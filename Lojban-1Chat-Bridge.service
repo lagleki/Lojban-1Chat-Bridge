@@ -1,0 +1,11 @@
+[Unit]
+Description=MessengerBridge
+After=network.target oidentd.socket
+
+[Service]
+ExecStart=/usr/bin/env node /path/to/bridge.js
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
