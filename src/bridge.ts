@@ -737,14 +737,14 @@ receivedFrom.facebook = async (message: any) => {
 
 receivedFrom.telegram = async (message: Telegram.Message) => {
   //spammer
-  //1. check if admin else leave chat and return
-  if (await TelegramLeaveChatIfNotAdmin(message)) return;
-  //2. remove entered bots
+  //1. remove entered bots
   TelegramRemoveAddedBots(message);
-  //3. check if new member event
-  if (TelegramRemoveNewMemberMessage(message)) return;
-  //4. check for spam
+  //2. check if admin else leave chat and return
+  if (await TelegramLeaveChatIfNotAdmin(message)) return;
+  //3. check for spam
   if (await TelegramRemoveSpam(message)) return;
+  //4. check if new member event
+  if (TelegramRemoveNewMemberMessage(message)) return;
   //now deal with the message that is fine
   if (!config.channelMapping.telegram) return;
 
