@@ -1,5 +1,6 @@
 #Todo
 
+- split code by messenger
 - remove spam via telegram user
 - qq support
 - discord support

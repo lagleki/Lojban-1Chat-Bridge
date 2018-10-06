@@ -716,19 +716,19 @@ receivedFrom.facebook = async (message: any) => {
       for (const attachment of message.attachments) {
         //todo: add type="photo","width","height"
         if (attachment.type === "share") continue;
-        generic
-          .downloadFile({
+        const [err, res]: [any, string[]] = await to(
+          generic.downloadFile({
             type: "simple",
             remote_path: attachment.url
           })
-          .then(([file, localfile]: [string, string]) => {
-            sendFrom({
-              messenger: "facebook",
-              channelId: message.threadID,
-              author,
-              text: file,
-              file: localfile
-            });
+        );
+        if (!err)
+          sendFrom({
+            messenger: "facebook",
+            channelId: message.threadID,
+            author,
+            text: res[0],
+            file: res[1]
           });
       }
     }
@@ -1596,14 +1596,11 @@ async function convertToPlainText(text: string) {
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
       .replace(/<br\/?>/gi, "\n")
-      .replace(/<a.*href="(.*?)".*>(.*?)<\/a>/gi, (...arr) => {
+      .replace(/<a.*href="(.+?)".*>(.+?)<\/a>/gi, (...arr) => {
         const url = arr[1];
-        const name = arr[2];
-        if (url && name) {
-          // if (url !== name) return `${name} (${url})`;
-          return url;
-        }
-        return arr;
+        // const name = arr[2];
+        // if (url !== name) return `${name} (${url})`;
+        return url;
       })
       .replace(/<(?:.|\s)*?>/g, "")
   );
