@@ -716,19 +716,19 @@ receivedFrom.facebook = async (message: any) => {
       for (const attachment of message.attachments) {
         //todo: add type="photo","width","height"
         if (attachment.type === "share") continue;
-        const [err, res]: [any, string[]] = await to(
-          generic.downloadFile({
+        generic
+          .downloadFile({
             type: "simple",
             remote_path: attachment.url
           })
-        );
-        if (!err)
-          sendFrom({
-            messenger: "facebook",
-            channelId: message.threadID,
-            author,
-            text: res[0],
-            file: res[1]
+          .then(([file, localfile]: [string, string]) => {
+            sendFrom({
+              messenger: "facebook",
+              channelId: message.threadID,
+              author,
+              text: file,
+              file: localfile
+            });
           });
       }
     }
