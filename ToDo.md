@@ -1,9 +1,10 @@
 #Todo
 
+- add comments to config.json via stripJsonComments 
 ReceivedFrom: config,facebook,sendFrom,AdaptName.facebook, generic.downloadFile
 - split code by messenger
 - remove spam via telegram user
-- qq support
+- qq support qq.js
 - discord support
 - topic set in slack not sent anywhere
 - get rid of all ".then"
