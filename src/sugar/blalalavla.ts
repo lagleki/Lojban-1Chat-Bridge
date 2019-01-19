@@ -31,18 +31,22 @@ const univalsi = `(${gismu}|${fragari}|${alpaka}|${sorpeka}|${asta})`;
 const RandExp = require("randexp");
 
 module.exports = {
-  cupra: function(url) {
-    const seed =
-      parseInt(
-        crypto
-          .createHash("md5")
-          .update(url)
-          .digest("hex"),
-        16
-      ) /
-      16 ** 32;
+  cupra: function(url: string) {
     const R = new RandExp(univalsi);
-    R.randInt = (a, b) => a + Math.floor(seed * (1 + b - a));
+    let gAcc = 0;
+    R.randInt = (a: number, b: number) => {
+      const seed =
+        parseInt(
+          crypto
+            .createHash("md5")
+            .update(url + gAcc)
+            .digest("hex"),
+          16
+        ) /
+        16 ** 32;
+      gAcc++;
+      return a + Math.floor(seed * (1 + b - a));
+    };
     return R.gen();
   }
 };

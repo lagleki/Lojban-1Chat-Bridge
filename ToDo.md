@@ -1,7 +1,8 @@
 #Todo
 
-- add comments to config.json via stripJsonComments 
-ReceivedFrom: config,facebook,sendFrom,AdaptName.facebook, generic.downloadFile
+- several links ia message are merged into one
+- add comments to config.json via stripJsonComments
+  ReceivedFrom: config,facebook,sendFrom,AdaptName.facebook, generic.downloadFile
 - split code by messenger
 - remove spam via telegram user
 - qq support qq.js

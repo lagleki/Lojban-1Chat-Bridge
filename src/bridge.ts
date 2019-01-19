@@ -25,8 +25,11 @@ const emoji = require("node-emoji");
 const slackify = require("./formatting-converters/slackify-html");
 
 const marked = require("marked");
+const lexer = new marked.Lexer();
+lexer.rules.list = { exec: () => {} };
+lexer.rules.listitem = { exec: () => {} };
+
 const html2md = require("./formatting-converters/html2md");
-const splitHtml = require("split-html");
 
 const Irc = require("irc-upd");
 const ircolors = require("./formatting-converters/irc-colors");
@@ -63,6 +66,28 @@ let facebook: any,
   slack: any,
   mattermost: any,
   irc: any;
+
+let facebookStop: any;
+
+let facebookErr: any;
+facebookErr = new Proxy(
+  {},
+  {
+    set: (target: any, prop: any, val: any): any => {
+      if (facebookErr.enabled && facebookStop) {
+        facebookErr.enabled = false;
+        lg("stopping facebook...");
+        setTimeout(() => {
+          // facebookStop();
+          lg("stopped facebook...");
+          // StartService.facebook();
+        }, 3000);
+        lg("restarted facebook...");
+      }
+      return { enabled: false };
+    }
+  }
+);
 
 interface Json {
   [index: string]: string | boolean | RegExp;
@@ -256,14 +281,26 @@ async function FormatMessageChunkForSending({
   quotation
 }: {
   messenger: string;
-  channelId: string;
+  channelId: number | string;
   author: string;
   chunk: string;
   action: string;
   title?: string;
   quotation: boolean;
 }) {
-  if (author && author !== "") {
+  if (quotation) {
+    if (!author || author === "") author = "-";
+    chunk = generic.LocalizeString({
+      messenger,
+      channelId,
+      localized_string_key: `OverlayMessageWithQuotedMark.${messenger}`,
+      arrElemsToInterpolate: [
+        ["author", author],
+        ["chunk", chunk],
+        ["title", title]
+      ]
+    });
+  } else if (author && author !== "") {
     if ((config[messenger].Actions || []).includes(action)) {
       chunk = generic.LocalizeString({
         messenger,
@@ -295,14 +332,6 @@ async function FormatMessageChunkForSending({
       arrElemsToInterpolate: [["chunk", chunk], ["title", title]]
     });
   }
-  if (quotation)
-    chunk = generic.LocalizeString({
-      messenger,
-      channelId,
-      localized_string_key: `OverlayMessageWithQuotedMark.${messenger}`,
-      arrElemsToInterpolate: [["message", chunk]]
-    });
-  chunk = await convertTo[messenger](chunk);
   return chunk;
 }
 
@@ -319,29 +348,24 @@ sendTo.facebook = async ({
       ["channelMapping", "facebook", channelId, "settings", "readonly"],
       config
     )
+    || !facebook
   )
     return;
-  chunk = await FormatMessageChunkForSending({
-    messenger: "facebook",
-    channelId,
-    author,
-    chunk,
-    action,
-    quotation
-  });
   queueOf.facebook.pushTask((resolve: any) => {
-    const jsonMessage: Json = {
-      body: chunk
-    };
-    if (file) jsonMessage.attachment = fs.createReadStream(file);
-    facebook.sendMessage(
-      jsonMessage,
-      channelId,
-      (err: any, messageInfo: any) => {
-        if (err) console.error(err);
-        resolve();
-      }
-    );
+    setTimeout(() => {
+      const jsonMessage: Json = {
+        body: chunk
+      };
+      if (file) jsonMessage.attachment = fs.createReadStream(file);
+      facebook.sendMessage(
+        jsonMessage,
+        channelId,
+        (err: any, messageInfo: any) => {
+          if (err) console.error(err);
+          resolve();
+        }
+      );
+    }, 500);
   });
 };
 
@@ -360,14 +384,6 @@ sendTo.telegram = async ({
     )
   )
     return;
-  chunk = await FormatMessageChunkForSending({
-    messenger: "telegram",
-    channelId,
-    author,
-    chunk,
-    action,
-    quotation
-  });
   queueOf.telegram.pushTask((resolve: any) => {
     telegram
       .sendMessage(channelId, chunk, {
@@ -396,33 +412,20 @@ sendTo.mattermost = async ({
     )
   )
     return;
-  if (channelId && chunk !== "") {
-    chunk = await FormatMessageChunkForSending({
-      messenger: "mattermost",
-      channelId,
-      author,
-      chunk,
-      action,
-      quotation
+  queueOf.mattermost.pushTask((resolve: any, reject: any) => {
+    const option = {
+      url: config.mattermost.HookUrl,
+      json: {
+        text: chunk,
+        // username: author,
+        channel: channelId
+      }
+    };
+    const req = request.post(option, (error: any, response: any, body: any) => {
+      if (error) reject();
+      else resolve();
     });
-    queueOf.mattermost.pushTask((resolve: any, reject: any) => {
-      const option = {
-        url: config.mattermost.HookUrl,
-        json: {
-          text: chunk,
-          // username: author,
-          channel: channelId
-        }
-      };
-      const req = request.post(
-        option,
-        (error: any, response: any, body: any) => {
-          if (error) reject();
-          else resolve();
-        }
-      );
-    });
-  }
+  });
 };
 
 sendTo.vkboard = async ({
@@ -440,52 +443,41 @@ sendTo.vkboard = async ({
     ) //|| !vk.WaitingForCaptcha
   )
     return;
-  if (channelId && chunk !== "") {
-    chunk = await FormatMessageChunkForSending({
-      messenger: "vkboard",
-      channelId,
-      title: config.vkboard.group_id,
-      author,
-      chunk,
-      action,
-      quotation
-    });
-    const token = vkboard.app.token;
-    queueOf.vkboard.pushTask((resolve: any) => {
-      setTimeout(() => {
-        vkboard.bot
-          .api("board.createComment", {
-            access_token: token,
-            group_id: config.vkboard.group_id,
-            topic_id: channelId,
-            message: chunk,
-            from_group: 1
-          })
-          .then(() => {
-            resolve();
-          })
-          .catch((err: any) => {
-            console.log(err.toString());
-            // if (err.error.error_code === 14) {
-            //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
-            //     //todo: send image to telegram,a reply is expected
-            //     vk.WaitingForCaptcha = true;
-            //     const key = await myAwesomeCaptchaHandler(src);
-            //     vk.WaitingForCaptcha = false;
-            //     try {
-            //       await retry(key);
-            //
-            //       console.log("Капча успешно решена");
-            //     } catch (error) {
-            //       console.log("Капча неверная", error.toString());
-            //     }
-            //   });
-            // }
-            resolve();
-          });
-      }, 10000);
-    });
-  }
+  const token = vkboard.app.token;
+  queueOf.vkboard.pushTask((resolve: any) => {
+    setTimeout(() => {
+      vkboard.bot
+        .api("board.createComment", {
+          access_token: token,
+          group_id: config.vkboard.group_id,
+          topic_id: channelId,
+          message: chunk,
+          from_group: 1
+        })
+        .then(() => {
+          resolve();
+        })
+        .catch((err: any) => {
+          console.log(err.toString());
+          // if (err.error.error_code === 14) {
+          //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
+          //     //todo: send image to telegram,a reply is expected
+          //     vk.WaitingForCaptcha = true;
+          //     const key = await myAwesomeCaptchaHandler(src);
+          //     vk.WaitingForCaptcha = false;
+          //     try {
+          //       await retry(key);
+          //
+          //       console.log("Капча успешно решена");
+          //     } catch (error) {
+          //       console.log("Капча неверная", error.toString());
+          //     }
+          //   });
+          // }
+          resolve();
+        });
+    }, 10000);
+  });
 };
 
 async function myAwesomeCaptchaHandler() {}
@@ -505,30 +497,20 @@ sendTo.slack = async ({
     )
   )
     return;
-  if (channelId && chunk !== "") {
-    chunk = await FormatMessageChunkForSending({
-      messenger: "slack",
-      channelId,
-      author,
-      chunk,
-      action,
-      quotation
-    });
-    queueOf.slack.pushTask((resolve: any) => {
-      chunk = emoji.unemojify(chunk);
-      slack.web.chat
-        .postMessage({
-          channel: channelId,
-          username: author,
-          text: chunk
-        })
-        .then(() => resolve())
-        .catch((err: any) => {
-          console.error(err);
-          resolve();
-        });
-    });
-  }
+  queueOf.slack.pushTask((resolve: any) => {
+    chunk = emoji.unemojify(chunk);
+    slack.web.chat
+      .postMessage({
+        channel: channelId,
+        username: author,
+        text: chunk
+      })
+      .then(() => resolve())
+      .catch((err: any) => {
+        console.error(err);
+        resolve();
+      });
+  });
 };
 
 sendTo.irc = async ({
@@ -543,29 +525,18 @@ sendTo.irc = async ({
     R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
   )
     return;
-  if (channelId && chunk !== "") {
-    const ColorificationMode = R.pathOr(
-      "color",
-      ["channelMapping", "irc", channelId, "settings", "nickcolor"],
-      config
-    );
-    author = ircolors.nickcolor(author || "", config.irc, ColorificationMode);
-    chunk = await FormatMessageChunkForSending({
-      messenger: "irc",
-      channelId,
-      author,
-      chunk,
-      action,
-      quotation
-    });
-
-    queueOf.irc.pushTask((resolve: any) => {
-      // if (config.irc.Actions.includes(action))
-      //   chunk = ircolors.underline(chunk);
-      irc.say(channelId, chunk);
-      resolve();
-    });
-  }
+  const ColorificationMode = R.pathOr(
+    "color",
+    ["channelMapping", "irc", channelId, "settings", "nickcolor"],
+    config
+  );
+  author = ircolors.nickcolor(author || "", config.irc, ColorificationMode);
+  queueOf.irc.pushTask((resolve: any) => {
+    // if (config.irc.Actions.includes(action))
+    //   chunk = ircolors.underline(chunk);
+    irc.say(channelId, chunk);
+    resolve();
+  });
 };
 
 sendTo.irc_old = async ({
@@ -610,10 +581,7 @@ async function prepareChunks({
   text: string;
   edited?: boolean;
 }) {
-  let arrChunks: string[] = await generic.GetChunks(
-    await convertFrom[messenger](text),
-    messengerTo
-  );
+  let arrChunks: string[] = await generic.GetChunks(text, messengerTo);
   for (let i in arrChunks) {
     if (edited)
       arrChunks[i] = generic.LocalizeString({
@@ -648,42 +616,59 @@ async function sendFrom({
   file?: string;
   edited?: boolean;
 }) {
-  const ConfigNode = config.channelMapping[messenger][channelId];
+  const ConfigNode = R.path(["channelMapping", messenger,channelId],config);
   if (!ConfigNode)
     return generic.LogToAdmin(
       `error finding assignment to ${messenger} channel with id ${channelId}`
     );
   if (!text || text === "") return;
-  for (const m of Object.keys(config.channelMapping)) {
-    if (ConfigNode[m] && messenger !== m) {
+  text = await convertFrom[messenger](text);
+  for (const messengerTo of Object.keys(config.channelMapping)) {
+    if (ConfigNode[messengerTo] && messenger !== messengerTo) {
       let thisToWhom: string = "";
-      if (ToWhom) {
-        if (m === "irc")
-          thisToWhom = `${ircolors.nickcolor(ToWhom, config.irc)}: `;
-        else thisToWhom = `${ToWhom}: `;
+      const ColorificationMode = R.pathOr(
+        "color",
+        ["channelMapping", "irc", channelId, "settings", "nickcolor"],
+        config
+      );
+      if (messengerTo === "irc" && author) {
+        author = ircolors.nickcolor(author, config.irc, ColorificationMode);
       }
-      const Chunks = await prepareChunks({
+      if (ToWhom) {
+        if (messengerTo === "irc") {
+          thisToWhom = `${ircolors.nickcolor(
+            ToWhom,
+            config.irc,
+            ColorificationMode
+          )}: `;
+        } else thisToWhom = `${ToWhom}: `;
+      }
+      let textTo = await convertTo[messengerTo](text);
+      let Chunks = await prepareChunks({
         messenger,
         channelId,
-        text,
+        text: textTo,
         edited,
-        messengerTo: m
+        messengerTo
       });
-      Chunks.map(chunk => {
-        if (ConfigNode[m] === "#lojbanme" && m === "irc") {
-          sendTo["irc_old"]({
-            channelId: ConfigNode[m],
-            author,
-            chunk: thisToWhom + chunk,
-            quotation,
-            action,
-            file
-          });
-        }
-        sendTo[m]({
-          channelId: ConfigNode[m],
+      for (const i in Chunks) {
+        const chunk = Chunks[i];
+        Chunks[i] = await FormatMessageChunkForSending({
+          messenger: messengerTo,
+          channelId,
+          title: config.vkboard.group_id,
           author,
           chunk: thisToWhom + chunk,
+          action,
+          quotation
+        });
+      }
+
+      Chunks.map(chunk => {
+        sendTo[messengerTo]({
+          channelId: ConfigNode[messengerTo],
+          author,
+          chunk,
           quotation,
           action,
           file
@@ -956,6 +941,14 @@ async function sendFromTelegram({
 
   const reply_to_bot =
     quotation && message.from.id === config.telegram.myUser.id ? true : false;
+  let author = "";
+  if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
+    const arrTxtMsg = jsonMessage["text"].text.split(": ");
+    author = arrTxtMsg[0];
+    jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ");
+  } else if (!reply_to_bot) {
+    author = GetName.telegram(message.from);
+  }
   // now send from Telegram
   for (let i: number = 0; i < arrMessage.length; i++) {
     const el = arrMessage[i];
@@ -992,7 +985,7 @@ async function sendFromTelegram({
     sendFrom({
       messenger: "telegram",
       channelId: message.chat.id,
-      author: reply_to_bot ? "" : GetName.telegram(message.from),
+      author,
       text,
       action,
       quotation,
@@ -1134,7 +1127,6 @@ receivedFrom.slack = async (message: any) => {
 
   let action;
   if (message.subtype === "me_message") action = "action";
-  lg(message);
   if (
     message.subtype === "channel_topic" &&
     message.topic &&
@@ -1405,7 +1397,7 @@ GetName.telegram = (user: Telegram.User) => {
 };
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => marked(text);
+convertFrom.telegram = async (text: string) => marked.parser(lexer.lex(text));
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.slack = async (text: string) => {
@@ -1583,7 +1575,7 @@ convertFrom.slack = async (text: string) => {
   const [err, str] = await to(publicParse(text));
   return str || text;
 };
-convertFrom.mattermost = async (text: string) => marked(text);
+convertFrom.mattermost = async (text: string) => marked.parser(lexer.lex(text));
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -1596,13 +1588,15 @@ async function convertToPlainText(text: string) {
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
       .replace(/<br\/?>/gi, "\n")
-      .replace(/<a.*href="(.+?)".*>(.+?)<\/a>/gi, (...arr) => {
+      .replace(/<a.*?href="(.+?)".*?>(.+?)<\/a>/gi, (...arr) => {
         const url = arr[1];
         // const name = arr[2];
         // if (url !== name) return `${name} (${url})`;
-        return url;
+        return " " + url;
       })
       .replace(/<(?:.|\s)*?>/g, "")
+      .trim(),
+    true
   );
   return a;
 }
@@ -1612,7 +1606,7 @@ convertTo["telegram"] = async (text: string) => {
   const a = generic.sanitizeHtml(text);
   return a;
 };
-convertTo["vkboard"] = async (text: string) => html2md.convert(text);
+convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
@@ -1830,7 +1824,7 @@ NewChannelAppeared.telegram = async ({
 };
 
 GetChannels.telegram = async () => {
-  if (!config.MessengersAvailable.facebook) return [];
+  if (!config.MessengersAvailable.telegram) return [];
   //read from file
   let [err, res] = await to(
     new Promise(resolve => {
@@ -2009,16 +2003,37 @@ StartService.facebook = async () => {
     });
     facebookLib(
       { email: config.facebook.email, password: config.facebook.password },
-      { logLevel: "warn", listenEvents: false },
+      { forceLogin: true, logLevel: "warn", listenEvents: false },
       (err: any, api: any) => {
         if (err) {
-          config.MessengersAvailable.facebook = false;
-          return console.error(err);
+          // config.MessengersAvailable.facebook = false;
+          console.error(err);
+          setTimeout(() => {
+            // facebookStop();
+            lg("stopped facebook...");
+            // return StartService.facebook();
+            // StartService.facebook();
+          }, 3000);
+        } else {
+          config.MessengersAvailable.facebook = true;
+          facebook = api;
+          facebookStop = facebook.listen((err: any, message: any) => {
+            if (err) {
+              // config.MessengersAvailable.facebook = false;
+              // facebookErr.enabled = true;
+              // facebookStop();
+              // setTimeout(() => {
+              //   // facebookStop();
+              //   lg("stopped facebook...");
+              //   return StartService.facebook();
+              //   // StartService.facebook();
+              // }, 3000);
+            } else {
+              config.MessengersAvailable.facebook = true;
+              receivedFrom.facebook(message);
+            }
+          });
         }
-        facebook = api;
-        facebook.listen((err: any, message: any) => {
-          if (!err) receivedFrom.facebook(message);
-        });
       }
     );
   }
@@ -2243,15 +2258,49 @@ generic.escapeHTML = (arg: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
     .replace(/'/g, "&#039;");
 
-generic.unescapeHTML = (arg: string) =>
-  arg
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/(&#039;|&#39;)/g, "'");
+// generic.unescapeHTML = (arg: string) =>
+//   arg
+//     .replace(/&amp;/g, "&")
+//     .replace(/&lt;/g, "<")
+//     .replace(/&gt;/g, ">")
+//     .replace(/&quot;/g, '"')
+//     .replace(/&apos;/g, "'")
+//     .replace(/(&#039;|&#39;)/g, "'");
+
+const htmlEntities: any = {
+  nbsp: " ",
+  cent: "¢",
+  pound: "£",
+  yen: "¥",
+  euro: "€",
+  copy: "©",
+  reg: "®",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  amp: "&",
+  apos: "'"
+};
+generic.unescapeHTML = (str: string, convertHtmlEntities: boolean) => {
+  return str.replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
+    let match: any;
+
+    if (convertHtmlEntities && htmlEntities[entityCode]) {
+      return htmlEntities[entityCode];
+      /*eslint no-cond-assign: 0*/
+    } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
+      return String.fromCharCode(parseInt(match[1], 16));
+      /*eslint no-cond-assign: 0*/
+    } else if ((match = entityCode.match(/^#(\d+)$/))) {
+      return String.fromCharCode(~~match[1]);
+    } else {
+      return entity;
+    }
+  });
+};
 
 function splitSlice(str: string, len: number) {
   const arrStr: string[] = [...str];
@@ -2309,7 +2358,6 @@ generic.GetChunks = async (text: string, messenger: string) => {
   const limit = config[messenger].MessageLength || 400;
   const r = new RegExp(`(.{${limit - 40},${limit}})(?= )`, "g");
   const arrText: string[] = text
-    .replace(/\n/g, "")
     .replace(r, "$1\n")
     .split(/\n/)
     .reduce((acc: string[], i: string) => {
@@ -2325,11 +2373,11 @@ generic.GetChunks = async (text: string, messenger: string) => {
         acc = acc.concat(arrI);
       } else acc.push(i);
       return acc;
-    }, []);
-  const a = splitHtml(arrText.join("<br/>"), "br").filter(
-    (i: string) => i !== "" && i.indexOf("<br") === -1
-  );
-  return a;
+    }, [])
+    .filter((i: string) => i !== "");
+  // const a = arrText
+  //   .map((i: string) => generic.unescapeHTML(i, false));
+  return arrText;
 };
 
 generic.downloadFile = async ({
@@ -2416,7 +2464,8 @@ generic.downloadFile = async ({
         });
         stream.on("error", (err: any) => {
           console.log(err.toString());
-          reject(err.toString());
+          resolve([rem_fullname, local_fullname]);
+          // reject(err.toString());
         });
       })
     );
@@ -2547,3 +2596,9 @@ if (config.generic.showMedia) {
   // Listen
   server.listen(config.generic.httpPort);
 }
+
+// p.p1 = 'v1'; // this will log o, "p1", "v1"
+// o.p2 = 'v2'; /
+
+// global var
+// call function, itchecks for global var value, if different then stopListening and reboot facebook
