@@ -622,7 +622,9 @@ async function sendFrom({
       `error finding assignment to ${messenger} channel with id ${channelId}`
     );
   if (!text || text === "") return;
+  lg(text,1);
   text = await convertFrom[messenger](text);
+  lg(text,2);
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (ConfigNode[messengerTo] && messenger !== messengerTo) {
       let thisToWhom: string = "";
@@ -643,7 +645,9 @@ async function sendFrom({
           )}: `;
         } else thisToWhom = `${ToWhom}: `;
       }
+      lg(text,3);
       let textTo = await convertTo[messengerTo](text);
+      lg(textTo,3);
       let Chunks = await prepareChunks({
         messenger,
         channelId,
@@ -1608,7 +1612,7 @@ convertTo["telegram"] = async (text: string) => {
 };
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
-convertTo["mattermost"] = async (text: string) => html2md.convert(text);
+convertTo["mattermost"] = async (text: string) => html2md.convert(text.replace(/\*/g,'&#42;').replace(/\_/g,'&#95;'));
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
