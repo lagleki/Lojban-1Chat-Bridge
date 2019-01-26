@@ -622,9 +622,7 @@ async function sendFrom({
       `error finding assignment to ${messenger} channel with id ${channelId}`
     );
   if (!text || text === "") return;
-  lg(text,1);
   text = await convertFrom[messenger](text);
-  lg(text,2);
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (ConfigNode[messengerTo] && messenger !== messengerTo) {
       let thisToWhom: string = "";
@@ -645,9 +643,7 @@ async function sendFrom({
           )}: `;
         } else thisToWhom = `${ToWhom}: `;
       }
-      lg(text,3);
       let textTo = await convertTo[messengerTo](text);
-      lg(textTo,3);
       let Chunks = await prepareChunks({
         messenger,
         channelId,
@@ -1301,11 +1297,11 @@ receivedFrom.irc = async ({
     text = `<${ircolors
       .stripColorsAndStyle(author)
       .replace(/_+$/g, "")}>: ${text}`
-      .replace(/^<.*?>: <([^>]*?)> ?: /, "*$1*: ")
-      .replace(/^<.*?>: &lt;([^>]*?)&gt; ?: /, "*$1*: ")
-      .replace(/^<(.*?)>: /, "*$1*: ")
-      .replace(/^\*(.*?)\*: /, "<b>$1</b>: ");
-    [, author, text] = text.match(/^<b>(.*?)<\/b>: (.*)/);
+      .replace(/^<[^ <>]+?>: <([^ <>]+?)> ?: /, "*$1*: ")
+      .replace(/^<[^ <>]+?>: &lt;([^ <>]+?)&gt; ?: /, "*$1*: ")
+      .replace(/^<([^ <>]+?)>: /, "*$1*: ")
+      .replace(/^\*([^ <>]+?)\*: /, "<b>$1</b>: ");
+    [, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/);
     if (text && text !== "") {
       sendFrom({
         messenger: "irc",
@@ -1606,10 +1602,7 @@ async function convertToPlainText(text: string) {
 }
 
 convertTo["facebook"] = async (text: string) => convertToPlainText(text);
-convertTo["telegram"] = async (text: string) => {
-  const a = generic.sanitizeHtml(text);
-  return a;
-};
+convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text.replace(/\*/g,'&#42;').replace(/\_/g,'&#95;'));
