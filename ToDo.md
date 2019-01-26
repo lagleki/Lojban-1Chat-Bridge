@@ -1,3 +1,11 @@
+#facebook
+
+- create an app
+- tune up your nginx/apache to forward port (Default 3011) to an https location
+- start facebook-installer, restart app
+- enter these webhooks into Facebook app
+- on new messages will come
+
 #Todo
 
 - several links ia message are merged into one

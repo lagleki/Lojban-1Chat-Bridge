@@ -502,7 +502,7 @@ sendTo.slack = async ({
     slack.web.chat
       .postMessage({
         channel: channelId,
-        username: author,
+        username: (author||'').replace(/(^.{21}).*$/,'$1'),
         text: chunk
       })
       .then(() => resolve())
@@ -1397,7 +1397,7 @@ GetName.telegram = (user: Telegram.User) => {
 };
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => marked.parser(lexer.lex(text));
+convertFrom.telegram = async (text: string) => generic.escapeHTML(marked.parser(lexer.lex(text)));
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.slack = async (text: string) => {
@@ -2478,7 +2478,8 @@ generic.downloadFile = async ({
     return [remote_path || fileId, remote_path || fileId];
   }
   let notrenamed = [rem_fullname, local_fullname];
-  [err, [rem_fullname, local_fullname]] = await to(
+  let res_;
+  [err, res_] = await to(
     new Promise((resolve, reject) => {
       const newname = `${local_path}/${randomStringName}${path.extname(
         local_fullname
@@ -2486,7 +2487,7 @@ generic.downloadFile = async ({
       fs.rename(local_fullname, newname, (err: any) => {
         if (err) {
           console.error(err);
-          reject();
+          resolve();
         } else {
           rem_fullname = `${rem_path}/${path.basename(newname)}`;
           resolve([rem_fullname, newname]);
@@ -2494,7 +2495,7 @@ generic.downloadFile = async ({
       });
     })
   );
-  if (err) [rem_fullname, local_fullname] = notrenamed;
+  if (err||!res_) {[rem_fullname, local_fullname] = notrenamed;}else{[rem_fullname, local_fullname] = res_;}
   if (![".webp", ".tiff"].includes(path.extname(local_fullname))) {
     return [rem_fullname, local_fullname];
   }
