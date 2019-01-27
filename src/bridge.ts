@@ -11,7 +11,8 @@ const lg = console.log.bind(console);
 const package_json = require("../package");
 
 // messengers' libs
-const facebookLib = require("facebook-chat-api");
+// const facebookLib = require("facebook-chat-api");
+const { login } = require("libfb");
 
 import * as Telegram from "node-telegram-bot-api";
 const sanitizeHtml = require("sanitize-html");
@@ -66,28 +67,6 @@ let facebook: any,
   slack: any,
   mattermost: any,
   irc: any;
-
-let facebookStop: any;
-
-let facebookErr: any;
-facebookErr = new Proxy(
-  {},
-  {
-    set: (target: any, prop: any, val: any): any => {
-      if (facebookErr.enabled && facebookStop) {
-        facebookErr.enabled = false;
-        lg("stopping facebook...");
-        setTimeout(() => {
-          // facebookStop();
-          lg("stopped facebook...");
-          // StartService.facebook();
-        }, 3000);
-        lg("restarted facebook...");
-      }
-      return { enabled: false };
-    }
-  }
-);
 
 interface Json {
   [index: string]: string | boolean | RegExp;
@@ -347,8 +326,8 @@ sendTo.facebook = async ({
     R.path(
       ["channelMapping", "facebook", channelId, "settings", "readonly"],
       config
-    )
-    || !facebook
+    ) ||
+    !facebook
   )
     return;
   queueOf.facebook.pushTask((resolve: any) => {
@@ -357,17 +336,11 @@ sendTo.facebook = async ({
         body: chunk
       };
       if (file) jsonMessage.attachment = fs.createReadStream(file);
-      facebook.sendMessage(
-        jsonMessage,
-        channelId,
-        (err: any, messageInfo: any) => {
-          if (err) console.error(err);
-          resolve();
-        }
-      );
+      facebook.sendMessage(channelId, chunk);
+      resolve();
     }, 500);
   });
-};
+}
 
 sendTo.telegram = async ({
   channelId,
@@ -502,7 +475,7 @@ sendTo.slack = async ({
     slack.web.chat
       .postMessage({
         channel: channelId,
-        username: (author||'').replace(/(^.{21}).*$/,'$1'),
+        username: (author || "").replace(/(^.{21}).*$/, "$1"),
         text: chunk
       })
       .then(() => resolve())
@@ -616,7 +589,7 @@ async function sendFrom({
   file?: string;
   edited?: boolean;
 }) {
-  const ConfigNode = R.path(["channelMapping", messenger,channelId],config);
+  const ConfigNode = R.path(["channelMapping", messenger, channelId], config);
   if (!ConfigNode)
     return generic.LogToAdmin(
       `error finding assignment to ${messenger} channel with id ${channelId}`
@@ -680,44 +653,55 @@ async function sendFrom({
 
 // receivedFrom
 receivedFrom.facebook = async (message: any) => {
-  if (!config.channelMapping.facebook) return;
   if (
-    message.type !== "message" ||
-    !R.path(["channelMapping", "facebook", message.threadID], config)
+    !R.path(
+      ["channelMapping", "facebook", (message.threadId || "").toString()],
+      config
+    )
   )
     return;
-  facebook.getUserInfo(message.senderID, (err: any, user: any) => {
-    if (err) return console.error(err);
-    const author = AdaptName.facebook(user[message.senderID]);
-    if (message.body) {
-      sendFrom({
-        messenger: "facebook",
-        channelId: message.threadID,
-        author,
-        text: message.body
-      });
-    }
-    if (message.attachments.length > 0) {
-      for (const attachment of message.attachments) {
-        //todo: add type="photo","width","height"
-        if (attachment.type === "share") continue;
+  let err, res;
+  [err, res] = await to(facebook.getUserInfo(message.authorId));
+  let author: string;
+  if (res) author = AdaptName.facebook(res);
+  if (message.message) {
+    sendFrom({
+      messenger: "facebook",
+      channelId: message.threadId,
+      author,
+      text: message.message
+    });
+  }
+  if (!message.attachments) message.attachments = [];
+  if (message.stickerId)
+    message.attachments.push({ id: message.stickerId, type: "sticker" });
+  if (message.attachments.length > 0) {
+    for (const attachment of message.attachments) {
+      if (attachment.type === "sticker") {
+        [err, res] = await to(facebook.getStickerURL(attachment.id));
+      } else {
+        [err, res] = await to(
+          facebook.getAttachmentURL(message.id, attachment.id)
+        );
+      }
+      //todo: add type="photo","width","height","size"
+      if (res)
         generic
           .downloadFile({
             type: "simple",
-            remote_path: attachment.url
+            remote_path: res
           })
           .then(([file, localfile]: [string, string]) => {
             sendFrom({
               messenger: "facebook",
-              channelId: message.threadID,
+              channelId: message.threadId,
               author,
               text: file,
               file: localfile
             });
           });
-      }
     }
-  });
+  }
 };
 
 receivedFrom.telegram = async (message: Telegram.Message) => {
@@ -1397,7 +1381,7 @@ GetName.telegram = (user: Telegram.User) => {
 };
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => generic.escapeHTML(marked.parser(lexer.lex(text)));
+convertFrom.telegram = async (text: string) => marked.parser(lexer.lex(text));
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.slack = async (text: string) => {
@@ -1605,7 +1589,8 @@ convertTo["facebook"] = async (text: string) => convertToPlainText(text);
 convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
-convertTo["mattermost"] = async (text: string) => html2md.convert(text.replace(/\*/g,'&#42;').replace(/\_/g,'&#95;'));
+convertTo["mattermost"] = async (text: string) =>
+  html2md.convert(text.replace(/\*/g, "&#42;").replace(/\_/g, "&#95;"));
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -1993,47 +1978,16 @@ generic.MessengersAvailable = () => {
 
 StartService.facebook = async () => {
   //facebook
-  if (config.MessengersAvailable.facebook) {
-    queueOf.facebook = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    facebookLib(
-      { email: config.facebook.email, password: config.facebook.password },
-      { forceLogin: true, logLevel: "warn", listenEvents: false },
-      (err: any, api: any) => {
-        if (err) {
-          // config.MessengersAvailable.facebook = false;
-          console.error(err);
-          setTimeout(() => {
-            // facebookStop();
-            lg("stopped facebook...");
-            // return StartService.facebook();
-            // StartService.facebook();
-          }, 3000);
-        } else {
-          config.MessengersAvailable.facebook = true;
-          facebook = api;
-          facebookStop = facebook.listen((err: any, message: any) => {
-            if (err) {
-              // config.MessengersAvailable.facebook = false;
-              // facebookErr.enabled = true;
-              // facebookStop();
-              // setTimeout(() => {
-              //   // facebookStop();
-              //   lg("stopped facebook...");
-              //   return StartService.facebook();
-              //   // StartService.facebook();
-              // }, 3000);
-            } else {
-              config.MessengersAvailable.facebook = true;
-              receivedFrom.facebook(message);
-            }
-          });
-        }
-      }
-    );
-  }
+  if (!config.MessengersAvailable.facebook) return;
+  queueOf.facebook = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  facebook = await login(config.facebook.email, config.facebook.password);
+  facebook.on("message", (message: any) => {
+    receivedFrom.facebook(message);
+  });
+  config.MessengersAvailable.facebook = true;
 };
 
 StartService.telegram = async () => {
@@ -2492,7 +2446,11 @@ generic.downloadFile = async ({
       });
     })
   );
-  if (err||!res_) {[rem_fullname, local_fullname] = notrenamed;}else{[rem_fullname, local_fullname] = res_;}
+  if (err || !res_) {
+    [rem_fullname, local_fullname] = notrenamed;
+  } else {
+    [rem_fullname, local_fullname] = res_;
+  }
   if (![".webp", ".tiff"].includes(path.extname(local_fullname))) {
     return [rem_fullname, local_fullname];
   }

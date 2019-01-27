@@ -9,6 +9,7 @@
   "author": "lojban <gleki.is.my.name@gmail.com> (http://jbotcan.org)",
   "license": "ISC",
   "dependencies": {
+    "libfb": "^1.4.10",
     "ngrok": "^3.1.0"
   }
 }
