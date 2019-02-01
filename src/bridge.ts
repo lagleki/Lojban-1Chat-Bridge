@@ -11,8 +11,7 @@ const lg = console.log.bind(console);
 const package_json = require("../package");
 
 // messengers' libs
-// const facebookLib = require("facebook-chat-api");
-const { login } = require("libfb");
+const { login } = require("../lib/libfb-js/dist/FBMessenger.js");
 
 import * as Telegram from "node-telegram-bot-api";
 const sanitizeHtml = require("sanitize-html");
