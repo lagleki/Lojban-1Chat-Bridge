@@ -19,6 +19,8 @@ const sanitizeHtml = require("sanitize-html");
 const { VK } = require("vk-io");
 const VkBot = require("node-vk-bot-api");
 
+const discord = require("discord.js");
+
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
 
@@ -339,7 +341,7 @@ sendTo.facebook = async ({
       resolve();
     }, 500);
   });
-}
+};
 
 sendTo.telegram = async ({
   channelId,
@@ -1148,112 +1150,195 @@ receivedFrom.slack = async (message: any) => {
 
 receivedFrom.mattermost = async (message: any) => {
   if (!config.channelMapping.mattermost) return;
-  if (R.path(["data", "team_id"], message) !== config.mattermost.team_id)
-    return; // unknown team
+  let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
+    const post_id = R.path(
+      ["id"],
+      JSON.parse(R.pathOr("", ["data", "post"], message))
+    );
+    const user_id = R.path(
+      ["user_id"],
+      JSON.parse(R.pathOr("", ["data", "post"], message))
+    );
+    const channel_id = R.path(
+      ["channel_id"],
+      JSON.parse(R.pathOr("", ["data", "post"], message))
+    );
     message.event = "posted";
     message.edited = true;
+    if (!post_id) return;
+    let err;
+    await to(
+      new Promise((resolve, reject) => {
+        const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post_id}`;
+        request(
+          {
+            method: "GET",
+            url,
+            headers: {
+              Authorization: `Bearer ${config.mattermost.token}`
+            }
+          },
+          (error: any, response: any, body: any) => {
+            if (error) {
+              console.error(error.toString());
+            } else {
+              msgText = JSON.parse(body).message;
+              file_ids = JSON.parse(body).file_ids;
+            }
+            resolve();
+          }
+        );
+      })
+    );
+    await to(
+      new Promise((resolve, reject) => {
+        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user_id}`;
+        request(
+          {
+            method: "GET",
+            url,
+            headers: {
+              Authorization: `Bearer ${config.mattermost.token}`
+            }
+          },
+          (error: any, response: any, body: any) => {
+            const json: Json = {};
+            if (error) {
+              console.error(error.toString());
+            } else {
+              author = JSON.parse(body).username;
+            }
+            resolve();
+          }
+        );
+      })
+    );
+    await to(
+      new Promise((resolve, reject) => {
+        const url = `${
+          config.mattermost.ProviderUrl
+        }/api/v4/channels/${channel_id}`;
+        request(
+          {
+            method: "GET",
+            url,
+            headers: {
+              Authorization: `Bearer ${config.mattermost.token}`
+            }
+          },
+          (error: any, response: any, body: any) => {
+            const json: Json = {};
+            if (error) {
+              console.error(error.toString());
+            } else {
+              channelId = JSON.parse(body).display_name;
+            }
+            resolve();
+          }
+        );
+      })
+    );
   } else {
     message.edited = false;
+    if (R.path(["data", "team_id"], message) !== config.mattermost.team_id)
+      return;
+    if (R.path(["event"], message) !== "posted") return;
+    const post = R.path(["data", "post"], message);
+    if (!post) return;
+    postParsed = JSON.parse(post);
+    channelId = R.path(["data", "channel_name"], message);
   }
-  if (R.path(["event"], message) !== "posted") return;
-  const post = R.path(["data", "post"], message);
-  if (post) {
-    const postParsed = JSON.parse(post);
-    const channelId = R.path(["data", "channel_name"], message);
-    if (
-      config.channelMapping.mattermost[channelId] &&
-      !R.path(["props", "from_webhook"], postParsed) &&
-      R.path(["type"], postParsed) === ""
-    ) {
-      //now await for file_ids array downloads
-      const file_ids = R.pathOr([], ["file_ids"], postParsed);
-      let files = [];
-      for (const file of file_ids) {
-        const [err, promfile] = await to(
-          new Promise((resolve, reject) => {
-            const url = `${
-              config.mattermost.ProviderUrl
-            }/api/v4/files/${file}/link`;
-            request(
-              {
-                method: "GET",
-                url,
-                headers: {
-                  Authorization: `Bearer ${config.mattermost.token}`
-                }
-              },
-              (error: any, response: any, body: any) => {
-                const json: Json = {};
-                if (error) {
-                  console.error(error.toString());
-                  reject();
-                } else {
-                  resolve(JSON.parse(body).link);
-                }
+  if (
+    config.channelMapping.mattermost[channelId] &&
+    !R.path(["props", "from_webhook"], postParsed) &&
+    R.pathOr("", ["type"], postParsed) === ""
+  ) {
+    if (!file_ids) file_ids = R.pathOr([], ["file_ids"], postParsed);
+    let files = [];
+    for (const file of file_ids) {
+      const [err, promfile] = await to(
+        new Promise((resolve, reject) => {
+          const url = `${
+            config.mattermost.ProviderUrl
+          }/api/v4/files/${file}/link`;
+          request(
+            {
+              method: "GET",
+              url,
+              headers: {
+                Authorization: `Bearer ${config.mattermost.token}`
               }
-            );
-          })
-        );
-        const [err2, promfile2] = await to(
-          new Promise((resolve, reject) => {
-            const url = `${
-              config.mattermost.ProviderUrl
-            }/api/v4/files/${file}/info`;
-            request(
-              {
-                method: "GET",
-                url,
-                headers: {
-                  Authorization: `Bearer ${config.mattermost.token}`
-                }
-              },
-              (error: any, response: any, body: any) => {
-                const json: Json = {};
-                if (error) {
-                  console.error(error.toString());
-                  reject();
-                } else {
-                  resolve(JSON.parse(body).extension);
-                }
+            },
+            (error: any, response: any, body: any) => {
+              const json: Json = {};
+              if (error) {
+                console.error(error.toString());
+                reject();
+              } else {
+                resolve(JSON.parse(body).link);
               }
-            );
-          })
-        );
-        if (!err && !err2) files.push([promfile2, promfile]);
-        if (err) console.error(err);
-      }
-      const author = R.path(["data", "sender_name"], message);
-      if (files.length > 0) {
-        for (const [extension, file] of files) {
-          const [file_, localfile]: [
-            string,
-            string
-          ] = await generic.downloadFile({
+            }
+          );
+        })
+      );
+      const [err2, promfile2] = await to(
+        new Promise((resolve, reject) => {
+          const url = `${
+            config.mattermost.ProviderUrl
+          }/api/v4/files/${file}/info`;
+          request(
+            {
+              method: "GET",
+              url,
+              headers: {
+                Authorization: `Bearer ${config.mattermost.token}`
+              }
+            },
+            (error: any, response: any, body: any) => {
+              const json: Json = {};
+              if (error) {
+                console.error(error.toString());
+                reject();
+              } else {
+                resolve(JSON.parse(body).extension);
+              }
+            }
+          );
+        })
+      );
+      if (!err && !err2) files.push([promfile2, promfile]);
+    }
+    if (!author) author = R.path(["data", "sender_name"], message);
+    if (files.length > 0) {
+      for (const [extension, file] of files) {
+        const [file_, localfile]: [string, string] = await generic.downloadFile(
+          {
             type: "simple",
             remote_path: file,
             extension
-          });
-          sendFrom({
-            messenger: "mattermost",
-            channelId,
-            author,
-            text: file_,
-            file: localfile,
-            edited: message.edited
-          });
-        }
+          }
+        );
+        sendFrom({
+          messenger: "mattermost",
+          channelId,
+          author,
+          text: file_,
+          file: localfile,
+          edited: message.edited
+        });
       }
-      let action;
-      sendFrom({
-        messenger: "mattermost",
-        channelId,
-        author,
-        text: R.path(["message"], postParsed),
-        action,
-        edited: message.edited
-      });
     }
+    let action;
+    //todo; handle mattermost actions
+    sendFrom({
+      messenger: "mattermost",
+      channelId,
+      author,
+      text: msgText || R.path(["message"], postParsed),
+      action,
+      edited: message.edited
+    });
   }
 };
 
@@ -2070,10 +2155,8 @@ StartService.mattermost = async () => {
       message = JSON.parse(message.data);
       receivedFrom.mattermost(message);
     });
-    mattermost.addEventListener(
-      "close",
-      () => mattermost._shouldReconnect && mattermost._connect()
-    );
+    mattermost.addEventListener("close", () => mattermost._connect());
+    mattermost.addEventListener("error", () => mattermost._connect());
   }
 };
 
