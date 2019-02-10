@@ -238,7 +238,7 @@ generic.mattermost.Start = async () => {
     })
   );
   if (err) {
-    config.MessengersAvailable.mattermost=false;
+    config.MessengersAvailable.mattermost = false;
     return;
   }
 
@@ -967,27 +967,24 @@ async function sendFromTelegram({
 
 receivedFrom.vkboard = async (message: any) => {
   if (!config.channelMapping.vkboard) return;
-  const topic_id = message.topic_id;
+  const channelId = message.topic_id;
   if (
-    !config.channelMapping.vkboard[topic_id] ||
+    !config.channelMapping.vkboard[channelId] ||
     message.topic_owner_id === message.from_id
   )
     return; // unknown topic || group owner sent the message
+  //todo: remove "group owner sent the message"
   let text = message.text;
   const fromwhomId = message.from_id;
-  let [err, user] = await to(
+  let [err, res] = await to(
     vkboard.bot.api("users.get", {
       user_ids: fromwhomId,
       access_token: config.vkboard.token,
       fields: "nickname,screen_name"
     })
   );
-  if (err || !user.response || !user.response[0]) {
-    user = fromwhomId;
-  } else {
-    user = user.response[0];
-    user = AdaptName.vkboard(user);
-  }
+  res = R.pathOr(fromwhomId, ["response", 0], res);
+  const author = AdaptName.vkboard(res);
 
   let arrQuotes: string[] = [];
   text.replace(
@@ -1001,55 +998,51 @@ receivedFrom.vkboard = async (message: any) => {
   if (arrQuotes.length > 0) {
     const token = vkboard.app.token;
     for (const el of arrQuotes) {
-      queueOf.vkboard.pushTask((resolve: any) => {
-        const opts = {
-          access_token: token,
-          group_id: config.vkboard.group_id,
-          topic_id,
-          start_comment_id: el,
-          count: 1,
-          v: "5.84"
-        };
-        vkboard.bot
-          .api("board.getComments", opts)
-          .then((res: any) => {
-            let text = R.path(["response", "items", 0, "text"], res);
-            if (text) {
-              let replyuser: string;
-              const rg = new RegExp(
-                `^\\[club${config.vkboard.group_id}\\|(.*?)\\]: (.*)$`
-              );
-              if (rg.test(text)) {
-                [, replyuser, text] = text.match(rg);
-              } else {
-                //todo: vk.user.get
-                replyuser = "";
-              }
-              sendFrom({
-                messenger: "vkboard",
-                channelId: topic_id,
-                author: replyuser,
-                text,
-                quotation: true
-              });
-            }
-            resolve();
+      const opts = {
+        access_token: token,
+        group_id: config.vkboard.group_id,
+        topic_id: channelId,
+        start_comment_id: el,
+        count: 1,
+        v: "5.84"
+      };
+      [err, res] = await to(vkboard.bot.api("board.getComments", opts));
+      if (res) lg("vkcom", JSON.stringify(res));
+      let text: string = R.path(["response", "items", 0, "text"], res);
+      if (!text) continue;
+      let replyuser: string;
+      const rg = new RegExp(
+        `^\\[club${config.vkboard.group_id}\\|(.*?)\\]: (.*)$`
+      );
+      if (rg.test(text)) {
+        [, replyuser, text] = text.match(rg);
+      } else {
+        let authorId = R.path(["response", "items", 0, "from_id"], res);
+        [err, res] = await to(
+          vkboard.bot.api("users.get", {
+            user_ids: authorId,
+            access_token: config.vkboard.token,
+            fields: "nickname,screen_name"
           })
-          .catch((err: any) => {
-            console.error(err);
-            resolve();
-          });
+        );
+        replyuser = R.pathOr("", ["response", 0], res);
+        replyuser = AdaptName.vkboard(replyuser);
+      }
+      sendFrom({
+        messenger: "vkboard",
+        channelId,
+        author: replyuser,
+        text,
+        quotation: true
       });
     }
   }
-  queueOf.vkboard.pushTask((resolve: any) => {
-    sendFrom({
-      messenger: "vkboard",
-      channelId: topic_id,
-      author: user,
-      text
-    });
-    resolve();
+  sendFrom({
+    messenger: "vkboard",
+    edited: message.edited,
+    channelId,
+    author: user,
+    text
   });
 };
 
@@ -1134,6 +1127,7 @@ receivedFrom.slack = async (message: any) => {
 };
 
 receivedFrom.mattermost = async (message: any) => {
+  if (R.path(["event"], message) === "posted") lg(message);
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
@@ -1419,7 +1413,9 @@ AdaptName.telegram = (name: string) =>
 AdaptName.vkboard = (user: any) => {
   let full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim();
   if (full_name === "") full_name = undefined;
-  return full_name || user.nickname || user.screen_name || user.id;
+  if (user.nickname && user.nickname.length < 1) user.nickname = null;
+  if (user.screen_name && user.screen_name.length < 1) user.screen_name = null;
+  return user.nickname || user.screen_name || full_name || user.id;
 };
 AdaptName.slack = (user: any) =>
   R.path(["user", "profile", "display_name"], user) ||
@@ -2103,6 +2099,10 @@ StartService.vkboard = async () => {
     vkboard.bot.event("board_post_new", async (ctx: any) => {
       receivedFrom.vkboard(ctx.message);
     });
+    vkboard.bot.event("board_post_edit", async (ctx: any) => {
+      ctx.message.edited = true;
+      receivedFrom.vkboard(ctx.message);
+    });
     vkboard.bot.startPolling();
   }
 };
@@ -2125,29 +2125,28 @@ StartService.mattermost = async () => {
   //mattermost
   mattermost = await generic.mattermost.Start();
   if (!config.MessengersAvailable.mattermost) return;
-    queueOf.mattermost = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    mattermost.addEventListener("open", () => {
-      mattermost.send(
-        JSON.stringify({
-          seq: 1,
-          action: "authentication_challenge",
-          data: {
-            token: config.mattermost.token
-          }
-        })
-      );
-    });
-    mattermost.addEventListener("message", (message: any) => {
-      if (!R.path(["data"], message) || !config.mattermost.team_id) return;
-      message = JSON.parse(message.data);
-      receivedFrom.mattermost(message);
-    });
-    mattermost.addEventListener("close", () => mattermost._connect());
-    mattermost.addEventListener("error", () => mattermost._connect());
-
+  queueOf.mattermost = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  mattermost.addEventListener("open", () => {
+    mattermost.send(
+      JSON.stringify({
+        seq: 1,
+        action: "authentication_challenge",
+        data: {
+          token: config.mattermost.token
+        }
+      })
+    );
+  });
+  mattermost.addEventListener("message", (message: any) => {
+    if (!R.path(["data"], message) || !config.mattermost.team_id) return;
+    message = JSON.parse(message.data);
+    receivedFrom.mattermost(message);
+  });
+  mattermost.addEventListener("close", () => mattermost._connect());
+  mattermost.addEventListener("error", () => mattermost._connect());
 };
 
 StartService.irc = async () => {
