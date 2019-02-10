@@ -35,6 +35,7 @@ Make sure you've installed Node.js.
 
 1. Add webhook
 2. Add your bot to each channel (otherwise your message won't go from Mattermost anywhere)
+3. check if the bot is only in the channels you need (so that the performance of your script would be optimal)
 
 Optional:
 
