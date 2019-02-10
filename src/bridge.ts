@@ -1041,7 +1041,7 @@ receivedFrom.vkboard = async (message: any) => {
     messenger: "vkboard",
     edited: message.edited,
     channelId,
-    author: user,
+    author,
     text
   });
 };
@@ -2115,8 +2115,8 @@ StartService.slack = async () => {
       autoStart: true,
       concurrency: 1
     });
-    slack.rtm.on("message", (msg: any) => {
-      receivedFrom.slack(msg);
+    slack.rtm.on("message", (message: any) => {
+      receivedFrom.slack(message);
     });
   }
 };
