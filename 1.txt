@@ -1,0 +1,54 @@
+COMMAND   PID  USER   FD      TYPE    DEVICE SIZE/OFF      NODE NAME
+node    20917 gleki  cwd       DIR    252,64     4096  10493547 /home/gleki/Lojban-1Chat-Bridge
+node    20917 gleki  rtd       DIR    252,16     4096         2 /
+node    20917 gleki  txt       REG    252,16 31711088    530043 /usr/bin/node
+node    20917 gleki  mem       REG    252,16   115624    534981 /usr/lib64/libresolv-2.28.so
+node    20917 gleki  mem       REG    252,16  2786472    534548 /usr/lib64/libc-2.28.so
+node    20917 gleki  mem       REG    252,16   258624    534875 /usr/lib64/libpthread-2.28.so
+node    20917 gleki  mem       REG    252,16   105400    546364 /usr/lib64/libgcc_s-8-20181215.so.1
+node    20917 gleki  mem       REG    252,16  2080424    534657 /usr/lib64/libm-2.28.so
+node    20917 gleki  mem       REG    252,16  1652992    535747 /usr/lib64/libstdc++.so.6.0.25
+node    20917 gleki  mem       REG    252,16    64816    534986 /usr/lib64/librt-2.28.so
+node    20917 gleki  mem       REG    252,16    29320    534567 /usr/lib64/libdl-2.28.so
+node    20917 gleki  mem       REG    252,16 26851392    536987 /usr/lib64/libicudata.so.62.1
+node    20917 gleki  mem       REG    252,16  1924920    536995 /usr/lib64/libicuuc.so.62.1
+node    20917 gleki  mem       REG    252,16  3039360    536989 /usr/lib64/libicui18n.so.62.1
+node    20917 gleki  mem       REG    252,16   623016    527874 /usr/lib64/libssl.so.1.1.1a
+node    20917 gleki  mem       REG    252,16  3194296    527872 /usr/lib64/libcrypto.so.1.1.1a
+node    20917 gleki  mem       REG    252,16   173760    537192 /usr/lib64/libnghttp2.so.14.17.1
+node    20917 gleki  mem       REG    252,16   199616    530022 /usr/lib64/libuv.so.1.0.0
+node    20917 gleki  mem       REG    252,16    43720    530024 /usr/lib64/libhttp_parser.so.2.9.0
+node    20917 gleki  mem       REG    252,16   105744    537766 /usr/lib64/libz.so.1.2.11
+node    20917 gleki  mem       REG    252,16    32904    534864 /usr/lib64/libnss_dns-2.28.so
+node    20917 gleki  mem       REG    252,16    20872    537217 /usr/lib64/libnss_mdns4_minimal.so.2
+node    20917 gleki  mem       REG    252,16    72680    534866 /usr/lib64/libnss_files-2.28.so
+node    20917 gleki  mem       REG    252,16   228072    546762 /usr/lib64/ld-2.28.so
+node    20917 gleki    0u      CHR     136,5      0t0         8 /dev/pts/5
+node    20917 gleki    1u      CHR     136,5      0t0         8 /dev/pts/5
+node    20917 gleki    2u      CHR     136,5      0t0         8 /dev/pts/5
+node    20917 gleki    3u  a_inode      0,13        0     10726 [eventpoll]
+node    20917 gleki    4r     FIFO      0,12      0t0 171796048 pipe
+node    20917 gleki    5w     FIFO      0,12      0t0 171796048 pipe
+node    20917 gleki    6r     FIFO      0,12      0t0 171796049 pipe
+node    20917 gleki    7w     FIFO      0,12      0t0 171796049 pipe
+node    20917 gleki    8u  a_inode      0,13        0     10726 [eventfd]
+node    20917 gleki    9u  a_inode      0,13        0     10726 [eventpoll]
+node    20917 gleki   10r     FIFO      0,12      0t0 171796050 pipe
+node    20917 gleki   11w     FIFO      0,12      0t0 171796050 pipe
+node    20917 gleki   12u  a_inode      0,13        0     10726 [eventfd]
+node    20917 gleki   13u  a_inode      0,13        0     10726 [eventpoll]
+node    20917 gleki   14r     FIFO      0,12      0t0 171793149 pipe
+node    20917 gleki   15w     FIFO      0,12      0t0 171793149 pipe
+node    20917 gleki   16u  a_inode      0,13        0     10726 [eventfd]
+node    20917 gleki   17u      CHR     136,5      0t0         8 /dev/pts/5
+node    20917 gleki   18r      CHR       1,3      0t0     10731 /dev/null
+node    20917 gleki   19u      CHR     136,5      0t0         8 /dev/pts/5
+node    20917 gleki   20u     IPv4 171796059      0t0       TCP vrici:45886->edge-mqtt-shv-01-sjc3.facebook.com:https (ESTABLISHED)
+node    20917 gleki   21u     IPv6 171796057      0t0       TCP *:xmltec-xmlmail (LISTEN)
+node    20917 gleki   22u     IPv4 171796062      0t0       TCP vrici:49896->149.154.167.220:https (ESTABLISHED)
+node    20917 gleki   23u     IPv4 171796063      0t0       TCP vrici:49898->149.154.167.220:https (ESTABLISHED)
+node    20917 gleki   24u     IPv4 171797533      0t0       TCP vrici:33348->srv135-129-240-87.vk.com:https (ESTABLISHED)
+node    20917 gleki   25u     IPv4 171807853      0t0       TCP vrici:59988->srv163-11-213-95.vk.com:https (ESTABLISHED)
+node    20917 gleki   28u     IPv4 171797568      0t0       TCP vrici:38796->ec2-54-203-183-158.us-west-2.compute.amazonaws.com:https (ESTABLISHED)
+node    20917 gleki   29u     IPv4 171796111      0t0       TCP vrici:55308->card.freenode.net:ircu-3 (ESTABLISHED)
+node    20917 gleki   30u     IPv4 171796110      0t0       TCP vrici:50294->mindy.framasoft.org:https (ESTABLISHED)
