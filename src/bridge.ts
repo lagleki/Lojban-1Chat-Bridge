@@ -170,8 +170,10 @@ generic.slack.Start = async () => {
   });
   return slack;
 };
-generic.discord.Start = () => {
-  return new Discord.Client();
+generic.discord.Start = async () => {
+  return new Promise((resolve, reject) => {
+    resolve(new Discord.Client());
+  });
 };
 generic.mattermost.Start = async () => {
   let [err, res] = await to(
@@ -392,7 +394,10 @@ sendTo.discord = async ({
   )
     return;
   queueOf.discord.pushTask((resolve: any) => {
-    discord.channels.get(config.cache.discord[channelId]).send(chunk).catch(catchError);;
+    discord.channels
+      .get(channelId)
+      .send(chunk)
+      .catch(catchError);
   });
 };
 
@@ -676,32 +681,36 @@ async function sendFrom({
 receivedFrom.discord = async (message: any) => {
   if (
     !R.path(
-      ["channelMapping", "discord", R.path(["channel", "name"], message)],
+      [
+        "channelMapping",
+        "discord",
+        R.pathOr("", ["channel", "id"], message).toString()
+      ],
       config
     )
   )
     return;
   //обработать сообщение надо
-  if (!message.author.bot){
+  if (!message.author.bot) {
     sendFrom({
       messenger: "discord",
-      channelId: message.channel.name,
+      channelId: message.channel.id,
       author: message.author.username,
       text: message.content
     });
   }
-    // console.log(
-    //   message.channel.name,
-    //   message.author.username,
-    //   message.author.id,
-    //   discord.user.id,
-    //   "-",
-    //   message.content,
-    //   "+",
-    //   message.attachments,
-    //   "//",
-    //   message._edits
-    // );
+  // console.log(
+  //   message.channel.name,
+  //   message.author.username,
+  //   message.author.id,
+  //   discord.user.id,
+  //   "-",
+  //   message.content,
+  //   "+",
+  //   message.attachments,
+  //   "//",
+  //   message._edits
+  // );
 };
 
 // receivedFrom
@@ -1691,6 +1700,7 @@ convertFrom.slack = async (text: string) => {
   return str || text;
 };
 convertFrom.mattermost = async (text: string) => marked.parser(lexer.lex(text));
+convertFrom.discord = async (text: string) => marked.parser(lexer.lex(text));
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -1720,8 +1730,8 @@ convertTo["facebook"] = async (text: string) => convertToPlainText(text);
 convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
-convertTo["mattermost"] = async (text: string) =>
-  html2md.convert(text.replace(/\*/g, "&#42;").replace(/\_/g, "&#95;"));
+convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
+convertTo["discord"] = async (text: string) => html2md.convert(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -2042,7 +2052,6 @@ async function PopulateChannelMappingCore({
     slack: "slack",
     mattermost: "mattermost",
     discord: "discord",
-
     irc: "irc"
   };
   config.channels.map((i: any) => {
@@ -2116,7 +2125,8 @@ generic.MessengersAvailable = () => {
     config.MessengersAvailable.facebook = false;
   if (
     R.pathOr("", ["discord", "client"], config) === "" ||
-    R.pathOr("", ["discord", "token"], config) === ""
+    R.pathOr("", ["discord", "token"], config) === "" ||
+    R.pathOr("", ["discord", "guildId"], config) === ""
   )
     config.MessengersAvailable.discord = false;
   if (R.pathOr("", ["telegram", "token"], config) === "")
@@ -2151,63 +2161,57 @@ StartService.facebook = async (force: boolean) => {
 
 StartService.telegram = async () => {
   //telegram
-  if (config.MessengersAvailable.telegram) {
-    telegram = generic.telegram.Start();
-    queueOf.telegram = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    telegram.on("message", (message: any) => {
-      receivedFrom.telegram(message);
-    });
-    telegram.on("edited_message", (message: any) => {
-      receivedFrom.telegram(message);
-    });
-    telegram.on("polling_error", (error: any) => {
-      if (
-        error.code === "ETELEGRAM" &&
-        error.response.body.error_code === 404
-      ) {
-        config.MessengersAvailable.telegram = false;
-        telegram.stopPolling();
-      }
-    });
-    const [err, res] = await to(telegram.getMe());
-    if (!err) config.telegram.myUser = res;
-  }
+  if (!config.MessengersAvailable.telegram) return;
+  telegram = generic.telegram.Start();
+  queueOf.telegram = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  telegram.on("message", (message: any) => {
+    receivedFrom.telegram(message);
+  });
+  telegram.on("edited_message", (message: any) => {
+    receivedFrom.telegram(message);
+  });
+  telegram.on("polling_error", (error: any) => {
+    if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
+      config.MessengersAvailable.telegram = false;
+      telegram.stopPolling();
+    }
+  });
+  const [err, res] = await to(telegram.getMe());
+  if (!err) config.telegram.myUser = res;
 };
 
 StartService.vkboard = async () => {
   //vkboard
-  if (config.MessengersAvailable.vkboard) {
-    vkboard = await generic.vkboard.Start();
-    queueOf.vkboard = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    vkboard.bot.event("board_post_new", async (ctx: any) => {
-      receivedFrom.vkboard(ctx.message);
-    });
-    vkboard.bot.event("board_post_edit", async (ctx: any) => {
-      ctx.message.edited = true;
-      receivedFrom.vkboard(ctx.message);
-    });
-    vkboard.bot.startPolling();
-  }
+  if (!config.MessengersAvailable.vkboard) return;
+  vkboard = await generic.vkboard.Start();
+  queueOf.vkboard = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  vkboard.bot.event("board_post_new", async (ctx: any) => {
+    receivedFrom.vkboard(ctx.message);
+  });
+  vkboard.bot.event("board_post_edit", async (ctx: any) => {
+    ctx.message.edited = true;
+    receivedFrom.vkboard(ctx.message);
+  });
+  vkboard.bot.startPolling();
 };
 
 StartService.slack = async () => {
   //slack
   slack = await generic.slack.Start();
-  if (config.MessengersAvailable.slack) {
-    queueOf.slack = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    slack.rtm.on("message", (message: any) => {
-      receivedFrom.slack(message);
-    });
-  }
+  if (!config.MessengersAvailable.slack) return;
+  queueOf.slack = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  slack.rtm.on("message", (message: any) => {
+    receivedFrom.slack(message);
+  });
 };
 
 StartService.mattermost = async () => {
@@ -2240,7 +2244,13 @@ StartService.mattermost = async () => {
 
 StartService.discord = async () => {
   //discord
-  discord = generic.discord.Start();
+  discord = await generic.discord.Start();
+  if (!config.MessengersAvailable.discord) return;
+
+  queueOf.discord = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
   if (config.MessengersAvailable.discord) {
     queueOf.discord = new Queue({
       autoStart: true,
@@ -2263,53 +2273,52 @@ StartService.irc = async () => {
     config.irc.ircOptions.nick,
     config.irc.ircOptions
   );
-  if (config.MessengersAvailable.irc) {
-    queueOf.irc = new Queue({
-      autoStart: true,
-      concurrency: 1
+  if (!config.MessengersAvailable.irc) return;
+  queueOf.irc = new Queue({
+    autoStart: true,
+    concurrency: 1
+  });
+  irc.on("error", (error: any) => {
+    receivedFrom.irc({
+      error,
+      type: "error"
     });
-    irc.on("error", (error: any) => {
-      receivedFrom.irc({
-        error,
-        type: "error"
-      });
-      // StartService.irc();
-    });
+    // StartService.irc();
+  });
 
-    irc.on("registered", () => {
-      receivedFrom.irc({
-        handler: irc,
-        type: "registered"
-      });
+  irc.on("registered", () => {
+    receivedFrom.irc({
+      handler: irc,
+      type: "registered"
     });
+  });
 
-    irc.on("message", (author: string, channelId: string, text: string) => {
-      receivedFrom.irc({
-        author,
-        channelId,
-        text,
-        type: "message"
-      });
+  irc.on("message", (author: string, channelId: string, text: string) => {
+    receivedFrom.irc({
+      author,
+      channelId,
+      text,
+      type: "message"
     });
+  });
 
-    irc.on("topic", (channelId: string, topic: string, author: string) => {
-      receivedFrom.irc({
-        author,
-        channelId,
-        text: topic,
-        type: "topic"
-      });
+  irc.on("topic", (channelId: string, topic: string, author: string) => {
+    receivedFrom.irc({
+      author,
+      channelId,
+      text: topic,
+      type: "topic"
     });
+  });
 
-    irc.on("action", (author: string, channelId: string, text: string) => {
-      receivedFrom.irc({
-        author,
-        channelId,
-        text,
-        type: "action"
-      });
+  irc.on("action", (author: string, channelId: string, text: string) => {
+    receivedFrom.irc({
+      author,
+      channelId,
+      text,
+      type: "action"
     });
-  }
+  });
 };
 
 async function StartServices() {
