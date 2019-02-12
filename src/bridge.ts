@@ -690,14 +690,34 @@ receivedFrom.discord = async (message: any) => {
     )
   )
     return;
-  //обработать сообщение надо
+
   if (!message.author.bot) {
+    const text = generic.discord.reconstructPlainText(message.content);
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
       author: message.author.username,
-      text: message.content
+      text
     });
+    for (let value of message.attachments.values()) {
+      //media of attachment
+      try {
+        sendFrom({
+          messenger: "discord",
+          channelId: message.channel.id,
+          author: message.author.username,
+          text: value.url
+        });
+        //text of attachment
+        const text = generic.discord.reconstructPlainText(value.content);
+        sendFrom({
+          messenger: "discord",
+          channelId: message.channel.id,
+          author: message.author.username,
+          text
+        });
+      } catch (e) {}
+    }
   }
   // console.log(
   //   message.channel.name,
@@ -826,8 +846,50 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   sendFromTelegram({ message });
 };
 
+generic.discord.reconstructPlainText = (message: string) => {
+  const massMentions = ["@everyone", "@here"];
+  if (
+    massMentions.some(massMention => message.includes(massMention)) &&
+    !config.discord.massMentions
+  ) {
+    massMentions.forEach(massMention => {
+      message = message.replace(
+        new RegExp(massMention, "g"),
+        `\`${massMention}\``
+      );
+    });
+  }
+  const matches = message.match(/@[^# ]{2,32}/g);
+  for (let match of matches) {
+    // Exclude @
+    match = match.substr(1);
+    // Go through each role in each guild the bot is in, and try to find the role.
+    const role = discord.guilds
+      .getAll("roles")
+      .find((role: any) => role.name.toLowerCase() === match.toLowerCase());
+    if (role) {
+      message = message.replace(`@${match}`, role);
+      continue;
+    }
+
+    const user = discord.guilds
+      .getAll("members")
+      .find(
+        (user: any) =>
+          (user.nickname &&
+            user.nickname.toLowerCase() === match.toLowerCase()) ||
+          user.user.username.toLowerCase() === match.toLowerCase()
+      );
+    if (user) {
+      message = message.replace(`@${match}`, user);
+    }
+  }
+
+  return message;
+};
+
 // reconstructs the original raw markdown message
-const reconstructMarkdown = (msg: Telegram.Message) => {
+generic.telegram.reconstructMarkdown = (msg: Telegram.Message) => {
   if (!msg.entities) return msg;
   const incrementOffsets = (from: number, by: number) => {
     msg.entities.forEach((entity: any) => {
@@ -904,7 +966,7 @@ async function sendFromTelegram({
 }) {
   if (!message) return;
   let action;
-  message = reconstructMarkdown(message);
+  message = generic.telegram.reconstructMarkdown(message);
   //collect attachments
   const jsonMessage: any = {};
   let i = 0;
