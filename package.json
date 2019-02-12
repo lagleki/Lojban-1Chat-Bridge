@@ -29,8 +29,10 @@
   "homepage": "https://github.com/lagleki/Lojban-1Chat-Bridge",
   "dependencies": {
     "@slack/client": "^4.6.0",
+    "@types/debug": "^4.1.0",
     "await-to-js": "^2.0.1",
     "bootbot": "^1.0.16",
+    "debug": "^4.1.1",
     "discord.js": "^11.4.2",
     "fs-extra": "^7.0.0",
     "html-entities": "^1.1.3",

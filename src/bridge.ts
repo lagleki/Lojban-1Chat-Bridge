@@ -20,7 +20,7 @@ const sanitizeHtml = require("sanitize-html");
 const { VK } = require("vk-io");
 const VkBot = require("node-vk-bot-api");
 
-const discord = require("discord.js");
+const Discord = require("discord.js");
 
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
@@ -42,27 +42,28 @@ const http = require("http");
 const serveStatic = require("serve-static");
 
 // syntactic sugar
+import debug from "debug"
 const R = require("ramda");
 const Queue = require("./sugar/promise-queue");
 const { to } = require("await-to-js");
 const { or } = require("./sugar/await-or.js");
 const blalalavla = require("./sugar/blalalavla.js");
-const UrlRegExp = new RegExp(
-  "(?:(?:https?|ftp|file)://|www.|ftp.)(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[A-Z0-9+&@#/%=~_|$])",
-  "igm"
-);
-const PageTitleRegExp = /(<\s*title[^>]*>(.+?)<\s*\/\s*title)>/gi;
-
 // file system and network libs
 const fs = require("fs-extra");
 const path = require("path");
 const mkdirp = require("mkdirp");
 import * as request from "request";
 
+
 // NLP & spam libs
 // const lojban = require("lojban")
 
 // global objects
+const UrlRegExp = new RegExp(
+  "(?:(?:https?|ftp|file)://|www.|ftp.)(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[A-Z0-9+&@#/%=~_|$])",
+  "igm"
+);
+const PageTitleRegExp = /(<\s*title[^>]*>(.+?)<\s*\/\s*title)>/gi;
 let facebook: any,
   telegram: any,
   vkboard: any,
@@ -1340,14 +1341,14 @@ receivedFrom.mattermost = async (message: any) => {
 };
 
 
-receivedFrom.discord = async (message: any) => {
+receivedFrom.discord = async (msg: any) => {
   //обработать сообщение надо
   if (!msg.author.bot)
     console.log(
       msg.channel.name,
       msg.author.username,
       msg.author.id,
-      client.user.id,
+      discord.user.id,
       "-",
       msg.content,
       "+",
