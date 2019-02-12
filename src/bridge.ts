@@ -68,6 +68,7 @@ let facebook: any,
   vkboard: any,
   slack: any,
   mattermost: any,
+  discord: any,
   irc: any;
 
 interface Json {
@@ -104,7 +105,8 @@ const generic: Igeneric = {
   telegram: {},
   vkboard: {},
   slack: {},
-  mattermost: {},
+  mattermost: {},  discord: {},
+
   irc: {}
 };
 
@@ -168,7 +170,9 @@ generic.slack.Start = async () => {
   });
   return slack;
 };
-
+generic.discord.Start = () => {
+  return new Discord.Client();
+};
 generic.mattermost.Start = async () => {
   let [err, res] = await to(
     new Promise((resolve, reject) => {
@@ -415,7 +419,7 @@ sendTo.vkboard = async ({
     R.path(
       ["channelMapping", "vkboard", channelId, "settings", "readonly"],
       config
-    ) //|| !vk.WaitingForCaptcha
+    ) //todo: !vk.WaitingForCaptcha
   )
     return;
   const token = vkboard.app.token;
@@ -429,13 +433,26 @@ sendTo.vkboard = async ({
           message: chunk,
           from_group: 1
         })
-        .then((res: any) => {
-          lg("vkboard", res);
-        })
+        .then((res: any) => {})
         .catch(catchError);
       resolve();
     }, 10000);
   });
+  // if (err.error.error_code === 14) {
+  //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
+  //     //todo: send image to telegram,a reply is expected
+  //     vk.WaitingForCaptcha = true;
+  //     const key = await myAwesomeCaptchaHandler(src);
+  //     vk.WaitingForCaptcha = false;
+  //     try {
+  //       await retry(key);
+  //
+  //       console.log("Капча успешно решена");
+  //     } catch (error) {
+  //       console.log("Капча неверная", error.toString());
+  //     }
+  //   });
+  // }
 };
 
 async function myAwesomeCaptchaHandler() {}
@@ -966,14 +983,15 @@ async function sendFromTelegram({
 }
 
 receivedFrom.vkboard = async (message: any) => {
+  lg(JSON.stringify(message));
   if (!config.channelMapping.vkboard) return;
   const channelId = message.topic_id;
   if (
     !config.channelMapping.vkboard[channelId] ||
     message.topic_owner_id === message.from_id
   )
-    return; // unknown topic || group owner sent the message
-  //todo: remove "group owner sent the message"
+    return;
+  //todo: replace message.topic_owner_id with "MyId"
   let text = message.text;
   const fromwhomId = message.from_id;
   let [err, res] = await to(
@@ -1321,6 +1339,28 @@ receivedFrom.mattermost = async (message: any) => {
   }
 };
 
+
+receivedFrom.discord = async (message: any) => {
+  //обработать сообщение надо
+  if (!msg.author.bot)
+    console.log(
+      msg.channel.name,
+      msg.author.username,
+      msg.author.id,
+      client.user.id,
+      "-",
+      msg.content,
+      "+",
+      msg.attachments,
+      "//",
+      msg._edits
+    );
+  if (msg.content === "ping") {
+    //sender
+    msg.channel.send("pong");
+  }
+}
+
 receivedFrom.irc = async ({
   author,
   channelId,
@@ -1415,7 +1455,7 @@ AdaptName.vkboard = (user: any) => {
   if (full_name === "") full_name = undefined;
   if (user.nickname && user.nickname.length < 1) user.nickname = null;
   if (user.screen_name && user.screen_name.length < 1) user.screen_name = null;
-  return user.nickname || user.screen_name || full_name || user.id;
+  return user.screen_name || user.nickname || full_name || user.id;
 };
 AdaptName.slack = (user: any) =>
   R.path(["user", "profile", "display_name"], user) ||
@@ -1919,6 +1959,19 @@ GetChannels.mattermost = async () => {
   return json;
 };
 
+
+GetChannels.discord = async () => {
+  if (!config.MessengersAvailable.discord) return;
+  const json: Json = {};
+  for (const value of discord.channels.values()) {
+    if (value.guild.id === config.discord.guildId) {
+      json[value.name] = value.id;
+    }
+  }
+  config.cache.discord = json;
+  return;
+};
+
 async function GetChannelsMattermostCore(json: Json, url: string) {
   await to(
     new Promise((resolve, reject) => {
@@ -1962,7 +2015,8 @@ async function PopulateChannelMappingCore({
     telegram: "telegram",
     vkboard: "vkboard",
     slack: "slack",
-    mattermost: "mattermost",
+    mattermost: "mattermost",    discord: "discord",
+
     irc: "irc"
   };
   config.channels.map((i: any) => {
@@ -2000,12 +2054,16 @@ generic.PopulateChannelMapping = async () => {
   await GetChannels.telegram();
   await GetChannels.slack();
   await GetChannels.mattermost();
+  // await GetChannels.discord();
 
   await PopulateChannelMappingCore({ messenger: "facebook" });
   await PopulateChannelMappingCore({ messenger: "telegram" });
   await PopulateChannelMappingCore({ messenger: "vkboard" });
   await PopulateChannelMappingCore({ messenger: "slack" });
   await PopulateChannelMappingCore({ messenger: "mattermost" });
+  // await PopulateChannelMappingCore({ messenger: "discord" });
+
+
   await PopulateChannelMappingCore({ messenger: "irc" });
   // console.log(
   //   "started services with these channel mapping:\n",
@@ -2021,16 +2079,22 @@ generic.MessengersAvailable = () => {
     if (i.vkboard) config.MessengersAvailable.vkboard = true;
     if (i.slack) config.MessengersAvailable.slack = true;
     if (i.mattermost) config.MessengersAvailable.mattermost = true;
+    // if (i.discord) config.MessengersAvailable.discord = true;
+
     if (i.irc) config.MessengersAvailable.irc = true;
   });
   if (
-    !R.path(["facebook", "email"], config) ||
-    config.facebook.login === "" ||
-    !R.path(["facebook", "password"], config) ||
-    config.facebook.password === ""
+    R.pathOr("", ["facebook", "email"], config) === "" ||
+    R.pathOr("", ["facebook", "login"], config) === "" ||
+    R.pathOr("", ["facebook", "password"], config) === ""
   )
     config.MessengersAvailable.facebook = false;
-  if (!R.path(["telegram", "token"], config) || config.telegram.token === "")
+  if (
+    R.pathOr("", ["discord", "client"], config) === "" ||
+    R.pathOr("", ["discord", "token"], config) === ""
+  )
+    config.MessengersAvailable.discord = false;
+  if (R.pathOr("", ["telegram", "token"], config) === "")
     config.MessengersAvailable.telegram = false;
   if (
     R.pathOr("", ["vkboard", "token"], config) === "" ||
@@ -2149,6 +2213,25 @@ StartService.mattermost = async () => {
   mattermost.addEventListener("error", () => mattermost._connect());
 };
 
+
+StartService.discord = async () => {
+  //discord
+  discord = generic.discord.Start();
+  if (config.MessengersAvailable.discord) {
+    queueOf.discord = new Queue({
+      autoStart: true,
+      concurrency: 1
+    });
+    discord.on("ready", () => {
+      console.log(`Logged in to discord`);
+    });
+    discord.on("message", (message: any) => {
+      receivedFrom.discord(message);
+    });
+    discord.login(config.discord.token);
+  }
+};
+
 StartService.irc = async () => {
   //irc
   irc = new Irc.Client(
@@ -2214,6 +2297,7 @@ async function StartServices() {
   await StartService.vkboard();
   await StartService.slack();
   await StartService.mattermost();
+  // await StartService.discord();
   await StartService.irc();
 
   await generic.PopulateChannelMapping();
@@ -2276,21 +2360,11 @@ generic.LogToAdmin = (msg_text: string) => {
 generic.escapeHTML = (arg: string) =>
   arg
     .replace(/&(?![a-zA-Z0-9#]{1,7};)/g, "&amp;")
-    // .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;")
     .replace(/'/g, "&#039;");
-
-// generic.unescapeHTML = (arg: string) =>
-//   arg
-//     .replace(/&amp;/g, "&")
-//     .replace(/&lt;/g, "<")
-//     .replace(/&gt;/g, ">")
-//     .replace(/&quot;/g, '"')
-//     .replace(/&apos;/g, "'")
-//     .replace(/(&#039;|&#39;)/g, "'");
 
 const htmlEntities: any = {
   nbsp: " ",
@@ -2312,10 +2386,8 @@ generic.unescapeHTML = (str: string, convertHtmlEntities: boolean) => {
 
     if (convertHtmlEntities && htmlEntities[entityCode]) {
       return htmlEntities[entityCode];
-      /*eslint no-cond-assign: 0*/
     } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
       return String.fromCharCode(parseInt(match[1], 16));
-      /*eslint no-cond-assign: 0*/
     } else if ((match = entityCode.match(/^#(\d+)$/))) {
       return String.fromCharCode(~~match[1]);
     } else {
@@ -2380,8 +2452,8 @@ generic.GetChunks = async (text: string, messenger: string) => {
   const limit = config[messenger].MessageLength || 400;
   const r = new RegExp(`(.{${limit - 40},${limit}})(?= )`, "g");
   const arrText: string[] = text
-    .replace(r, "$1\n")
-    .split(/\n/)
+    .replace(r, "$1\r")
+    .split(/\r/)
     .reduce((acc: string[], i: string) => {
       if (Buffer.byteLength(i, "utf8") > limit) {
         const arrI: string[] = i.split(/(?=<a href="https?:\/\/)/gu);
@@ -2397,8 +2469,6 @@ generic.GetChunks = async (text: string, messenger: string) => {
       return acc;
     }, [])
     .filter((i: string) => i !== "");
-  // const a = arrText
-  //   .map((i: string) => generic.unescapeHTML(i, false));
   return arrText;
 };
 
@@ -2623,9 +2693,3 @@ if (config.generic.showMedia) {
   // Listen
   server.listen(config.generic.httpPort);
 }
-
-// p.p1 = 'v1'; // this will log o, "p1", "v1"
-// o.p2 = 'v2'; /
-
-// global var
-// call function, itchecks for global var value, if different then stopListening and reboot facebook
