@@ -107,7 +107,6 @@ const generic: Igeneric = {
   slack: {},
   mattermost: {},
   discord: {},
-
   irc: {}
 };
 
@@ -374,6 +373,26 @@ sendTo.telegram = async ({
         generic.LogToAdmin(err.toString() + "<br/>\n" + chunk);
         resolve();
       });
+  });
+};
+
+sendTo.discord = async ({
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file
+}: IsendToArgs) => {
+  if (
+    R.path(
+      ["channelMapping", "discord", channelId, "settings", "readonly"],
+      config
+    )
+  )
+    return;
+  queueOf.discord.pushTask((resolve: any) => {
+    discord.channels.get(config.cache.discord[channelId]).send(chunk).catch(catchError);;
   });
 };
 
@@ -654,6 +673,37 @@ async function sendFrom({
   }
 }
 
+receivedFrom.discord = async (message: any) => {
+  if (
+    !R.path(
+      ["channelMapping", "discord", R.path(["channel", "name"], message)],
+      config
+    )
+  )
+    return;
+  //обработать сообщение надо
+  if (!message.author.bot){
+    sendFrom({
+      messenger: "discord",
+      channelId: message.channel.name,
+      author: message.author.username,
+      text: message.content
+    });
+  }
+    // console.log(
+    //   message.channel.name,
+    //   message.author.username,
+    //   message.author.id,
+    //   discord.user.id,
+    //   "-",
+    //   message.content,
+    //   "+",
+    //   message.attachments,
+    //   "//",
+    //   message._edits
+    // );
+};
+
 // receivedFrom
 receivedFrom.facebook = async (message: any) => {
   if (
@@ -679,32 +729,30 @@ receivedFrom.facebook = async (message: any) => {
   if (!message.attachments) message.attachments = [];
   if (message.stickerId)
     message.attachments.push({ id: message.stickerId, type: "sticker" });
-  if (message.attachments.length > 0) {
-    for (const attachment of message.attachments) {
-      if (attachment.type === "sticker") {
-        [err, res] = await to(facebook.getStickerURL(attachment.id));
-      } else {
-        [err, res] = await to(
-          facebook.getAttachmentURL(message.id, attachment.id)
-        );
-      }
-      if (err) return;
-      //todo: add type="photo","width","height","size"
-      generic
-        .downloadFile({
-          type: "simple",
-          remote_path: res
-        })
-        .then(([file, localfile]: [string, string]) => {
-          sendFrom({
-            messenger: "facebook",
-            channelId: message.threadId,
-            author,
-            text: file,
-            file: localfile
-          });
-        });
+  for (const attachment of message.attachments) {
+    if (attachment.type === "sticker") {
+      [err, res] = await to(facebook.getStickerURL(attachment.id));
+    } else {
+      [err, res] = await to(
+        facebook.getAttachmentURL(message.id, attachment.id)
+      );
     }
+    if (err) return;
+    //todo: add type="photo","width","height","size"
+    generic
+      .downloadFile({
+        type: "simple",
+        remote_path: res
+      })
+      .then(([file, localfile]: [string, string]) => {
+        sendFrom({
+          messenger: "facebook",
+          channelId: message.threadId,
+          author,
+          text: file,
+          file: localfile
+        });
+      });
   }
 };
 
@@ -1336,27 +1384,6 @@ receivedFrom.mattermost = async (message: any) => {
       action,
       edited: message.edited
     });
-  }
-};
-
-receivedFrom.discord = async (msg: any) => {
-  //обработать сообщение надо
-  if (!msg.author.bot)
-    console.log(
-      msg.channel.name,
-      msg.author.username,
-      msg.author.id,
-      discord.user.id,
-      "-",
-      msg.content,
-      "+",
-      msg.attachments,
-      "//",
-      msg._edits
-    );
-  if (msg.content === "ping") {
-    //sender
-    msg.channel.send("pong");
   }
 };
 
