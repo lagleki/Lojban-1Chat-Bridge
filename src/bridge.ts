@@ -2080,14 +2080,14 @@ generic.PopulateChannelMapping = async () => {
   await GetChannels.telegram();
   await GetChannels.slack();
   await GetChannels.mattermost();
-  // await GetChannels.discord();
+  await GetChannels.discord();
 
   await PopulateChannelMappingCore({ messenger: "facebook" });
   await PopulateChannelMappingCore({ messenger: "telegram" });
   await PopulateChannelMappingCore({ messenger: "vkboard" });
   await PopulateChannelMappingCore({ messenger: "slack" });
   await PopulateChannelMappingCore({ messenger: "mattermost" });
-  // await PopulateChannelMappingCore({ messenger: "discord" });
+  await PopulateChannelMappingCore({ messenger: "discord" });
 
   await PopulateChannelMappingCore({ messenger: "irc" });
   // console.log(
@@ -2104,7 +2104,7 @@ generic.MessengersAvailable = () => {
     if (i.vkboard) config.MessengersAvailable.vkboard = true;
     if (i.slack) config.MessengersAvailable.slack = true;
     if (i.mattermost) config.MessengersAvailable.mattermost = true;
-    // if (i.discord) config.MessengersAvailable.discord = true;
+    if (i.discord) config.MessengersAvailable.discord = true;
 
     if (i.irc) config.MessengersAvailable.irc = true;
   });
@@ -2321,7 +2321,7 @@ async function StartServices() {
   await StartService.vkboard();
   await StartService.slack();
   await StartService.mattermost();
-  // await StartService.discord();
+  await StartService.discord();
   await StartService.irc();
 
   await generic.PopulateChannelMapping();
