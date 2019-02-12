@@ -42,7 +42,7 @@ const http = require("http");
 const serveStatic = require("serve-static");
 
 // syntactic sugar
-import debug from "debug"
+import debug from "debug";
 const R = require("ramda");
 const Queue = require("./sugar/promise-queue");
 const { to } = require("await-to-js");
@@ -53,7 +53,6 @@ const fs = require("fs-extra");
 const path = require("path");
 const mkdirp = require("mkdirp");
 import * as request from "request";
-
 
 // NLP & spam libs
 // const lojban = require("lojban")
@@ -106,7 +105,8 @@ const generic: Igeneric = {
   telegram: {},
   vkboard: {},
   slack: {},
-  mattermost: {},  discord: {},
+  mattermost: {},
+  discord: {},
 
   irc: {}
 };
@@ -992,7 +992,6 @@ receivedFrom.vkboard = async (message: any) => {
     message.topic_owner_id === message.from_id
   )
     return;
-  //todo: replace message.topic_owner_id with "MyId"
   let text = message.text;
   const fromwhomId = message.from_id;
   let [err, res] = await to(
@@ -1340,7 +1339,6 @@ receivedFrom.mattermost = async (message: any) => {
   }
 };
 
-
 receivedFrom.discord = async (msg: any) => {
   //обработать сообщение надо
   if (!msg.author.bot)
@@ -1360,7 +1358,7 @@ receivedFrom.discord = async (msg: any) => {
     //sender
     msg.channel.send("pong");
   }
-}
+};
 
 receivedFrom.irc = async ({
   author,
@@ -1960,7 +1958,6 @@ GetChannels.mattermost = async () => {
   return json;
 };
 
-
 GetChannels.discord = async () => {
   if (!config.MessengersAvailable.discord) return;
   const json: Json = {};
@@ -2016,7 +2013,8 @@ async function PopulateChannelMappingCore({
     telegram: "telegram",
     vkboard: "vkboard",
     slack: "slack",
-    mattermost: "mattermost",    discord: "discord",
+    mattermost: "mattermost",
+    discord: "discord",
 
     irc: "irc"
   };
@@ -2063,7 +2061,6 @@ generic.PopulateChannelMapping = async () => {
   await PopulateChannelMappingCore({ messenger: "slack" });
   await PopulateChannelMappingCore({ messenger: "mattermost" });
   // await PopulateChannelMappingCore({ messenger: "discord" });
-
 
   await PopulateChannelMappingCore({ messenger: "irc" });
   // console.log(
@@ -2213,7 +2210,6 @@ StartService.mattermost = async () => {
   mattermost.addEventListener("close", () => mattermost._connect());
   mattermost.addEventListener("error", () => mattermost._connect());
 };
-
 
 StartService.discord = async () => {
   //discord
