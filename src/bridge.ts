@@ -691,46 +691,33 @@ receivedFrom.discord = async (message: any) => {
   )
     return;
 
-  if (!message.author.bot) {
-    const text = generic.discord.reconstructPlainText(message.content);
-    sendFrom({
-      messenger: "discord",
-      channelId: message.channel.id,
-      author: message.author.username,
-      text
-    });
-    for (let value of message.attachments.values()) {
-      //media of attachment
-      try {
-        sendFrom({
-          messenger: "discord",
-          channelId: message.channel.id,
-          author: message.author.username,
-          text: value.url
-        });
-        //text of attachment
-        const text = generic.discord.reconstructPlainText(value.content);
-        sendFrom({
-          messenger: "discord",
-          channelId: message.channel.id,
-          author: message.author.username,
-          text
-        });
-      } catch (e) {}
-    }
+  if (message.author.bot) return;
+  const text = generic.discord.reconstructPlainText(message.content);
+  sendFrom({
+    messenger: "discord",
+    channelId: message.channel.id,
+    author: message.author.username,
+    text
+  });
+  for (let value of message.attachments.values()) {
+    //media of attachment
+    try {
+      sendFrom({
+        messenger: "discord",
+        channelId: message.channel.id,
+        author: message.author.username,
+        text: value.url
+      });
+      //text of attachment
+      const text = generic.discord.reconstructPlainText(value.content);
+      sendFrom({
+        messenger: "discord",
+        channelId: message.channel.id,
+        author: message.author.username,
+        text
+      });
+    } catch (e) {}
   }
-  // console.log(
-  //   message.channel.name,
-  //   message.author.username,
-  //   message.author.id,
-  //   discord.user.id,
-  //   "-",
-  //   message.content,
-  //   "+",
-  //   message.attachments,
-  //   "//",
-  //   message._edits
-  // );
 };
 
 // receivedFrom
