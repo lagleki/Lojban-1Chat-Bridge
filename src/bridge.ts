@@ -691,7 +691,7 @@ receivedFrom.discord = async (message: any) => {
   )
     return;
 
-  if (message.author.bot) return;
+  if (message.author.bot || message.channel.type !== "text") return;
   const text = generic.discord.reconstructPlainText(message.content);
   sendFrom({
     messenger: "discord",
@@ -701,22 +701,36 @@ receivedFrom.discord = async (message: any) => {
   });
   for (let value of message.attachments.values()) {
     //media of attachment
-    try {
-      sendFrom({
-        messenger: "discord",
-        channelId: message.channel.id,
-        author: message.author.username,
-        text: value.url
-      });
-      //text of attachment
-      const text = generic.discord.reconstructPlainText(value.content);
-      sendFrom({
-        messenger: "discord",
-        channelId: message.channel.id,
-        author: message.author.username,
-        text
-      });
-    } catch (e) {}
+    //todo: height,width,generic.LocalizeString
+    let [err, res] = await to(
+      generic.downloadFile({
+        type: "simple",
+        remote_path: value.url
+      })
+    );
+    let file: string, localfile: string;
+
+    if (R.path([1], res)) {
+      [file, localfile] = res;
+    } else {
+      file = value.url;
+      localfile = value.url;
+    }
+    sendFrom({
+      messenger: "discord",
+      channelId: message.channel.id,
+      author: message.author.username,
+      text: file,
+      file: localfile
+    });
+    //text of attachment
+    const text = generic.discord.reconstructPlainText(value.content);
+    sendFrom({
+      messenger: "discord",
+      channelId: message.channel.id,
+      author: message.author.username,
+      text
+    });
   }
 };
 
@@ -847,6 +861,7 @@ generic.discord.reconstructPlainText = (message: string) => {
     });
   }
   const matches = message.match(/@[^# ]{2,32}/g);
+  if (!matches || !matches[0]) return message;
   for (let match of matches) {
     // Exclude @
     match = match.substr(1);
@@ -1251,7 +1266,7 @@ receivedFrom.slack = async (message: any) => {
 };
 
 receivedFrom.mattermost = async (message: any) => {
-  if (R.path(["event"], message) === "posted") lg(message);
+  // if (R.path(["event"], message) === "posted") lg(message);
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
