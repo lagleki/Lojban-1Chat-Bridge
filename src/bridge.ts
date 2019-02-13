@@ -172,7 +172,25 @@ generic.slack.Start = async () => {
 };
 generic.discord.Start = async () => {
   return new Promise((resolve, reject) => {
-    resolve(new Discord.Client());
+    const discord: any = {};
+    const client = new Discord.Client();
+    discord.client = client;
+    discord.guilds = client.guilds.array();
+    if (config.discord.guildId) {
+      const guild = client.guilds.find(
+        (guild: any) =>
+          guild.name.toLowerCase() === config.discord.guildId.toLowerCase() ||
+          guild.id === config.discord.guildId
+      );
+      if (guild)
+        discord.guilds = [
+          guild,
+          ...discord.guilds.filter((_guild: any) => _guild.id !== guild.id)
+        ];
+    }
+    discord.guilds.getAll = (name: string) =>
+      [].concat(...discord.guilds.map((guild: any) => guild[name].array()));
+    resolve(discord);
   });
 };
 generic.mattermost.Start = async () => {
@@ -394,7 +412,7 @@ sendTo.discord = async ({
   )
     return;
   queueOf.discord.pushTask((resolve: any) => {
-    discord.channels
+    discord.client.channels
       .get(channelId)
       .send(chunk)
       .catch(catchError);
@@ -2062,7 +2080,7 @@ GetChannels.mattermost = async () => {
 GetChannels.discord = async () => {
   if (!config.MessengersAvailable.discord) return;
   const json: Json = {};
-  for (const value of discord.channels.values()) {
+  for (const value of discord.client.channels.values()) {
     if (value.guild.id === config.discord.guildId) {
       json[value.name] = value.id;
     }
@@ -2320,13 +2338,13 @@ StartService.discord = async () => {
       autoStart: true,
       concurrency: 1
     });
-    discord.on("ready", () => {
-      console.log(`Logged in to discord`);
-    });
-    discord.on("message", (message: any) => {
+    // discord.client.on("ready", () => {
+    //   console.log(`Logged in to discord`);
+    // });
+    discord.client.on("message", (message: any) => {
       receivedFrom.discord(message);
     });
-    discord.login(config.discord.token);
+    discord.client.login(config.discord.token);
   }
 };
 
