@@ -710,7 +710,7 @@ receivedFrom.discord = async (message: any) => {
     return;
 
   if (message.author.bot || message.channel.type !== "text") return;
-  const text = generic.discord.reconstructPlainText(message.content);
+  const text = discord.reconstructPlainText(message.content);
   sendFrom({
     messenger: "discord",
     channelId: message.channel.id,
@@ -742,7 +742,7 @@ receivedFrom.discord = async (message: any) => {
       file: localfile
     });
     //text of attachment
-    const text = generic.discord.reconstructPlainText(value.content);
+    const text = discord.reconstructPlainText(value.content);
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -865,7 +865,8 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   sendFromTelegram({ message });
 };
 
-generic.discord.reconstructPlainText = (message: string) => {
+discord.reconstructPlainText = (message: string) => {
+  if (!message) return '';
   const massMentions = ["@everyone", "@here"];
   if (
     massMentions.some(massMention => message.includes(massMention)) &&
