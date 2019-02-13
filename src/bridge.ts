@@ -710,13 +710,6 @@ receivedFrom.discord = async (message: any) => {
     return;
 
   if (message.author.bot || message.channel.type !== "text") return;
-  const text = discord.reconstructPlainText(message.content);
-  sendFrom({
-    messenger: "discord",
-    channelId: message.channel.id,
-    author: message.author.username,
-    text
-  });
   for (let value of message.attachments.values()) {
     //media of attachment
     //todo: height,width,generic.LocalizeString
@@ -742,7 +735,7 @@ receivedFrom.discord = async (message: any) => {
       file: localfile
     });
     //text of attachment
-    const text = discord.reconstructPlainText(value.content);
+    const text = generic.discord.reconstructPlainText(value.content);
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -750,6 +743,14 @@ receivedFrom.discord = async (message: any) => {
       text
     });
   }
+
+  const text = generic.discord.reconstructPlainText(message.content);
+  sendFrom({
+    messenger: "discord",
+    channelId: message.channel.id,
+    author: message.author.username,
+    text
+  });
 };
 
 // receivedFrom
@@ -766,14 +767,7 @@ receivedFrom.facebook = async (message: any) => {
   if (err) return;
   let author: string;
   author = AdaptName.facebook(res);
-  if (message.message) {
-    sendFrom({
-      messenger: "facebook",
-      channelId: message.threadId,
-      author,
-      text: message.message
-    });
-  }
+
   if (!message.attachments) message.attachments = [];
   if (message.stickerId)
     message.attachments.push({ id: message.stickerId, type: "sticker" });
@@ -802,6 +796,14 @@ receivedFrom.facebook = async (message: any) => {
         });
       });
   }
+
+  if (message.message)
+    sendFrom({
+      messenger: "facebook",
+      channelId: message.threadId,
+      author,
+      text: message.message
+    });
 };
 
 receivedFrom.telegram = async (message: Telegram.Message) => {
@@ -865,8 +867,8 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   sendFromTelegram({ message });
 };
 
-discord.reconstructPlainText = (message: string) => {
-  if (!message) return '';
+generic.discord.reconstructPlainText = (message: string) => {
+  if (!message) return "";
   const massMentions = ["@everyone", "@here"];
   if (
     massMentions.some(massMention => message.includes(massMention)) &&
@@ -1124,7 +1126,7 @@ async function sendFromTelegram({
 }
 
 receivedFrom.vkboard = async (message: any) => {
-  lg(JSON.stringify(message));
+  // lg(JSON.stringify(message));
   if (!config.channelMapping.vkboard) return;
   const channelId = message.topic_id;
   if (
@@ -1165,7 +1167,7 @@ receivedFrom.vkboard = async (message: any) => {
         v: "5.84"
       };
       [err, res] = await to(vkboard.bot.api("board.getComments", opts));
-      if (res) lg("vkcom", JSON.stringify(res));
+      // if (res) lg("vkcom", JSON.stringify(res));
       let text: string = R.path(["response", "items", 0, "text"], res);
       if (!text) continue;
       let replyuser: string;
@@ -2202,7 +2204,6 @@ generic.MessengersAvailable = () => {
   });
   if (
     R.pathOr("", ["facebook", "email"], config) === "" ||
-    R.pathOr("", ["facebook", "login"], config) === "" ||
     R.pathOr("", ["facebook", "password"], config) === ""
   )
     config.MessengersAvailable.facebook = false;
