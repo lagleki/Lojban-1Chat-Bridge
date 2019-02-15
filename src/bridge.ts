@@ -8,7 +8,6 @@ declare var process: {
 };
 process.env.NTBA_FIX_319 = 1;
 // process.on('warning', (e: any) => console.warn(e.stack));
-const lg = console.log.bind(console);
 const package_json = require("../package");
 
 // messengers' libs
@@ -43,6 +42,7 @@ const serveStatic = require("serve-static");
 
 // syntactic sugar
 import debug from "debug";
+
 const R = require("ramda");
 const Queue = require("./sugar/promise-queue");
 const { to } = require("await-to-js");
@@ -404,6 +404,17 @@ sendTo.discord = async ({
   quotation,
   file
 }: IsendToArgs) => {
+  debug("discord")(
+    `sending ` +
+      JSON.stringify({
+        channelId,
+        author,
+        chunk,
+        action,
+        quotation,
+        file
+      })
+  );
   if (
     R.path(
       ["channelMapping", "discord", channelId, "settings", "readonly"],
@@ -416,6 +427,7 @@ sendTo.discord = async ({
       .get(channelId)
       .send(chunk)
       .catch(catchError);
+    resolve();
   });
 };
 
@@ -727,6 +739,7 @@ receivedFrom.discord = async (message: any) => {
       file = value.url;
       localfile = value.url;
     }
+    debug("discord")("sending text: " + file)
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -735,7 +748,7 @@ receivedFrom.discord = async (message: any) => {
       file: localfile
     });
     //text of attachment
-    const text = generic.discord.reconstructPlainText(value.content);
+    const text = generic.discord.reconstructPlainText(message, value.content);
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -744,7 +757,7 @@ receivedFrom.discord = async (message: any) => {
     });
   }
 
-  const text = generic.discord.reconstructPlainText(message.content);
+  const text = generic.discord.reconstructPlainText(message, message.content);
   sendFrom({
     messenger: "discord",
     channelId: message.channel.id,
@@ -867,48 +880,31 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   sendFromTelegram({ message });
 };
 
-generic.discord.reconstructPlainText = (message: string) => {
-  if (!message) return "";
+generic.discord.reconstructPlainText = (message: any, text: string) => {
+  if (!text) return "";
   const massMentions = ["@everyone", "@here"];
   if (
-    massMentions.some(massMention => message.includes(massMention)) &&
+    massMentions.some((massMention: string) => text.includes(massMention)) &&
     !config.discord.massMentions
   ) {
-    massMentions.forEach(massMention => {
-      message = message.replace(
-        new RegExp(massMention, "g"),
-        `\`${massMention}\``
-      );
+    massMentions.forEach((massMention: string) => {
+      text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``);
     });
   }
-  const matches = message.match(/@[^# ]{2,32}/g);
-  if (!matches || !matches[0]) return message;
+  const matches = text.match(/<?@[^# ]{2,32}>?/g);
+  if (!matches || !matches[0]) return text;
   for (let match of matches) {
-    // Exclude @
-    match = match.substr(1);
-    // Go through each role in each guild the bot is in, and try to find the role.
-    const role = discord.guilds
-      .getAll("roles")
-      .find((role: any) => role.name.toLowerCase() === match.toLowerCase());
-    if (role) {
-      message = message.replace(`@${match}`, role);
-      continue;
-    }
-
-    const user = discord.guilds
-      .getAll("members")
+    const from = new RegExp(`<?@${match}>?`);
+    const core = match.replace(/[@<>]/g, "");
+    const member = message.channel.guild.members
+      .array()
       .find(
-        (user: any) =>
-          (user.nickname &&
-            user.nickname.toLowerCase() === match.toLowerCase()) ||
-          user.user.username.toLowerCase() === match.toLowerCase()
+        (member: any) => member.user.username && member.user.id.toLowerCase() === core
       );
-    if (user) {
-      message = message.replace(`@${match}`, user);
-    }
+    if (member) text = text.replace(match, "@" + member.user.username);
   }
 
-  return message;
+  return text;
 };
 
 // reconstructs the original raw markdown message
@@ -1126,7 +1122,6 @@ async function sendFromTelegram({
 }
 
 receivedFrom.vkboard = async (message: any) => {
-  // lg(JSON.stringify(message));
   if (!config.channelMapping.vkboard) return;
   const channelId = message.topic_id;
   if (
@@ -1167,7 +1162,6 @@ receivedFrom.vkboard = async (message: any) => {
         v: "5.84"
       };
       [err, res] = await to(vkboard.bot.api("board.getComments", opts));
-      // if (res) lg("vkcom", JSON.stringify(res));
       let text: string = R.path(["response", "items", 0, "text"], res);
       if (!text) continue;
       let replyuser: string;
@@ -1287,7 +1281,6 @@ receivedFrom.slack = async (message: any) => {
 };
 
 receivedFrom.mattermost = async (message: any) => {
-  // if (R.path(["event"], message) === "posted") lg(message);
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
@@ -1816,7 +1809,7 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) => html2md.convert(text);
+convertTo["discord"] = async (text: string) => html2md.convert(await generic.unescapeHTML(text,true));
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -2610,11 +2603,11 @@ generic.downloadFile = async ({
     package_json.name
   }/files/${randomString}`;
 
-  let err: any;
-  let rem_fullname: string;
-  let local_fullname: string;
+  let err: any, res: any;
+  let rem_fullname: string = "";
+  let local_fullname: string = "";
   if (type === "slack") {
-    [err, [rem_fullname, local_fullname]] = await to(
+    [err, res] = await to(
       new Promise((resolve, reject) => {
         const local_fullname = `${local_path}/${path.basename(remote_path)}`;
         const stream = request(
@@ -2627,8 +2620,8 @@ generic.downloadFile = async ({
           },
           err => {
             if (err) {
-              console.log(err.toString());
-              reject();
+              console.log(remote_path, err.toString());
+              resolve();
             }
           }
         ).pipe(fs.createWriteStream(local_fullname));
@@ -2638,13 +2631,14 @@ generic.downloadFile = async ({
           resolve([rem_fullname, local_fullname]);
         });
         stream.on("error", (e: any) => {
-          console.error(e);
-          reject();
+          console.error(remote_path,e);
+          resolve();
         });
       })
     );
+    if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "simple") {
-    [err, [rem_fullname, local_fullname]] = await to(
+    [err, res] = await to(
       new Promise((resolve, reject) => {
         if (extension) {
           extension = `.${extension}`;
@@ -2672,30 +2666,28 @@ generic.downloadFile = async ({
           resolve([rem_fullname, local_fullname]);
         });
         stream.on("error", (err: any) => {
-          console.log(err.toString());
+          console.log(remote_path,err.toString());
           resolve([rem_fullname, local_fullname]);
-          // reject(err.toString());
         });
       })
     );
+    if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "telegram") {
     [err, local_fullname] = await to(telegram.downloadFile(fileId, local_path));
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
   }
   if (err) {
-    console.error(err);
+    console.error(remote_path,err);
     return [remote_path || fileId, remote_path || fileId];
   }
-  let notrenamed = [rem_fullname, local_fullname];
-  let res_;
-  [err, res_] = await to(
+  [err, res] = await to(
     new Promise((resolve, reject) => {
       const newname = `${local_path}/${randomStringName}${path.extname(
         local_fullname
       )}`;
       fs.rename(local_fullname, newname, (err: any) => {
         if (err) {
-          console.error(err);
+          console.error(remote_path,err);
           resolve();
         } else {
           rem_fullname = `${rem_path}/${path.basename(newname)}`;
@@ -2704,11 +2696,7 @@ generic.downloadFile = async ({
       });
     })
   );
-  if (err || !res_) {
-    [rem_fullname, local_fullname] = notrenamed;
-  } else {
-    [rem_fullname, local_fullname] = res_;
-  }
+  if (res) [rem_fullname, local_fullname] = res;
   if (![".webp", ".tiff"].includes(path.extname(local_fullname))) {
     return [rem_fullname, local_fullname];
   }
@@ -2717,12 +2705,11 @@ generic.downloadFile = async ({
     .split(".")
     .slice(0, -1)
     .join(".")}.jpg`;
-  notrenamed = [rem_fullname, local_fullname];
-  [err, [rem_fullname, local_fullname]] = await to(
+  [err, res] = await to(
     new Promise((resolve, reject) => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
-          console.error(err.toString());
+          console.error(remote_path,err.toString());
           resolve([rem_fullname, local_fullname]);
         } else {
           fs.unlink(local_fullname);
@@ -2737,7 +2724,7 @@ generic.downloadFile = async ({
       });
     })
   );
-  if (err) [rem_fullname, local_fullname] = notrenamed;
+  if (res) [rem_fullname, local_fullname] = res;
   return [rem_fullname, local_fullname];
 };
 

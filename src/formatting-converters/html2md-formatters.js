@@ -10,6 +10,7 @@ const ulRegex = /<ul>([\s\S]*?)<\/ul>/gim
 const olRegex = /<ol>([\s\S]*?)<\/ol>/gim
 const liRegex = /<li>([\s\S]*?)<\/li>/gim
 const preRegex = /<pre>([\s\S]*?)<\/pre>/gim
+const codeRegex = /<code>([\s\S]*?)<\/code>/gim
 const blockQuoteRegex = /<blockquote>([\s\S]*?)<\/blockquote>/gim
 const boldRegex = /<(?:b|strong)>([\s\S]*?)<\/\w*>/gim
 const italicRegex = /<(?:i|em)>([\s\S]*?)<\/\w*>/gim
@@ -115,6 +116,17 @@ function replacePre(doc) {
 }
 
 /**
+ * @description replaces code section with equalent markdown
+ * syntax
+ * @method replaceCode
+ * @param  {String}       doc [description]
+ * @return {String}           [description]
+ */
+function replaceCode(doc) {
+	return makeRegex(codeRegex, doc, "`", "`")
+}
+
+/**
  * @description replaces blockquote section with equalent markdown
  * syntax
  * @method replaceBlockQuote
@@ -178,6 +190,7 @@ module.exports = [
 	replaceHeading,
 	replaceParagraph,
 	replacePre,
+	replaceCode,
 	replaceUl,
 	replaceOl,
 	replaceBold,
