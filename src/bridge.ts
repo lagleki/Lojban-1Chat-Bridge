@@ -653,6 +653,7 @@ async function sendFrom({
     );
   if (!text || text === "") return;
   text = await convertFrom[messenger](text);
+  text = text.replace(/^(<br\/>)+/,'');
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (ConfigNode[messengerTo] && messenger !== messengerTo) {
       let thisToWhom: string = "";
