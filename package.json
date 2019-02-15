@@ -11,7 +11,7 @@
     "webpack-build": "node_modules/.bin/webpack --config webpack.config.js",
     "build": "npm install ; npm run start",
     "start": "npm run tsc -w && node node_modules/.bin/supervisor -i . -- --expose-gc ./dist/bridge.js",
-    "push": "git add . ; git commit -m 'fixes' ; git push ; npm run start",
+    "push": "git add . ; git commit -m 'fixes' ; git push",
     "test": "NODE_ENV=test ./node_modules/mocha/bin/mocha"
   },
   "licenses": [
