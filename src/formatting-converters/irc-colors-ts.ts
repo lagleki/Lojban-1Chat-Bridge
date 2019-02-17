@@ -1,4 +1,4 @@
-const globalColors = {
+const globalColors: Json = {
   white: "00",
   black: "01",
   navy: "02",
@@ -21,7 +21,6 @@ interface Json {
   [index: string]: string;
 }
 
-
 const globalStyles: Json = {
   normal: "\x0F",
   underline: "\x1F",
@@ -33,7 +32,6 @@ const styleChars: any = {};
 Object.keys(globalStyles).forEach(key => {
   styleChars[globalStyles[key]] = true;
 });
-
 
 const globalRichMood = [
   ["bold", ["red", "red", "yellow"]],
@@ -65,6 +63,7 @@ const globalRichMood = [
   ["bold", ["italic"]],
   ["normal", ["violet"]]
 ];
+
 const globalSimpleMood = [
   ["normal", ["silver"]],
   ["normal", ["navy"]],
@@ -87,11 +86,22 @@ const globalZero = globalStyles.bold + globalStyles.bold;
 const globalBadStr = /^,\d/;
 const globalColorCodeStr = new RegExp(`^${globalC}\\d\\d`);
 
-function ColorifyText({ side, text, color }: { side: string, text: string, color: string }) {
-  if (side === "fg") {
+function ColorifyText({
+  side = 'fg',
+  text,
+  color
+}: {
+  side: string;
+  text: string;
+  color: string;
+}) {
+  const code = globalColors[color] || globalStyles[color];
+  if (globalStyles[color]) {
+    return code + text + code;
+  } else if (side === "fg") {
     return (
       globalC +
-      color +
+      code +
       (globalBadStr.test(text) ? globalZero : "") +
       text +
       globalC
@@ -102,19 +112,24 @@ function ColorifyText({ side, text, color }: { side: string, text: string, color
       return (
         text.substr(0, 3) +
         "," +
-        color +
+        code +
         (str2.indexOf(globalZero) === 0 ? str2.substr(globalZero.length) : str2)
       );
     } else {
-      return globalC + "01," + color + text + globalC;
+      return globalC + "01," + code + text + globalC;
     }
-  } else if (side === "style") {
-    let code = globalStyles[color];
-    return code + text + code;
   }
 }
 
-function MoodifyText({ text, colors, mood }: {text: string, colors: any, mood: string}) {
+function MoodifyText({
+  text,
+  colors,
+  mood
+}: {
+  text: string;
+  colors: any;
+  mood: string;
+}) {
   if (mood === "none") return text;
   if (mood === "mood") {
     colors = globalRichMood;
@@ -134,21 +149,25 @@ function MoodifyText({ text, colors, mood }: {text: string, colors: any, mood: s
 
   hash = Math.abs(hash % colors.length);
 
-  const chosenBg = colors[hash][0];
-  const chosenFg = colors[hash][1];
-  let l = chosenFg.length;
+  const chosenFg = colors[hash][0];
+  const chosenBg = colors[hash][1];
+  let l = chosenBg.length;
   let i = 0;
-
   return prettyStr
     .split("")
     .map((c: string) => {
       if (c === " ") return c;
-      const bg_text = ColorifyText({ side: "bg", text: c, color: chosenBg });
-      return ColorifyText({
-        side: "bg",
-        text: bg_text,
-        color: chosenFg[i++ % l]
+      const bg_text = ColorifyText({
+        side: "fg",
+        text: c,
+        color: chosenBg[i++ % l]
       });
+      const a: string = ColorifyText({
+        text: bg_text,
+        side: "fg",
+        color: chosenFg
+      });
+      return a;
     })
     .join("");
 }

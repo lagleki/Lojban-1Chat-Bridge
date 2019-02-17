@@ -31,7 +31,7 @@ const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 
-const html2md = require("./formatting-converters/html2md");
+const html2md = require("./formatting-converters/html2md-ts");
 
 const Irc = require("irc-upd");
 const ircolors = require("./formatting-converters/irc-colors");
@@ -109,6 +109,9 @@ const generic: Igeneric = {
   discord: {},
   irc: {}
 };
+
+const prepareToWhom: Igeneric = {};
+const prepareAuthor: Igeneric = {};
 
 const queueOf: IMessengerInfo = {};
 const receivedFrom: IMessengerInfo = {};
@@ -555,44 +558,11 @@ sendTo.irc = async ({
     R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
   )
     return;
-  const ColorificationMode = R.pathOr(
-    "color",
-    ["channelMapping", "irc", channelId, "settings", "nickcolor"],
-    config
-  );
-  author = ircolors.nickcolor(author || "", config.irc, ColorificationMode);
+  console.log("irc",chunk);
   queueOf.irc.pushTask((resolve: any) => {
     // if (config.irc.Actions.includes(action))
     //   chunk = ircolors.underline(chunk);
     irc.say(channelId, chunk);
-    resolve();
-  });
-};
-
-sendTo.irc_old = async ({
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file
-}: IsendToArgs) => {
-  if (
-    R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
-  )
-    return;
-  const ColorificationMode = R.pathOr(
-    "color",
-    ["channelMapping", "irc", channelId, "settings", "nickcolor"],
-    config
-  );
-  chunk = await convertTo["irc"](chunk);
-  author = ircolors.nickcolor(author, config.irc, ColorificationMode);
-  author = author ? `<${author}>: ` : "";
-  if (quotation) author = "> " + author;
-  queueOf.irc.pushTask((resolve: any) => {
-    if (config.irc.Actions.includes(action)) chunk = `\x1D${chunk}\x1D`;
-    irc.say(channelId, author + chunk);
     resolve();
   });
 };
@@ -624,6 +594,55 @@ async function prepareChunks({
   return arrChunks;
 }
 
+prepareToWhom.irc = function({
+  text,
+  channelId
+}: {
+  text: string;
+  channelId: string | number;
+}) {
+  const ColorificationMode = R.pathOr(
+    "color",
+    ["channelMapping", "irc", channelId, "settings", "nickcolor"],
+    config
+  );
+  return `${ircolors.nickcolor(text, config.irc, ColorificationMode)}: `;
+};
+
+prepareToWhom.fallback = function({
+  text,
+  channelId
+}: {
+  text: string;
+  channelId: string | number;
+}) {
+  return `${text}: `;
+};
+prepareAuthor.irc = function({
+  text,
+  channelId
+}: {
+  text: string;
+  channelId: string | number;
+}) {
+  const ColorificationMode = R.pathOr(
+    "color",
+    ["channelMapping", "irc", channelId, "settings", "nickcolor"],
+    config
+  );
+  return `${ircolors.nickcolor(text, config.irc, ColorificationMode)}`;
+};
+
+prepareAuthor.fallback = function({
+  text,
+  channelId
+}: {
+  text: string;
+  channelId: string | number;
+}) {
+  return `${text}`;
+};
+
 // sendFrom
 async function sendFrom({
   messenger,
@@ -653,27 +672,18 @@ async function sendFrom({
     );
   if (!text || text === "") return;
   text = await convertFrom[messenger](text);
-  text = text.replace(/^(<br\/>)+/,'');
+  text = text.replace(/^(<br\/>)+/, "");
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (ConfigNode[messengerTo] && messenger !== messengerTo) {
       let thisToWhom: string = "";
-      const ColorificationMode = R.pathOr(
-        "color",
-        ["channelMapping", "irc", channelId, "settings", "nickcolor"],
-        config
-      );
-      if (messengerTo === "irc" && author) {
-        author = ircolors.nickcolor(author, config.irc, ColorificationMode);
-      }
-      if (ToWhom) {
-        if (messengerTo === "irc") {
-          thisToWhom = `${ircolors.nickcolor(
-            ToWhom,
-            config.irc,
-            ColorificationMode
-          )}: `;
-        } else thisToWhom = `${ToWhom}: `;
-      }
+      if (ToWhom)
+        if (prepareToWhom[messengerTo]) {
+          thisToWhom = prepareToWhom[messengerTo]({ text: ToWhom, channelId });
+        } else thisToWhom = prepareToWhom.fallback({ text: ToWhom, channelId });
+      if (!author) author = "";
+      if (prepareAuthor[messengerTo]) {
+        author = prepareAuthor[messengerTo]({ text: author, channelId });
+      } else author = prepareAuthor.fallback({ text: author, channelId });
       let textTo = await convertTo[messengerTo](text);
       let Chunks = await prepareChunks({
         messenger,
@@ -740,7 +750,7 @@ receivedFrom.discord = async (message: any) => {
       file = value.url;
       localfile = value.url;
     }
-    debug("discord")("sending text: " + file)
+    debug("discord")("sending text: " + file);
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -900,7 +910,8 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
     const member = message.channel.guild.members
       .array()
       .find(
-        (member: any) => member.user.username && member.user.id.toLowerCase() === core
+        (member: any) =>
+          member.user.username && member.user.id.toLowerCase() === core
       );
     if (member) text = text.replace(match, "@" + member.user.username);
   }
@@ -1810,7 +1821,8 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) => html2md.convert(await generic.unescapeHTML(text,true));
+convertTo["discord"] = async (text: string) =>
+  html2md.convert(await generic.unescapeHTML(text, true));
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -2340,6 +2352,10 @@ StartService.discord = async () => {
     discord.client.on("message", (message: any) => {
       receivedFrom.discord(message);
     });
+    discord.client.on("error", (error: any) => {
+      debug('discord')(JSON.stringify(error));
+      StartService.discord();
+    });
     discord.client.login(config.discord.token);
   }
 };
@@ -2632,7 +2648,7 @@ generic.downloadFile = async ({
           resolve([rem_fullname, local_fullname]);
         });
         stream.on("error", (e: any) => {
-          console.error(remote_path,e);
+          console.error(remote_path, e);
           resolve();
         });
       })
@@ -2667,7 +2683,7 @@ generic.downloadFile = async ({
           resolve([rem_fullname, local_fullname]);
         });
         stream.on("error", (err: any) => {
-          console.log(remote_path,err.toString());
+          console.log(remote_path, err.toString());
           resolve([rem_fullname, local_fullname]);
         });
       })
@@ -2678,7 +2694,7 @@ generic.downloadFile = async ({
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
   }
   if (err) {
-    console.error(remote_path,err);
+    console.error(remote_path, err);
     return [remote_path || fileId, remote_path || fileId];
   }
   [err, res] = await to(
@@ -2688,7 +2704,7 @@ generic.downloadFile = async ({
       )}`;
       fs.rename(local_fullname, newname, (err: any) => {
         if (err) {
-          console.error(remote_path,err);
+          console.error(remote_path, err);
           resolve();
         } else {
           rem_fullname = `${rem_path}/${path.basename(newname)}`;
@@ -2710,7 +2726,7 @@ generic.downloadFile = async ({
     new Promise((resolve, reject) => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
-          console.error(remote_path,err.toString());
+          console.error(remote_path, err.toString());
           resolve([rem_fullname, local_fullname]);
         } else {
           fs.unlink(local_fullname);
@@ -2789,12 +2805,8 @@ if (config.generic.showMedia) {
     index: false,
     maxAge: 86400000
   });
-
-  // Create server
-  const server = http.createServer(function onRequest(req: any, res: any) {
+  const server = http.createServer((req: any, res: any) => {
     serve(req, res, finalhandler(req, res));
   });
-
-  // Listen
   server.listen(config.generic.httpPort);
 }
