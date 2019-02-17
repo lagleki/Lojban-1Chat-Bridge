@@ -34,7 +34,7 @@ lexer.rules.listitem = { exec: () => {} };
 const html2md = require("./formatting-converters/html2md-ts");
 
 const Irc = require("irc-upd");
-const ircolors = require("./formatting-converters/irc-colors");
+const ircolors = require("./formatting-converters/irc-colors-ts");
 
 const finalhandler = require("finalhandler");
 const http = require("http");
@@ -63,13 +63,6 @@ const UrlRegExp = new RegExp(
   "igm"
 );
 const PageTitleRegExp = /(<\s*title[^>]*>(.+?)<\s*\/\s*title)>/gi;
-let facebook: any,
-  telegram: any,
-  vkboard: any,
-  slack: any,
-  mattermost: any,
-  discord: any,
-  irc: any;
 
 interface Json {
   [index: string]: string | boolean | RegExp;
@@ -107,7 +100,8 @@ const generic: Igeneric = {
   slack: {},
   mattermost: {},
   discord: {},
-  irc: {}
+  irc: {},
+  fallback: {}
 };
 
 const prepareToWhom: Igeneric = {};
@@ -157,28 +151,27 @@ generic.vkboard.Start = async () => {
   if (err) {
     console.error(err.toString());
   }
-  return { io: vkio, bot: vkbot, app };
+  return { bot: vkbot, app };
 };
 
 generic.slack.Start = async () => {
-  const slack = {
+  generic.slack.client = {
     rtm: new RTMClient(config.slack.token),
     web: new WebClient(config.slack.token)
   };
-  slack.rtm.start().catch((e: any) => {
+  generic.slack.client.rtm.start().catch((e: any) => {
     if (!R.path(["data", "ok"], e)) {
       config.MessengersAvailable.slack = false;
+      console.log("couldn't start Slack");
       return;
     }
   });
-  return slack;
 };
 generic.discord.Start = async () => {
   return new Promise((resolve, reject) => {
-    const discord: any = {};
     const client = new Discord.Client();
-    discord.client = client;
-    discord.guilds = client.guilds.array();
+    generic.discord.client = client;
+    generic.discord.guilds = client.guilds.array();
     if (config.discord.guildId) {
       const guild = client.guilds.find(
         (guild: any) =>
@@ -186,14 +179,18 @@ generic.discord.Start = async () => {
           guild.id === config.discord.guildId
       );
       if (guild)
-        discord.guilds = [
+        generic.discord.guilds = [
           guild,
-          ...discord.guilds.filter((_guild: any) => _guild.id !== guild.id)
+          ...generic.discord.guilds.filter(
+            (_guild: any) => _guild.id !== guild.id
+          )
         ];
     }
-    discord.guilds.getAll = (name: string) =>
-      [].concat(...discord.guilds.map((guild: any) => guild[name].array()));
-    resolve(discord);
+    generic.discord.guilds.getAll = (name: string) =>
+      [].concat(
+        ...generic.discord.guilds.map((guild: any) => guild[name].array())
+      );
+    resolve();
   });
 };
 generic.mattermost.Start = async () => {
@@ -356,7 +353,7 @@ sendTo.facebook = async ({
       ["channelMapping", "facebook", channelId, "settings", "readonly"],
       config
     ) ||
-    !facebook
+    !generic.facebook.client
   )
     return;
   queueOf.facebook.pushTask((resolve: any) => {
@@ -365,7 +362,7 @@ sendTo.facebook = async ({
         body: chunk
       };
       if (file) jsonMessage.attachment = fs.createReadStream(file);
-      facebook.sendMessage(channelId, chunk).catch(catchError);
+      generic.facebook.client.sendMessage(channelId, chunk).catch(catchError);
       resolve();
     }, 500);
   });
@@ -387,7 +384,7 @@ sendTo.telegram = async ({
   )
     return;
   queueOf.telegram.pushTask((resolve: any) => {
-    telegram
+    generic.telegram.client
       .sendMessage(channelId, chunk, {
         parse_mode: "HTML"
       })
@@ -426,7 +423,7 @@ sendTo.discord = async ({
   )
     return;
   queueOf.discord.pushTask((resolve: any) => {
-    discord.client.channels
+    generic.discord.client.channels
       .get(channelId)
       .send(chunk)
       .catch(catchError);
@@ -480,10 +477,10 @@ sendTo.vkboard = async ({
     ) //todo: !vk.WaitingForCaptcha
   )
     return;
-  const token = vkboard.app.token;
+  const token = generic.vkboard.client.app.token;
   queueOf.vkboard.pushTask((resolve: any) => {
     setTimeout(() => {
-      vkboard.bot
+      generic.vkboard.client.bot
         .api("board.createComment", {
           access_token: token,
           group_id: config.vkboard.group_id,
@@ -532,7 +529,7 @@ sendTo.slack = async ({
     return;
   queueOf.slack.pushTask((resolve: any) => {
     chunk = emoji.unemojify(chunk);
-    slack.web.chat
+    generic.slack.client.web.chat
       .postMessage({
         channel: channelId,
         username: (author || "").replace(/(^.{21}).*$/, "$1"),
@@ -558,11 +555,10 @@ sendTo.irc = async ({
     R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
   )
     return;
-  console.log("irc",chunk);
   queueOf.irc.pushTask((resolve: any) => {
     // if (config.irc.Actions.includes(action))
     //   chunk = ircolors.underline(chunk);
-    irc.say(channelId, chunk);
+    generic.irc.client.say(channelId, chunk);
     resolve();
   });
 };
@@ -606,7 +602,11 @@ prepareToWhom.irc = function({
     ["channelMapping", "irc", channelId, "settings", "nickcolor"],
     config
   );
-  return `${ircolors.nickcolor(text, config.irc, ColorificationMode)}: `;
+  return `${ircolors.MoodifyText({
+    text,
+    colors: config.irc,
+    mood: ColorificationMode
+  })}: `;
 };
 
 prepareToWhom.fallback = function({
@@ -630,7 +630,11 @@ prepareAuthor.irc = function({
     ["channelMapping", "irc", channelId, "settings", "nickcolor"],
     config
   );
-  return `${ircolors.nickcolor(text, config.irc, ColorificationMode)}`;
+  return `${ircolors.MoodifyText({
+    text,
+    colors: config.irc,
+    mood: ColorificationMode
+  })}`;
 };
 
 prepareAuthor.fallback = function({
@@ -787,7 +791,7 @@ receivedFrom.facebook = async (message: any) => {
   )
     return;
   let err, res;
-  [err, res] = await to(facebook.getUserInfo(message.authorId));
+  [err, res] = await to(generic.facebook.client.getUserInfo(message.authorId));
   if (err) return;
   let author: string;
   author = AdaptName.facebook(res);
@@ -797,10 +801,12 @@ receivedFrom.facebook = async (message: any) => {
     message.attachments.push({ id: message.stickerId, type: "sticker" });
   for (const attachment of message.attachments) {
     if (attachment.type === "sticker") {
-      [err, res] = await to(facebook.getStickerURL(attachment.id));
+      [err, res] = await to(
+        generic.facebook.client.getStickerURL(attachment.id)
+      );
     } else {
       [err, res] = await to(
-        facebook.getAttachmentURL(message.id, attachment.id)
+        generic.facebook.client.getAttachmentURL(message.id, attachment.id)
       );
     }
     if (err) return;
@@ -1144,7 +1150,7 @@ receivedFrom.vkboard = async (message: any) => {
   let text = message.text;
   const fromwhomId = message.from_id;
   let [err, res] = await to(
-    vkboard.bot.api("users.get", {
+    generic.vkboard.client.bot.api("users.get", {
       user_ids: fromwhomId,
       access_token: config.vkboard.token,
       fields: "nickname,screen_name"
@@ -1163,7 +1169,7 @@ receivedFrom.vkboard = async (message: any) => {
     }
   );
   if (arrQuotes.length > 0) {
-    const token = vkboard.app.token;
+    const token = generic.vkboard.client.app.token;
     for (const el of arrQuotes) {
       const opts = {
         access_token: token,
@@ -1173,7 +1179,9 @@ receivedFrom.vkboard = async (message: any) => {
         count: 1,
         v: "5.84"
       };
-      [err, res] = await to(vkboard.bot.api("board.getComments", opts));
+      [err, res] = await to(
+        generic.vkboard.client.bot.api("board.getComments", opts)
+      );
       let text: string = R.path(["response", "items", 0, "text"], res);
       if (!text) continue;
       let replyuser: string;
@@ -1185,7 +1193,7 @@ receivedFrom.vkboard = async (message: any) => {
       } else {
         let authorId = R.path(["response", "items", 0, "from_id"], res);
         [err, res] = await to(
-          vkboard.bot.api("users.get", {
+          generic.vkboard.client.bot.api("users.get", {
             user_ids: authorId,
             access_token: config.vkboard.token,
             fields: "nickname,screen_name"
@@ -1219,7 +1227,7 @@ receivedFrom.slack = async (message: any) => {
       !["me_message", "channel_topic", "message_changed"].includes(
         message.subtype
       )) ||
-    slack.rtm.activeUserId === message.user
+    generic.slack.client.rtm.activeUserId === message.user
   )
     return;
 
@@ -1230,10 +1238,10 @@ receivedFrom.slack = async (message: any) => {
   }
   message.edited = message.subtype === "message_changed" ? true : false;
 
-  const promUser = slack.web.users.info({
+  const promUser = generic.slack.client.web.users.info({
     user: message.user
   });
-  const promChannel = slack.web.channels.info({
+  const promChannel = generic.slack.client.web.channels.info({
     channel: message.channel
   });
 
@@ -1726,12 +1734,14 @@ convertFrom.slack = async (text: string) => {
     );
     for (const channelId of Object.keys(jsonChannels)) {
       const [err, { channel }] = await to(
-        slack.web.conversations.info({ channel: channelId })
+        generic.slack.client.web.conversations.info({ channel: channelId })
       );
       if (!err) jsonChannels[channelId] = channel.name;
     }
     for (const userId of Object.keys(jsonUsers)) {
-      const [err, { user }] = await to(slack.web.users.info({ user: userId }));
+      const [err, { user }] = await to(
+        generic.slack.client.web.users.info({ user: userId })
+      );
       jsonUsers[userId] = AdaptName.slack(user);
     }
     return (
@@ -1821,8 +1831,7 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) =>
-  html2md.convert(await generic.unescapeHTML(text, true));
+convertTo["discord"] = async (text: string) => await convertToPlainText(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -1859,7 +1868,9 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
   const cloned_message = JSON.parse(JSON.stringify(message));
   if (IsSpam(cloned_message)) {
     if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
-      const [err, chat] = await to(telegram.getChat(message.chat.id));
+      const [err, chat] = await to(
+        generic.telegram.client.getChat(message.chat.id)
+      );
       if (!err) {
         const invite_link = chat.invite_link;
         cloned_message.text = cloned_message.text.replace(invite_link, "");
@@ -1873,7 +1884,9 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
         );
       }
     } else {
-      const [err, chat] = await to(telegram.getChat(cloned_message.chat.id));
+      const [err, chat] = await to(
+        generic.telegram.client.getChat(cloned_message.chat.id)
+      );
       if (!err) {
         generic.telegram.DeleteMessage({ message, log: true });
       } else {
@@ -1909,7 +1922,9 @@ function TelegramRemoveAddedBots(message: Telegram.Message) {
   if (config.telegram.remove_added_bots)
     R.pathOr([], ["new_chat_members"], message).map((u: Telegram.User) => {
       if (u.is_bot && R.path(["telegram", "myUser", "id"], config) !== u.id)
-        telegram.kickChatMember(message.chat.id, u.id).catch(catchError);
+        generic.telegram.client
+          .kickChatMember(message.chat.id, u.id)
+          .catch(catchError);
     });
 }
 
@@ -1936,10 +1951,13 @@ async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
   )
     return;
   let [err, res] = await to(
-    telegram.getChatMember(message.chat.id, config.telegram.myUser.id)
+    generic.telegram.client.getChatMember(
+      message.chat.id,
+      config.telegram.myUser.id
+    )
   );
   if (res && !res.can_delete_messages) {
-    [err, res] = await to(telegram.leaveChat(message.chat.id));
+    [err, res] = await to(generic.telegram.client.leaveChat(message.chat.id));
     generic.LogToAdmin(`leaving chat ${message.chat.id} ${message.chat.title}`);
     config.cache.telegram[message.chat.title] = undefined;
     await to(
@@ -1960,7 +1978,9 @@ generic.telegram.DeleteMessage = async ({
   log: boolean;
 }) => {
   if (log) await to(generic.LogMessageToAdmin(message));
-  await to(telegram.deleteMessage(message.chat.id, message.message_id));
+  await to(
+    generic.telegram.client.deleteMessage(message.chat.id, message.message_id)
+  );
 };
 
 // generic
@@ -2058,7 +2078,7 @@ GetChannels.telegram = async () => {
 
 GetChannels.slack = async () => {
   if (!config.MessengersAvailable.slack) return {};
-  let [err, res] = await to(slack.web.channels.list());
+  let [err, res] = await to(generic.slack.client.web.channels.list());
   if (err) {
     console.error(err);
   }
@@ -2089,7 +2109,7 @@ GetChannels.mattermost = async () => {
 GetChannels.discord = async () => {
   if (!config.MessengersAvailable.discord) return;
   const json: Json = {};
-  for (const value of discord.client.channels.values()) {
+  for (const value of generic.discord.client.channels.values()) {
     if (value.guild.id === config.discord.guildId) {
       json[value.name] = value.id;
     }
@@ -2238,8 +2258,11 @@ StartService.facebook = async (force: boolean) => {
     concurrency: 1
   });
   try {
-    facebook = await login(config.facebook.email, config.facebook.password);
-    facebook.on("message", (message: any) => {
+    generic.facebook.client = await login(
+      config.facebook.email,
+      config.facebook.password
+    );
+    generic.facebook.client.on("message", (message: any) => {
       receivedFrom.facebook(message);
     });
     config.MessengersAvailable.facebook = true;
@@ -2252,68 +2275,68 @@ StartService.facebook = async (force: boolean) => {
 StartService.telegram = async () => {
   //telegram
   if (!config.MessengersAvailable.telegram) return;
-  telegram = generic.telegram.Start();
+  generic.telegram.client = generic.telegram.Start();
   queueOf.telegram = new Queue({
     autoStart: true,
     concurrency: 1
   });
-  telegram.on("message", (message: any) => {
+  generic.telegram.client.on("message", (message: any) => {
     receivedFrom.telegram(message);
   });
-  telegram.on("edited_message", (message: any) => {
+  generic.telegram.client.on("edited_message", (message: any) => {
     receivedFrom.telegram(message);
   });
-  telegram.on("polling_error", (error: any) => {
+  generic.telegram.client.on("polling_error", (error: any) => {
     if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
       config.MessengersAvailable.telegram = false;
-      telegram.stopPolling();
+      generic.telegram.client.stopPolling();
     }
   });
-  const [err, res] = await to(telegram.getMe());
+  const [err, res] = await to(generic.telegram.client.getMe());
   if (!err) config.telegram.myUser = res;
 };
 
 StartService.vkboard = async () => {
   //vkboard
   if (!config.MessengersAvailable.vkboard) return;
-  vkboard = await generic.vkboard.Start();
+  generic.vkboard.client = await generic.vkboard.Start();
   queueOf.vkboard = new Queue({
     autoStart: true,
     concurrency: 1
   });
-  vkboard.bot.event("board_post_new", async (ctx: any) => {
+  generic.vkboard.client.bot.event("board_post_new", async (ctx: any) => {
     receivedFrom.vkboard(ctx.message);
   });
-  vkboard.bot.event("board_post_edit", async (ctx: any) => {
+  generic.vkboard.client.bot.event("board_post_edit", async (ctx: any) => {
     ctx.message.edited = true;
     receivedFrom.vkboard(ctx.message);
   });
-  vkboard.bot.startPolling();
+  generic.vkboard.client.bot.startPolling();
 };
 
 StartService.slack = async () => {
   //slack
-  slack = await generic.slack.Start();
+  await generic.slack.Start();
   if (!config.MessengersAvailable.slack) return;
   queueOf.slack = new Queue({
     autoStart: true,
     concurrency: 1
   });
-  slack.rtm.on("message", (message: any) => {
+  generic.slack.client.rtm.on("message", (message: any) => {
     receivedFrom.slack(message);
   });
 };
 
 StartService.mattermost = async () => {
   //mattermost
-  mattermost = await generic.mattermost.Start();
+  generic.mattermost.client = await generic.mattermost.Start();
   if (!config.MessengersAvailable.mattermost) return;
   queueOf.mattermost = new Queue({
     autoStart: true,
     concurrency: 1
   });
-  mattermost.addEventListener("open", () => {
-    mattermost.send(
+  generic.mattermost.client.addEventListener("open", () => {
+    generic.mattermost.client.send(
       JSON.stringify({
         seq: 1,
         action: "authentication_challenge",
@@ -2323,18 +2346,22 @@ StartService.mattermost = async () => {
       })
     );
   });
-  mattermost.addEventListener("message", (message: any) => {
+  generic.mattermost.client.addEventListener("message", (message: any) => {
     if (!R.path(["data"], message) || !config.mattermost.team_id) return;
     message = JSON.parse(message.data);
     receivedFrom.mattermost(message);
   });
-  mattermost.addEventListener("close", () => mattermost._connect());
-  mattermost.addEventListener("error", () => mattermost._connect());
+  generic.mattermost.client.addEventListener("close", () =>
+    generic.mattermost.client._connect()
+  );
+  generic.mattermost.client.addEventListener("error", () =>
+    generic.mattermost.client._connect()
+  );
 };
 
 StartService.discord = async () => {
   //discord
-  discord = await generic.discord.Start();
+  await generic.discord.Start();
   if (!config.MessengersAvailable.discord) return;
 
   queueOf.discord = new Queue({
@@ -2349,20 +2376,20 @@ StartService.discord = async () => {
     // discord.client.on("ready", () => {
     //   console.log(`Logged in to discord`);
     // });
-    discord.client.on("message", (message: any) => {
+    generic.discord.client.on("message", (message: any) => {
       receivedFrom.discord(message);
     });
-    discord.client.on("error", (error: any) => {
-      debug('discord')(JSON.stringify(error));
+    generic.discord.client.on("error", (error: any) => {
+      debug("discord")(JSON.stringify(error));
       StartService.discord();
     });
-    discord.client.login(config.discord.token);
+    generic.discord.client.login(config.discord.token);
   }
 };
 
 StartService.irc = async () => {
   //irc
-  irc = new Irc.Client(
+  generic.irc.client = new Irc.Client(
     config.irc.ircServer,
     config.irc.ircOptions.nick,
     config.irc.ircOptions
@@ -2372,7 +2399,7 @@ StartService.irc = async () => {
     autoStart: true,
     concurrency: 1
   });
-  irc.on("error", (error: any) => {
+  generic.irc.client.on("error", (error: any) => {
     receivedFrom.irc({
       error,
       type: "error"
@@ -2380,14 +2407,14 @@ StartService.irc = async () => {
     // StartService.irc();
   });
 
-  irc.on("registered", () => {
+  generic.irc.client.on("registered", () => {
     receivedFrom.irc({
-      handler: irc,
+      handler: generic.irc.client,
       type: "registered"
     });
   });
 
-  irc.on("message", (author: string, channelId: string, text: string) => {
+  generic.irc.client.on("message", (author: string, channelId: string, text: string) => {
     receivedFrom.irc({
       author,
       channelId,
@@ -2396,7 +2423,7 @@ StartService.irc = async () => {
     });
   });
 
-  irc.on("topic", (channelId: string, topic: string, author: string) => {
+  generic.irc.client.on("topic", (channelId: string, topic: string, author: string) => {
     receivedFrom.irc({
       author,
       channelId,
@@ -2405,7 +2432,7 @@ StartService.irc = async () => {
     });
   });
 
-  irc.on("action", (author: string, channelId: string, text: string) => {
+  generic.irc.client.on("action", (author: string, channelId: string, text: string) => {
     receivedFrom.irc({
       author,
       channelId,
@@ -2442,7 +2469,7 @@ generic.sendOnlineUsersTo = ({
   // dont show the result in other networks
   if (network === "telegram") {
     const objChannel: any =
-      irc.chans[R.path(["channelMapping", "telegram", channel, "irc"], config)];
+      generic.irc.client.chans[R.path(["channelMapping", "telegram", channel, "irc"], config)];
 
     if (!objChannel) return;
 
@@ -2454,7 +2481,7 @@ generic.sendOnlineUsersTo = ({
     names.sort();
     const strNames = `Users on ${objChannel.ircChan}:\n\n${names.join(", ")}`;
 
-    telegram
+    generic.telegram.client
       .sendMessage(objChannel.id, strNames)
       .catch((e: any) => console.log(e.toString()));
   }
@@ -2463,7 +2490,7 @@ generic.sendOnlineUsersTo = ({
 generic.LogMessageToAdmin = async (message: Telegram.Message) => {
   if (config.telegram.admins_userid)
     await to(
-      telegram.forwardMessage(
+      generic.telegram.client.forwardMessage(
         config.telegram.admins_userid,
         message.chat.id,
         message.message_id
@@ -2473,7 +2500,7 @@ generic.LogMessageToAdmin = async (message: Telegram.Message) => {
 
 generic.LogToAdmin = (msg_text: string) => {
   if (config.telegram.admins_userid)
-    telegram
+    generic.telegram.client
       .sendMessage(
         config.telegram.admins_userid,
         generic.escapeHTML(msg_text.toString()),
@@ -2690,7 +2717,9 @@ generic.downloadFile = async ({
     );
     if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "telegram") {
-    [err, local_fullname] = await to(telegram.downloadFile(fileId, local_path));
+    [err, local_fullname] = await to(
+      generic.telegram.client.downloadFile(fileId, local_path)
+    );
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
   }
   if (err) {
