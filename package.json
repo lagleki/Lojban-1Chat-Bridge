@@ -42,6 +42,7 @@
     "marked": "^0.5.0",
     "mkdirp": "^0.5.1",
     "node-emoji": "^1.8.1",
+    "node-gitter": "^2.1.0",
     "node-telegram-bot-api": "^0.30.0",
     "node-vk-bot-api": "^2.1.1",
     "ramda": "^0.25.0",

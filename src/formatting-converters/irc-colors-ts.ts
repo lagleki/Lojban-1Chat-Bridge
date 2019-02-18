@@ -148,7 +148,6 @@ function MoodifyText({
   }
 
   hash = Math.abs(hash % colors.length);
-
   const chosenFg = colors[hash][0];
   const chosenBg = colors[hash][1];
   let l = chosenBg.length;

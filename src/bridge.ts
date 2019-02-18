@@ -604,7 +604,6 @@ prepareToWhom.irc = function({
   );
   return `${ircolors.MoodifyText({
     text,
-    colors: config.irc,
     mood: ColorificationMode
   })}: `;
 };
@@ -632,7 +631,6 @@ prepareAuthor.irc = function({
   );
   return `${ircolors.MoodifyText({
     text,
-    colors: config.irc,
     mood: ColorificationMode
   })}`;
 };
