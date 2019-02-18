@@ -81,7 +81,6 @@ interface IMessengerFunctions {
 interface Igeneric extends IMessengerInfo {
   LogToAdmin?: any;
   sendOnlineUsersTo?: any;
-  GetChunks?: any;
   downloadFile?: any;
   ConfigBeforeStart?: any;
   PopulateChannelMapping?: any;
@@ -106,6 +105,7 @@ const generic: Igeneric = {
 
 const prepareToWhom: Igeneric = {};
 const prepareAuthor: Igeneric = {};
+const GetChunks: Igeneric = {};
 
 const queueOf: IMessengerInfo = {};
 const receivedFrom: IMessengerInfo = {};
@@ -404,17 +404,6 @@ sendTo.discord = async ({
   quotation,
   file
 }: IsendToArgs) => {
-  debug("discord")(
-    `sending ` +
-      JSON.stringify({
-        channelId,
-        author,
-        chunk,
-        action,
-        quotation,
-        file
-      })
-  );
   if (
     R.path(
       ["channelMapping", "discord", channelId, "settings", "readonly"],
@@ -577,7 +566,10 @@ async function prepareChunks({
   text: string;
   edited?: boolean;
 }) {
-  let arrChunks: string[] = await generic.GetChunks(text, messengerTo);
+  let arrChunks: string[],
+    fallback: string = "fallback";
+  if (GetChunks[messengerTo]) fallback = messengerTo;
+  arrChunks = await GetChunks[fallback](text, messengerTo);
   for (let i in arrChunks) {
     if (edited)
       arrChunks[i] = generic.LocalizeString({
@@ -2379,7 +2371,7 @@ StartService.discord = async () => {
     });
     generic.discord.client.on("error", (error: any) => {
       debug("discord")(JSON.stringify(error));
-      StartService.discord();
+      // StartService.discord();
     });
     generic.discord.client.login(config.discord.token);
   }
@@ -2412,32 +2404,41 @@ StartService.irc = async () => {
     });
   });
 
-  generic.irc.client.on("message", (author: string, channelId: string, text: string) => {
-    receivedFrom.irc({
-      author,
-      channelId,
-      text,
-      type: "message"
-    });
-  });
+  generic.irc.client.on(
+    "message",
+    (author: string, channelId: string, text: string) => {
+      receivedFrom.irc({
+        author,
+        channelId,
+        text,
+        type: "message"
+      });
+    }
+  );
 
-  generic.irc.client.on("topic", (channelId: string, topic: string, author: string) => {
-    receivedFrom.irc({
-      author,
-      channelId,
-      text: topic,
-      type: "topic"
-    });
-  });
+  generic.irc.client.on(
+    "topic",
+    (channelId: string, topic: string, author: string) => {
+      receivedFrom.irc({
+        author,
+        channelId,
+        text: topic,
+        type: "topic"
+      });
+    }
+  );
 
-  generic.irc.client.on("action", (author: string, channelId: string, text: string) => {
-    receivedFrom.irc({
-      author,
-      channelId,
-      text,
-      type: "action"
-    });
-  });
+  generic.irc.client.on(
+    "action",
+    (author: string, channelId: string, text: string) => {
+      receivedFrom.irc({
+        author,
+        channelId,
+        text,
+        type: "action"
+      });
+    }
+  );
 };
 
 async function StartServices() {
@@ -2467,7 +2468,9 @@ generic.sendOnlineUsersTo = ({
   // dont show the result in other networks
   if (network === "telegram") {
     const objChannel: any =
-      generic.irc.client.chans[R.path(["channelMapping", "telegram", channel, "irc"], config)];
+      generic.irc.client.chans[
+        R.path(["channelMapping", "telegram", channel, "irc"], config)
+      ];
 
     if (!objChannel) return;
 
@@ -2599,7 +2602,12 @@ function splitSlice(str: string, len: number) {
 //   return text;
 // }
 
-generic.GetChunks = async (text: string, messenger: string) => {
+GetChunks.irc = async (text: string, messenger: string) => {
+  text = text.replace(/\n/g, "\r");
+  return await GetChunks.fallback(text, messenger);
+};
+
+GetChunks.fallback = async (text: string, messenger: string) => {
   // text = await appendPageTitles(text);
   const limit = config[messenger].MessageLength || 400;
   const r = new RegExp(`(.{${limit - 40},${limit}})(?= )`, "g");
