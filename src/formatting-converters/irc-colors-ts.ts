@@ -6,14 +6,18 @@ const globalColors: Json = {
   red: "04",
   brown: "05",
   violet: "06",
+  purple: "06",
   olive: "07",
   yellow: "08",
   lime: "09",
+  lightgreen: "09",
   teal: "10",
   cyan: "11",
   blue: "12",
   pink: "13",
+  lightpurple: "13",
   gray: "14",
+  grey: "14",
   silver: "15"
 };
 
@@ -60,7 +64,6 @@ const globalRichMood = [
   ["normal", ["teal"]],
   ["normal", ["cyan"]],
   ["normal", ["blue"]],
-  ["bold", ["italic"]],
   ["normal", ["violet"]]
 ];
 
@@ -77,7 +80,7 @@ const globalSimpleMood = [
   ["normal", ["cyan"]],
   ["normal", ["blue"]],
   ["normal", ["pink"]],
-  ["bold", ["italic"]]
+  ["bold", ["violet"]]
 ];
 
 // Coloring character.
@@ -96,6 +99,7 @@ function ColorifyText({
   color: string;
 }) {
   const code = globalColors[color] || globalStyles[color];
+  if (!code || !color) return text;
   if (globalStyles[color]) {
     return code + text + code;
   } else if (side === "fg") {
