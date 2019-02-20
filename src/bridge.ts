@@ -168,7 +168,7 @@ generic.slack.Start = async () => {
   });
 };
 generic.discord.Start = async () => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const client = new Discord.Client();
     generic.discord.client = client;
     generic.discord.guilds = client.guilds.array();
@@ -195,7 +195,7 @@ generic.discord.Start = async () => {
 };
 generic.mattermost.Start = async () => {
   let [err, res] = await to(
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       const credentials = {
         login_id: config.mattermost.login,
         password: config.mattermost.password
@@ -210,7 +210,7 @@ generic.mattermost.Start = async () => {
         (err: any, response: any, body: any) => {
           if (err) {
             console.error(err);
-            reject();
+            resolve();
           } else {
             resolve({
               token: R.pathOr("", ["headers", "token"], response),
@@ -230,7 +230,7 @@ generic.mattermost.Start = async () => {
   }
 
   [err, res] = await to(
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       const user_id = config.mattermost.user_id;
       const url = `${
         config.mattermost.ProviderUrl
@@ -246,7 +246,7 @@ generic.mattermost.Start = async () => {
         (error: any, response: any, body: any) => {
           if (err) {
             console.error(err);
-            reject();
+            resolve();
           } else {
             const team = JSON.parse(body).find((i: any) => {
               return (
@@ -261,7 +261,7 @@ generic.mattermost.Start = async () => {
       );
     })
   );
-  if (err) {
+  if (!res) {
     config.MessengersAvailable.mattermost = false;
     return;
   }
@@ -435,7 +435,7 @@ sendTo.mattermost = async ({
     )
   )
     return;
-  queueOf.mattermost.pushTask((resolve: any, reject: any) => {
+  queueOf.mattermost.pushTask((resolve: any) => {
     const option = {
       url: config.mattermost.HookUrl,
       json: {
@@ -445,8 +445,7 @@ sendTo.mattermost = async ({
       }
     };
     const req = request.post(option, (error: any, response: any, body: any) => {
-      if (error) reject();
-      else resolve();
+      resolve();
     });
   });
 };
@@ -1311,7 +1310,7 @@ receivedFrom.mattermost = async (message: any) => {
     if (!post_id) return;
     let err;
     await to(
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post_id}`;
         request(
           {
@@ -1334,7 +1333,7 @@ receivedFrom.mattermost = async (message: any) => {
       })
     );
     await to(
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user_id}`;
         request(
           {
@@ -1357,7 +1356,7 @@ receivedFrom.mattermost = async (message: any) => {
       })
     );
     await to(
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         const url = `${
           config.mattermost.ProviderUrl
         }/api/v4/channels/${channel_id}`;
@@ -1400,7 +1399,7 @@ receivedFrom.mattermost = async (message: any) => {
     let files = [];
     for (const file of file_ids) {
       const [err, promfile] = await to(
-        new Promise((resolve, reject) => {
+        new Promise((resolve) => {
           const url = `${
             config.mattermost.ProviderUrl
           }/api/v4/files/${file}/link`;
@@ -1416,7 +1415,7 @@ receivedFrom.mattermost = async (message: any) => {
               const json: Json = {};
               if (error) {
                 console.error(error.toString());
-                reject();
+                resolve();
               } else {
                 resolve(JSON.parse(body).link);
               }
@@ -1425,7 +1424,7 @@ receivedFrom.mattermost = async (message: any) => {
         })
       );
       const [err2, promfile2] = await to(
-        new Promise((resolve, reject) => {
+        new Promise((resolve) => {
           const url = `${
             config.mattermost.ProviderUrl
           }/api/v4/files/${file}/info`;
@@ -1441,7 +1440,7 @@ receivedFrom.mattermost = async (message: any) => {
               const json: Json = {};
               if (error) {
                 console.error(error.toString());
-                reject();
+                resolve();
               } else {
                 resolve(JSON.parse(body).extension);
               }
@@ -1449,7 +1448,7 @@ receivedFrom.mattermost = async (message: any) => {
           );
         })
       );
-      if (!err && !err2) files.push([promfile2, promfile]);
+      if (promfile && promfile2) files.push([promfile2, promfile]);
     }
     if (!author) author = R.path(["data", "sender_name"], message);
     if (files.length > 0) {
@@ -1832,7 +1831,7 @@ generic.telegram.serveFile = (fileId: number) =>
   });
 
 generic.writeCache = async (origin: string) => {
-  await new Promise((resolve, reject) => {
+  await new Promise((resolve) => {
     fs.writeFile(
       `${process.env.HOME}/.${package_json.name}/cache.json`,
       JSON.stringify(config.cache),
@@ -1840,15 +1839,14 @@ generic.writeCache = async (origin: string) => {
         if (err) {
           console.log`error while storing chat ID:`;
           console.log`${err}`;
-          reject();
         } else {
           console.log(
             `successfully stored chat ID in ~/.${
               package_json.name
             }/cache.json, ${origin}`
           );
-          resolve();
         }
+        resolve();
       }
     );
   });
@@ -2110,7 +2108,7 @@ GetChannels.discord = async () => {
 
 async function GetChannelsMattermostCore(json: Json, url: string) {
   await to(
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       request(
         {
           method: "GET",
@@ -2122,16 +2120,15 @@ async function GetChannelsMattermostCore(json: Json, url: string) {
         (error: any, response: any, body: any) => {
           if (error) {
             console.error(error.toString());
-            reject();
           } else {
             body = JSON.parse(body);
             if (body[0]) {
               body.map((i: any) => {
                 json[i.display_name] = i.name;
               });
-              resolve();
-            } else reject();
+            }
           }
+          resolve();
         }
       );
     })
@@ -2569,7 +2566,7 @@ function splitSlice(str: string, len: number) {
 //     if (urls.length > 0) {
 //       for (const url of urls) {
 //         await to(
-//           new Promise((resolve, reject) => {
+//           new Promise((resolve) => {
 //             request(
 //               {
 //                 url,
@@ -2658,7 +2655,7 @@ generic.downloadFile = async ({
   let local_fullname: string = "";
   if (type === "slack") {
     [err, res] = await to(
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         const local_fullname = `${local_path}/${path.basename(remote_path)}`;
         const stream = request(
           {
@@ -2689,7 +2686,7 @@ generic.downloadFile = async ({
     if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "simple") {
     [err, res] = await to(
-      new Promise((resolve, reject) => {
+      new Promise((resolve) => {
         if (extension) {
           extension = `.${extension}`;
         } else {
@@ -2706,7 +2703,7 @@ generic.downloadFile = async ({
           (err: any) => {
             if (err) {
               console.log(err.toString(), remote_path);
-              reject(err.toString());
+              resolve([rem_fullname, local_fullname]);
             }
           }
         ).pipe(fs.createWriteStream(local_fullname));
@@ -2733,7 +2730,7 @@ generic.downloadFile = async ({
     return [remote_path || fileId, remote_path || fileId];
   }
   [err, res] = await to(
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       const newname = `${local_path}/${randomStringName}${path.extname(
         local_fullname
       )}`;
@@ -2758,7 +2755,7 @@ generic.downloadFile = async ({
     .slice(0, -1)
     .join(".")}.jpg`;
   [err, res] = await to(
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
           console.error(remote_path, err.toString());
