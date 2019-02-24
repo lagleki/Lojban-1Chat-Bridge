@@ -2249,13 +2249,17 @@ StartService.facebook = async (force: boolean) => {
       config.facebook.email,
       config.facebook.password
     );
+    console.log(generic.facebook.client);
+    console.log(JSON.stringify(generic.facebook.client.getSession()));
+
     generic.facebook.client.on("message", (message: any) => {
       receivedFrom.facebook(message);
     });
     config.MessengersAvailable.facebook = true;
   } catch (e) {
+    console.log(e.toString());
     config.MessengersAvailable.facebook = false;
-    StartService.facebook(true);
+    // StartService.facebook(true);
   }
 };
 
