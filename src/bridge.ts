@@ -272,9 +272,6 @@ generic.mattermost.Start = async () => {
   });
 };
 
-function consoleErr(err: any) {
-  console.error(err);
-}
 // sendTo
 async function FormatMessageChunkForSending({
   messenger,
@@ -2258,7 +2255,7 @@ StartService.facebook = async (force: boolean) => {
     config.MessengersAvailable.facebook = true;
   } catch (e) {
     console.log(e.toString());
-    config.MessengersAvailable.facebook = false;
+    // config.MessengersAvailable.facebook = false;
     // StartService.facebook(true);
   }
 };
