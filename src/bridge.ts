@@ -24,7 +24,7 @@ const Discord = require("discord.js");
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
 
-const slackify = require("./formatting-converters/slackify-html");
+const slackify = require("./formatting-converters/slackify-html-ts");
 
 const marked = require("marked");
 const lexer = new marked.Lexer();
@@ -44,7 +44,7 @@ const serveStatic = require("serve-static");
 import debug from "debug";
 
 const R = require("ramda");
-const Queue = require("./sugar/promise-queue");
+const Queue = require("../lib/sugar/promise-queue");
 const { to } = require("await-to-js");
 const { or } = require("./sugar/await-or.js");
 const blalalavla = require("./sugar/blalalavla.js");
@@ -138,10 +138,6 @@ generic.telegram.Start = () => {
 
 generic.vkboard.Start = async () => {
   const vkio = new VK();
-  const vkbot = new VkBot({
-    token: config.vkboard.token,
-    group_id: config.vkboard.group_id
-  });
   vkio.setOptions({
     app: config.vkboard.app,
     login: config.vkboard.login,
@@ -149,8 +145,12 @@ generic.vkboard.Start = async () => {
   });
   const [err, app] = await to(vkio.auth.implicitFlowUser().run());
   if (err) {
-    console.error(err.toString());
+    console.error("vkboard", err.toString());
   }
+  const vkbot = new VkBot({
+    token: config.vkboard.token,
+    group_id: config.vkboard.group_id
+  });
   return { bot: vkbot, app };
 };
 
@@ -168,7 +168,7 @@ generic.slack.Start = async () => {
   });
 };
 generic.discord.Start = async () => {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const client = new Discord.Client();
     generic.discord.client = client;
     generic.discord.guilds = client.guilds.array();
@@ -195,7 +195,7 @@ generic.discord.Start = async () => {
 };
 generic.mattermost.Start = async () => {
   let [err, res] = await to(
-    new Promise((resolve) => {
+    new Promise(resolve => {
       const credentials = {
         login_id: config.mattermost.login,
         password: config.mattermost.password
@@ -230,7 +230,7 @@ generic.mattermost.Start = async () => {
   }
 
   [err, res] = await to(
-    new Promise((resolve) => {
+    new Promise(resolve => {
       const user_id = config.mattermost.user_id;
       const url = `${
         config.mattermost.ProviderUrl
@@ -462,6 +462,10 @@ sendTo.vkboard = async ({
     ) //todo: !vk.WaitingForCaptcha
   )
     return;
+  if (!generic.vkboard.client.app) {
+    config.MessengersAvailable.vkboard = false;
+    return;
+  }
   const token = generic.vkboard.client.app.token;
   queueOf.vkboard.pushTask((resolve: any) => {
     setTimeout(() => {
@@ -664,7 +668,11 @@ async function sendFrom({
   text = await convertFrom[messenger](text);
   text = text.replace(/^(<br\/>)+/, "");
   for (const messengerTo of Object.keys(config.channelMapping)) {
-    if (ConfigNode[messengerTo] && messenger !== messengerTo) {
+    if (
+      config.MessengersAvailable[messengerTo] &&
+      ConfigNode[messengerTo] &&
+      messenger !== messengerTo
+    ) {
       let thisToWhom: string = "";
       if (ToWhom)
         if (prepareToWhom[messengerTo]) {
@@ -721,7 +729,6 @@ receivedFrom.discord = async (message: any) => {
     )
   )
     return;
-
   if (message.author.bot || message.channel.type !== "text") return;
   for (let value of message.attachments.values()) {
     //media of attachment
@@ -1133,6 +1140,10 @@ receivedFrom.vkboard = async (message: any) => {
     message.topic_owner_id === message.from_id
   )
     return;
+  if (!generic.vkboard.client.app) {
+    config.MessengersAvailable.vkboard = false;
+    return;
+  }
   let text = message.text;
   const fromwhomId = message.from_id;
   let [err, res] = await to(
@@ -1307,7 +1318,7 @@ receivedFrom.mattermost = async (message: any) => {
     if (!post_id) return;
     let err;
     await to(
-      new Promise((resolve) => {
+      new Promise(resolve => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post_id}`;
         request(
           {
@@ -1330,7 +1341,7 @@ receivedFrom.mattermost = async (message: any) => {
       })
     );
     await to(
-      new Promise((resolve) => {
+      new Promise(resolve => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user_id}`;
         request(
           {
@@ -1353,7 +1364,7 @@ receivedFrom.mattermost = async (message: any) => {
       })
     );
     await to(
-      new Promise((resolve) => {
+      new Promise(resolve => {
         const url = `${
           config.mattermost.ProviderUrl
         }/api/v4/channels/${channel_id}`;
@@ -1396,7 +1407,7 @@ receivedFrom.mattermost = async (message: any) => {
     let files = [];
     for (const file of file_ids) {
       const [err, promfile] = await to(
-        new Promise((resolve) => {
+        new Promise(resolve => {
           const url = `${
             config.mattermost.ProviderUrl
           }/api/v4/files/${file}/link`;
@@ -1421,7 +1432,7 @@ receivedFrom.mattermost = async (message: any) => {
         })
       );
       const [err2, promfile2] = await to(
-        new Promise((resolve) => {
+        new Promise(resolve => {
           const url = `${
             config.mattermost.ProviderUrl
           }/api/v4/files/${file}/info`;
@@ -1605,7 +1616,8 @@ GetName.telegram = (user: Telegram.User) => {
 };
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => marked.parser(lexer.lex(text));
+convertFrom.telegram = async (text: string) =>
+  marked.parser(lexer.lex(generic.escapeHTML(text)));
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.slack = async (text: string) => {
@@ -1782,11 +1794,14 @@ convertFrom.slack = async (text: string) => {
 
     return text;
   };
+  text = generic.escapeHTML(text);
   const [err, str] = await to(publicParse(text));
   return str || text;
 };
-convertFrom.mattermost = async (text: string) => marked.parser(lexer.lex(text));
-convertFrom.discord = async (text: string) => marked.parser(lexer.lex(text));
+convertFrom.mattermost = async (text: string) =>
+  marked.parser(lexer.lex(generic.escapeHTML(text)));
+convertFrom.discord = async (text: string) =>
+  marked.parser(lexer.lex(generic.escapeHTML(text)));
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -1828,7 +1843,7 @@ generic.telegram.serveFile = (fileId: number) =>
   });
 
 generic.writeCache = async (origin: string) => {
-  await new Promise((resolve) => {
+  await new Promise(resolve => {
     fs.writeFile(
       `${process.env.HOME}/.${package_json.name}/cache.json`,
       JSON.stringify(config.cache),
@@ -2105,7 +2120,7 @@ GetChannels.discord = async () => {
 
 async function GetChannelsMattermostCore(json: Json, url: string) {
   await to(
-    new Promise((resolve) => {
+    new Promise(resolve => {
       request(
         {
           method: "GET",
@@ -2162,14 +2177,9 @@ async function PopulateChannelMappingCore({
         name: i[messenger]
       }
     };
-    for (const key of Object.keys(arrMappingKeys)) {
-      if (config.cache[key]) {
-        const val = R.path(["cache", key, i[key]], config);
-        mapping[key] = val;
-      } else {
-        mapping[key] = i[key];
-      }
-    }
+    for (const key of Object.keys(arrMappingKeys))
+      mapping[key] = R.pathOr(i[key], ["cache", key, i[key]], config);
+
     config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(
       mapping,
       config.channelMapping[messenger][i_mapped] || {}
@@ -2356,23 +2366,28 @@ StartService.discord = async () => {
     autoStart: true,
     concurrency: 1
   });
-  if (config.MessengersAvailable.discord) {
-    queueOf.discord = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
-    // discord.client.on("ready", () => {
-    //   console.log(`Logged in to discord`);
-    // });
-    generic.discord.client.on("message", (message: any) => {
-      receivedFrom.discord(message);
-    });
-    generic.discord.client.on("error", (error: any) => {
-      debug("discord")(JSON.stringify(error));
-      // StartService.discord();
-    });
-    generic.discord.client.login(config.discord.token);
-  }
+  await new Promise(resolve => {
+    if (config.MessengersAvailable.discord) {
+      queueOf.discord = new Queue({
+        autoStart: true,
+        concurrency: 1
+      });
+      generic.discord.client.on("ready", () => {
+        resolve();
+      });
+      generic.discord.client.on("error", (error: any) => {
+        debug("discord")(JSON.stringify(error));
+        resolve();
+        // StartService.discord();
+      });
+      generic.discord.client.login(config.discord.token);
+    } else {
+      resolve();
+    }
+  });
+  generic.discord.client.on("message", (message: any) => {
+    receivedFrom.discord(message);
+  });
 };
 
 StartService.irc = async () => {
@@ -2656,7 +2671,7 @@ generic.downloadFile = async ({
   let local_fullname: string = "";
   if (type === "slack") {
     [err, res] = await to(
-      new Promise((resolve) => {
+      new Promise(resolve => {
         const local_fullname = `${local_path}/${path.basename(remote_path)}`;
         const stream = request(
           {
@@ -2687,7 +2702,7 @@ generic.downloadFile = async ({
     if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "simple") {
     [err, res] = await to(
-      new Promise((resolve) => {
+      new Promise(resolve => {
         if (extension) {
           extension = `.${extension}`;
         } else {
@@ -2731,7 +2746,7 @@ generic.downloadFile = async ({
     return [remote_path || fileId, remote_path || fileId];
   }
   [err, res] = await to(
-    new Promise((resolve) => {
+    new Promise(resolve => {
       const newname = `${local_path}/${randomStringName}${path.extname(
         local_fullname
       )}`;
@@ -2756,7 +2771,7 @@ generic.downloadFile = async ({
     .slice(0, -1)
     .join(".")}.jpg`;
   [err, res] = await to(
-    new Promise((resolve) => {
+    new Promise(resolve => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
           console.error(remote_path, err.toString());
