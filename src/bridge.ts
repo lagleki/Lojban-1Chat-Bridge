@@ -387,7 +387,15 @@ sendTo.telegram = async ({
       })
       .then(() => resolve())
       .catch((err: any) => {
-        generic.LogToAdmin(err.toString() + "<br/>\n" + chunk);
+        generic.LogToAdmin(
+          channelId +
+            "<br/>\n" +
+            err.toString() +
+            "<br/>\n" +
+            chunk +
+            "<br/>\n" +
+            JSON.stringify(config.channelMapping, null, 2)
+        );
         resolve();
       });
   });
@@ -1842,22 +1850,28 @@ generic.telegram.serveFile = (fileId: number) =>
     fileId
   });
 
-generic.writeCache = async (origin: string) => {
+generic.writeCache = async ({
+  channelName,
+  channelId,
+  action
+}: {
+  channelName: string | number;
+  channelId: string | number;
+  action: string;
+}) => {
   await new Promise(resolve => {
     fs.writeFile(
       `${process.env.HOME}/.${package_json.name}/cache.json`,
       JSON.stringify(config.cache),
       (err: any) => {
-        if (err) {
-          console.log`error while storing chat ID:`;
-          console.log`${err}`;
-        } else {
-          console.log(
-            `successfully stored chat ID in ~/.${
-              package_json.name
-            }/cache.json, ${origin}`
-          );
-        }
+        if (err) action = "error " + err.toString();
+        console.log(
+          `
+          action: ${action}\n
+          channel Name: ${channelName}\n
+          channel Id: ${channelId}
+          `
+        );
         resolve();
       }
     );
@@ -1961,9 +1975,11 @@ async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
     generic.LogToAdmin(`leaving chat ${message.chat.id} ${message.chat.title}`);
     config.cache.telegram[message.chat.title] = undefined;
     await to(
-      generic.writeCache(
-        `(leaving chat ${message.chat.title}, id: ${message.chat.id})`
-      )
+      generic.writeCache({
+        channelName: message.chat.title,
+        channelId: message.chat.id,
+        action: "leave"
+      })
     );
     return true;
   }
@@ -2039,7 +2055,7 @@ NewChannelAppeared.telegram = async ({
 }) => {
   config.cache.telegram[channelName] = channelId;
   let [err, res] = await to(
-    generic.writeCache(`(new channel ${channelName}, id: ${channelId})`)
+    generic.writeCache({ channelName, channelId, action: "join" })
   );
   if (err) {
     console.error(err);
@@ -2515,13 +2531,9 @@ generic.LogMessageToAdmin = async (message: Telegram.Message) => {
 generic.LogToAdmin = (msg_text: string) => {
   if (config.telegram.admins_userid)
     generic.telegram.client
-      .sendMessage(
-        config.telegram.admins_userid,
-        generic.escapeHTML(msg_text.toString()),
-        {
-          parse_mode: "HTML"
-        }
-      )
+      .sendMessage(config.telegram.admins_userid, msg_text, {
+        parse_mode: "HTML"
+      })
       .catch((e: any) => console.log(e.toString()));
 };
 

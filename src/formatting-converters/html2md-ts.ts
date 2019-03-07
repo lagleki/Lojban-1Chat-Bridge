@@ -18,6 +18,19 @@ function replaceExtras(doc: string) {
   return newDoc;
 }
 
+const replacements = [
+  [/\*/g, "\\*"],
+  [/#/g, "\\#"],
+  [/\//g, "\\/"],
+  [/\(/g, "\\("],
+  [/\)/g, "\\)"],
+  [/\[/g, "\\["],
+  [/\]/g, "\\]"],
+  [/\</g, "&lt;"],
+  [/\>/g, "&gt;"],
+  [/_/g, "\\_"]
+];
+
 module.exports = {
   /**
    * @description converts given html to a markdown
@@ -26,12 +39,16 @@ module.exports = {
    * @param  {String} html
    * @return {String}
    */
-  convert(html: string) {
+  convert(string: string) {
     /**
      * replacing unncessary html tags
      * @type {String}
      */
-    html = replaceExtras(html);
+    let html = replaceExtras(
+      replacements.reduce((string: string, replacement: string[]) => {
+        return string.replace(replacement[0], replacement[1]);
+      }, string)
+    );
     /**
      * looping through registered formatters
      */
