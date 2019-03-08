@@ -1824,8 +1824,8 @@ async function convertToPlainText(text: string) {
       .replace(/<br\/?>/gi, "\n")
       .replace(/<a.*?href="(.+?)".*?>(.+?)<\/a>/gi, (...arr) => {
         const url = arr[1];
-        // const name = arr[2];
-        // if (url !== name) return `${name} (${url})`;
+        const name = arr[2];
+        if (url !== name) return `${name} (${url})`;
         return " " + url;
       })
       .replace(/<(?:.|\s)*?>/g, "")
