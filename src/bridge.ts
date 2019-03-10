@@ -139,7 +139,7 @@ generic.telegram.Start = () => {
 generic.vkboard.Start = async () => {
   const vkio = new VK();
   vkio.setOptions({
-    app: config.vkboard.app,
+    appId: config.vkboard.appId,
     login: config.vkboard.login,
     password: config.vkboard.password
   });
