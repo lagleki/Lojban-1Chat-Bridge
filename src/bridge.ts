@@ -416,6 +416,7 @@ sendTo.discord = async ({
     )
   )
     return;
+
   queueOf.discord.pushTask((resolve: any) => {
     generic.discord.client.channels
       .get(channelId)
@@ -738,6 +739,7 @@ receivedFrom.discord = async (message: any) => {
   )
     return;
   if (message.author.bot || message.channel.type !== "text") return;
+  const edited = message.edited ? true : false;
   for (let value of message.attachments.values()) {
     //media of attachment
     //todo: height,width,generic.LocalizeString
@@ -761,7 +763,8 @@ receivedFrom.discord = async (message: any) => {
       channelId: message.channel.id,
       author: message.author.username,
       text: file,
-      file: localfile
+      file: localfile,
+      edited
     });
     //text of attachment
     const text = generic.discord.reconstructPlainText(message, value.content);
@@ -769,7 +772,8 @@ receivedFrom.discord = async (message: any) => {
       messenger: "discord",
       channelId: message.channel.id,
       author: message.author.username,
-      text
+      text,
+      edited
     });
   }
 
@@ -778,7 +782,8 @@ receivedFrom.discord = async (message: any) => {
     messenger: "discord",
     channelId: message.channel.id,
     author: message.author.username,
-    text
+    text,
+    edited
   });
 };
 
@@ -1126,7 +1131,7 @@ async function sendFromTelegram({
       localized_string_key: `MessageWith.${el}.telegram`,
       arrElemsToInterpolate: arrForLocal
     });
-    message.edited = message.edit_date ? true : false;
+    const edited = message.edit_date ? true : false;
     sendFrom({
       messenger: "telegram",
       channelId: message.chat.id,
@@ -1135,7 +1140,7 @@ async function sendFromTelegram({
       action,
       quotation,
       file: jsonMessage[el].local_file,
-      edited: message.edited
+      edited
     });
   }
 }
@@ -1241,7 +1246,7 @@ receivedFrom.slack = async (message: any) => {
     message.user = message.message.user;
     message.text = message.message.text;
   }
-  message.edited = message.subtype === "message_changed" ? true : false;
+  const edited = message.subtype === "message_changed" ? true : false;
 
   const promUser = generic.slack.client.web.users.info({
     user: message.user
@@ -1290,7 +1295,7 @@ receivedFrom.slack = async (message: any) => {
         author,
         text: file,
         file: localfile,
-        edited: message.edited
+        edited
       });
     });
   if (message.text && !message.topic) {
@@ -1300,7 +1305,7 @@ receivedFrom.slack = async (message: any) => {
       author,
       text: message.text,
       action,
-      edited: message.edited
+      edited
     });
   }
 };
@@ -1840,7 +1845,8 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) => await convertToPlainText(text);
+convertTo["discord"] = async (text: string) => await generic.unescapeHTML(html2md.convert(text),true);
+// convertTo["discord"] = async (text: string) => await convertToPlainText(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
@@ -2404,6 +2410,10 @@ StartService.discord = async () => {
   generic.discord.client.on("message", (message: any) => {
     receivedFrom.discord(message);
   });
+  generic.discord.client.on("messageUpdate", (oldMessage:any, message: any) => {
+    message.edited=true;
+    receivedFrom.discord(message);
+  });
 };
 
 StartService.irc = async () => {
@@ -2807,7 +2817,7 @@ generic.downloadFile = async ({
 
 generic.sanitizeHtml = (text: string) => {
   return sanitizeHtml(text, {
-    allowedTags: ["b", "i", "code", "pre", "a", "em"],
+    allowedTags: ["b", "strong", "i", "code", "pre", "a", "em"],
     allowedAttributes: {
       a: ["href"]
     }
