@@ -2221,15 +2221,15 @@ async function PopulateChannelMappingCore({
 }) {
   if (!config.MessengersAvailable[messenger]) return;
   if (!config.channelMapping[messenger]) config.channelMapping[messenger] = {};
-  const arrMappingKeys: Json = {
-    facebook: "facebook",
-    telegram: "telegram",
-    vkboard: "vkboard",
-    slack: "slack",
-    mattermost: "mattermost",
-    discord: "discord",
-    irc: "irc"
-  };
+  const arrMappingKeys: string[] = [
+    "facebook",
+    "telegram",
+    "vkboard",
+    "slack",
+    "mattermost",
+    "discord",
+    "irc"
+  ];
   config.channels.map((i: any) => {
     let i_mapped = i[messenger];
     if (config.cache[messenger])
@@ -2243,7 +2243,7 @@ async function PopulateChannelMappingCore({
         name: i[messenger]
       }
     };
-    for (const key of Object.keys(arrMappingKeys))
+    for (const let key of arrMappingKeys)
       mapping[key] = R.pathOr(i[key], ["cache", key, i[key]], config);
 
     config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(
