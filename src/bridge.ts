@@ -691,7 +691,13 @@ async function sendFrom({
       if (prepareAuthor[messengerTo]) {
         author = prepareAuthor[messengerTo]({ text: author, channelId });
       } else author = prepareAuthor.fallback({ text: author, channelId });
+      debug("generic")(
+        `converting for messenger ${messengerTo} the text "` + text + `"`
+      );
       let textTo = await convertTo[messengerTo](text);
+      debug("generic")(
+        `converted for messenger ${messengerTo} to text "` + textTo + `"`
+      );
       let Chunks = await prepareChunks({
         messenger,
         channelId,
@@ -1221,6 +1227,43 @@ receivedFrom.vkboard = async (message: any) => {
       });
     }
   }
+  const attachments = R.pathOr([], ["attachments"], message);
+  let texts = [];
+  if (attachments.length > 0) {
+    for (let a of attachments) {
+      switch (a.type) {
+        case "photo":
+        case "posted_photo":
+          try {
+            const sizes = a.photo.sizes
+              .map((i: any) => {
+                i.square = i.width * i.height;
+                return i;
+              })
+              .sort(
+                (d: any, c: any) => parseFloat(c.size) - parseFloat(d.size)
+              );
+            texts.push(sizes[0].url);
+            texts.push(a.photo.text);
+          } catch (e) {}
+          break;
+        case "doc":
+          try {
+            texts.push(a.doc.url);
+          } catch (e) {}
+          break;
+      }
+    }
+  }
+  texts.filter(Boolean).map((mini: string) => {
+    sendFrom({
+      messenger: "vkboard",
+      edited: message.edited,
+      channelId,
+      author,
+      text: mini
+    });
+  });
   sendFrom({
     messenger: "vkboard",
     edited: message.edited,
@@ -1845,7 +1888,8 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) => await generic.unescapeHTML(html2md.convert(text),true);
+convertTo["discord"] = async (text: string) =>
+  await generic.unescapeHTML(html2md.convert(text), true);
 // convertTo["discord"] = async (text: string) => await convertToPlainText(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
@@ -2410,10 +2454,13 @@ StartService.discord = async () => {
   generic.discord.client.on("message", (message: any) => {
     receivedFrom.discord(message);
   });
-  generic.discord.client.on("messageUpdate", (oldMessage:any, message: any) => {
-    message.edited=true;
-    receivedFrom.discord(message);
-  });
+  generic.discord.client.on(
+    "messageUpdate",
+    (oldMessage: any, message: any) => {
+      message.edited = true;
+      receivedFrom.discord(message);
+    }
+  );
 };
 
 StartService.irc = async () => {

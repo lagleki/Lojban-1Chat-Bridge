@@ -42,7 +42,7 @@ function makeRegex(
       if (replaceFn && typeof replaceFn === "function") {
         replaceText = replaceFn(matches);
       }
-      replaceString += `${replaceText}\n`;
+      replaceString += `${replaceText}`;
       replaceString += after || "";
       newDoc = newDoc.replace(matches[0], replaceString);
     }
@@ -155,7 +155,7 @@ function replaceBlockQuote(doc: string) {
  * @return {String}           [description]
  */
 function replaceBold(doc: string) {
-  return makeRegex(boldRegex, doc, "** ", " **");
+  return makeRegex(boldRegex, doc, "**", "**");
 }
 
 /**
@@ -166,7 +166,7 @@ function replaceBold(doc: string) {
  * @return {String}           [description]
  */
 function replaceItalic(doc: string) {
-  return makeRegex(italicRegex, doc, "* ", " *");
+  return makeRegex(italicRegex, doc, "*", "*");
 }
 
 /**
