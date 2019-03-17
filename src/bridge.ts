@@ -96,6 +96,7 @@ const generic: Igeneric = {
   facebook: {},
   telegram: {},
   vkboard: {},
+  vkwall: {},
   slack: {},
   mattermost: {},
   discord: {},
@@ -150,6 +151,24 @@ generic.vkboard.Start = async () => {
   const vkbot = new VkBot({
     token: config.vkboard.token,
     group_id: config.vkboard.group_id
+  });
+  return { bot: vkbot, app };
+};
+
+generic.vkwall.Start = async () => {
+  const vkio = new VK();
+  vkio.setOptions({
+    appId: config.vkwall.appId,
+    login: config.vkwall.login,
+    password: config.vkwall.password
+  });
+  const [err, app] = await to(vkio.auth.implicitFlowUser().run());
+  if (err) {
+    console.error("vkwall", err.toString());
+  }
+  const vkbot = new VkBot({
+    token: config.vkwall.token,
+    group_id: config.vkwall.group_id
   });
   return { bot: vkbot, app };
 };
@@ -455,6 +474,51 @@ sendTo.mattermost = async ({
     });
   });
 };
+sendTo.vkwall = async ({
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file
+}: IsendToArgs) => {
+  if (
+    R.path(
+      ["channelMapping", "vkwall", channelId, "settings", "readonly"],
+      config
+    )
+  )
+    return;
+  if (!generic.vkwall.client.app) {
+    config.MessengersAvailable.vkwall = false;
+    return;
+  }
+  const token = generic.vkwall.client.app.token;
+  queueOf.vk.pushTask((resolve: any) => {
+    setTimeout(() => {
+      console.log({
+        access_token: token,
+        owner_id: "-" + config.vkwall.group_id,
+        post_id: channelId,
+        from_group: config.vkwall.group_id,
+        reply_to_comment: 1,
+        message: chunk
+      });
+      generic.vkwall.client.bot
+        .api("wall.createComment", {
+          access_token: token,
+          owner_id: "-" + config.vkwall.group_id,
+          post_id: channelId,
+          from_group: config.vkwall.group_id,
+          reply_to_comment: 1,
+          message: chunk
+        })
+        .then((res: any) => {})
+        .catch(catchError);
+      resolve();
+    }, 10000);
+  });
+};
 
 sendTo.vkboard = async ({
   channelId,
@@ -476,7 +540,7 @@ sendTo.vkboard = async ({
     return;
   }
   const token = generic.vkboard.client.app.token;
-  queueOf.vkboard.pushTask((resolve: any) => {
+  queueOf.vk.pushTask((resolve: any) => {
     setTimeout(() => {
       generic.vkboard.client.bot
         .api("board.createComment", {
@@ -710,7 +774,7 @@ async function sendFrom({
         Chunks[i] = await FormatMessageChunkForSending({
           messenger: messengerTo,
           channelId,
-          title: config.vkboard.group_id,
+          title: R.path(["vkboard", "group_id"], config),
           author,
           chunk: thisToWhom + chunk,
           action,
@@ -1150,6 +1214,128 @@ async function sendFromTelegram({
     });
   }
 }
+
+receivedFrom.vkwall = async (message: any) => {
+  if (!config.channelMapping.vkwall) return;
+  const channelId = message.post_id;
+  if (
+    !config.channelMapping.vkwall[channelId] ||
+    config.vkwall.group_id === message.from_id.toString()
+  )
+    return;
+  if (!generic.vkwall.client.app) {
+    config.MessengersAvailable.vkwall = false;
+    return;
+  }
+  let text = message.text;
+  const fromwhomId = message.from_id;
+  let [err, res] = await to(
+    generic.vkwall.client.bot.api("users.get", {
+      user_ids: fromwhomId,
+      access_token: config.vkwall.token,
+      fields: "nickname,screen_name"
+    })
+  );
+  res = R.pathOr(fromwhomId, ["response", 0], res);
+  const author = AdaptName.vkwall(res);
+
+  let arrQuotes: string[] = [];
+  text.replace(
+    /\[[^\]]+:bp-([^\]]+)_([^\]]+)\|[^\]]*\]/g,
+    (match: any, group_id: string, post_id: string) => {
+      if (group_id === config.vkwall.group_id) {
+        arrQuotes.push(post_id);
+      }
+    }
+  );
+  if (arrQuotes.length > 0) {
+    const token = generic.vkwall.client.app.token;
+    for (const el of arrQuotes) {
+      const opts = {
+        access_token: token,
+        group_id: config.vkwall.group_id,
+        topic_id: channelId,
+        start_comment_id: el,
+        count: 1,
+        v: "5.84"
+      };
+      [err, res] = await to(
+        generic.vkwall.client.bot.api("board.getComments", opts)
+      );
+      let text: string = R.path(["response", "items", 0, "text"], res);
+      if (!text) continue;
+      let replyuser: string;
+      const rg = new RegExp(
+        `^\\[club${config.vkwall.group_id}\\|(.*?)\\]: (.*)$`
+      );
+      if (rg.test(text)) {
+        [, replyuser, text] = text.match(rg);
+      } else {
+        let authorId = R.path(["response", "items", 0, "from_id"], res);
+        [err, res] = await to(
+          generic.vkwall.client.bot.api("users.get", {
+            user_ids: authorId,
+            access_token: config.vkwall.token,
+            fields: "nickname,screen_name"
+          })
+        );
+        replyuser = R.pathOr("", ["response", 0], res);
+        replyuser = AdaptName.vkwall(replyuser);
+      }
+      sendFrom({
+        messenger: "vkwall",
+        channelId,
+        author: replyuser,
+        text,
+        quotation: true
+      });
+    }
+  }
+  const attachments = R.pathOr([], ["attachments"], message);
+  let texts = [];
+  if (attachments.length > 0) {
+    for (let a of attachments) {
+      switch (a.type) {
+        case "photo":
+        case "posted_photo":
+          try {
+            const sizes = a.photo.sizes
+              .map((i: any) => {
+                i.square = i.width * i.height;
+                return i;
+              })
+              .sort(
+                (d: any, c: any) => parseFloat(c.size) - parseFloat(d.size)
+              );
+            texts.push(sizes[0].url);
+            texts.push(a.photo.text);
+          } catch (e) {}
+          break;
+        case "doc":
+          try {
+            texts.push(a.doc.url);
+          } catch (e) {}
+          break;
+      }
+    }
+  }
+  texts.filter(Boolean).map((mini: string) => {
+    sendFrom({
+      messenger: "vkwall",
+      edited: message.edited,
+      channelId,
+      author,
+      text: mini
+    });
+  });
+  sendFrom({
+    messenger: "vkwall",
+    edited: message.edited,
+    channelId,
+    author,
+    text
+  });
+};
 
 receivedFrom.vkboard = async (message: any) => {
   if (!config.channelMapping.vkboard) return;
@@ -1643,6 +1829,7 @@ AdaptName.vkboard = (user: any) => {
   if (user.screen_name && user.screen_name.length < 1) user.screen_name = null;
   return user.screen_name || user.nickname || full_name || user.id;
 };
+AdaptName.vkwall = AdaptName.vkboard;
 AdaptName.slack = (user: any) =>
   R.path(["user", "profile", "display_name"], user) ||
   R.path(["user", "real_name"], user) ||
@@ -1676,6 +1863,7 @@ convertFrom.telegram = async (text: string) =>
   marked.parser(lexer.lex(generic.escapeHTML(text)));
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
+convertFrom.vkwall = convertFrom.vkboard;
 convertFrom.slack = async (text: string) => {
   const RE_ALPHANUMERIC = new RegExp("^\\w?$"),
     RE_TAG = new RegExp("<(.+?)>", "g"),
@@ -1886,6 +2074,7 @@ async function convertToPlainText(text: string) {
 convertTo["facebook"] = async (text: string) => convertToPlainText(text);
 convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
+convertTo["vkwall"] = convertTo["vkboard"];
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
 convertTo["discord"] = async (text: string) =>
@@ -2225,6 +2414,7 @@ async function PopulateChannelMappingCore({
     "facebook",
     "telegram",
     "vkboard",
+    "vkwall",
     "slack",
     "mattermost",
     "discord",
@@ -2243,7 +2433,7 @@ async function PopulateChannelMappingCore({
         name: i[messenger]
       }
     };
-    for (const let key of arrMappingKeys)
+    for (const key of arrMappingKeys)
       mapping[key] = R.pathOr(i[key], ["cache", key, i[key]], config);
 
     config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(
@@ -2265,6 +2455,7 @@ generic.PopulateChannelMapping = async () => {
   await PopulateChannelMappingCore({ messenger: "facebook" });
   await PopulateChannelMappingCore({ messenger: "telegram" });
   await PopulateChannelMappingCore({ messenger: "vkboard" });
+  await PopulateChannelMappingCore({ messenger: "vkwall" });
   await PopulateChannelMappingCore({ messenger: "slack" });
   await PopulateChannelMappingCore({ messenger: "mattermost" });
   await PopulateChannelMappingCore({ messenger: "discord" });
@@ -2282,6 +2473,7 @@ generic.MessengersAvailable = () => {
     if (i.facebook) config.MessengersAvailable.facebook = true;
     if (i.telegram) config.MessengersAvailable.telegram = true;
     if (i.vkboard) config.MessengersAvailable.vkboard = true;
+    if (i.vkwall) config.MessengersAvailable.vkwall = true;
     if (i.slack) config.MessengersAvailable.slack = true;
     if (i.mattermost) config.MessengersAvailable.mattermost = true;
     if (i.discord) config.MessengersAvailable.discord = true;
@@ -2308,6 +2500,13 @@ generic.MessengersAvailable = () => {
     R.pathOr("", ["vkboard", "password"], config) === ""
   )
     config.MessengersAvailable.vkboard = false;
+  if (
+    R.pathOr("", ["vkwall", "token"], config) === "" ||
+    R.pathOr("", ["vkwall", "group_id"], config) === "" ||
+    R.pathOr("", ["vkwall", "login"], config) === "" ||
+    R.pathOr("", ["vkwall", "password"], config) === ""
+  )
+    config.MessengersAvailable.vkwall = false;
 };
 
 StartService.facebook = async (force: boolean) => {
@@ -2360,14 +2559,34 @@ StartService.telegram = async () => {
   if (!err) config.telegram.myUser = res;
 };
 
+StartService.vkwall = async () => {
+  //vkboard
+  if (!config.MessengersAvailable.vkwall) return;
+  generic.vkwall.client = await generic.vkwall.Start();
+  if (!queueOf.vk)
+    queueOf.vk = new Queue({
+      autoStart: true,
+      concurrency: 1
+    });
+  generic.vkwall.client.bot.event("wall_reply_new", async (ctx: any) => {
+    receivedFrom.vkwall(ctx.message);
+  });
+  generic.vkwall.client.bot.event("wall_reply_edit", async (ctx: any) => {
+    ctx.message.edited = true;
+    receivedFrom.vkwall(ctx.message);
+  });
+  generic.vkwall.client.bot.startPolling();
+};
+
 StartService.vkboard = async () => {
   //vkboard
   if (!config.MessengersAvailable.vkboard) return;
   generic.vkboard.client = await generic.vkboard.Start();
-  queueOf.vkboard = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  if (!queueOf.vk)
+    queueOf.vk = new Queue({
+      autoStart: true,
+      concurrency: 1
+    });
   generic.vkboard.client.bot.event("board_post_new", async (ctx: any) => {
     receivedFrom.vkboard(ctx.message);
   });
@@ -2534,6 +2753,7 @@ async function StartServices() {
   await StartService.facebook();
   await StartService.telegram();
   await StartService.vkboard();
+  await StartService.vkwall();
   await StartService.slack();
   await StartService.mattermost();
   await StartService.discord();
