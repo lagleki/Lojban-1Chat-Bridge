@@ -496,14 +496,6 @@ sendTo.vkwall = async ({
   const token = generic.vkwall.client.app.token;
   queueOf.vk.pushTask((resolve: any) => {
     setTimeout(() => {
-      console.log({
-        access_token: token,
-        owner_id: "-" + config.vkwall.group_id,
-        post_id: channelId,
-        from_group: config.vkwall.group_id,
-        reply_to_comment: 1,
-        message: chunk
-      });
       generic.vkwall.client.bot
         .api("wall.createComment", {
           access_token: token,
@@ -1220,7 +1212,7 @@ receivedFrom.vkwall = async (message: any) => {
   const channelId = message.post_id;
   if (
     !config.channelMapping.vkwall[channelId] ||
-    config.vkwall.group_id === message.from_id.toString()
+    ("-"+config.vkwall.group_id) === message.from_id.toString()
   )
     return;
   if (!generic.vkwall.client.app) {
