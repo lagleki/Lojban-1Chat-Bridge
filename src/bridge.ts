@@ -508,7 +508,7 @@ sendTo.vkwall = async ({
         .then((res: any) => {})
         .catch(catchError);
       resolve();
-    }, 10000);
+    }, 30000);
   });
 };
 
@@ -976,11 +976,10 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
       text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``);
     });
   }
-  const matches = text.match(/<?@[^# ]{2,32}>?/g);
+  let matches = text.match(/<[\!&]?@[^# ]{2,32}>/g);
   if (!matches || !matches[0]) return text;
   for (let match of matches) {
-    const from = new RegExp(`<?@${match}>?`);
-    const core = match.replace(/[@<>]/g, "");
+    const core = match.replace(/[@<>\!&]/g, "");
     const member = message.channel.guild.members
       .array()
       .find(
@@ -988,6 +987,15 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
           member.user.username && member.user.id.toLowerCase() === core
       );
     if (member) text = text.replace(match, "@" + member.user.username);
+  }
+  matches = text.match(/<#[^# ]{2,32}>/g);
+  if (!matches || !matches[0]) return text;
+  for (let match of matches) {
+    const core = match.replace(/[<>#]/g, "");
+    const chan = Object.keys(config.cache.discord).filter(
+      i => config.cache.discord[i] === core
+    );
+    if (chan[0]) text = text.replace(match, "#" + chan[0]);
   }
 
   return text;
@@ -1212,7 +1220,7 @@ receivedFrom.vkwall = async (message: any) => {
   const channelId = message.post_id;
   if (
     !config.channelMapping.vkwall[channelId] ||
-    ("-"+config.vkwall.group_id) === message.from_id.toString()
+    "-" + config.vkwall.group_id === message.from_id.toString()
   )
     return;
   if (!generic.vkwall.client.app) {
@@ -1920,13 +1928,16 @@ convertFrom.slack = async (text: string) => {
     let postfix_ok = match.index === match.input.length - match[0].length;
 
     if (!prefix_ok) {
-      const charAtLeft = match.input.substr(match.index - 1, 1);
+      const charAtLeft: string = match.input.substr(match.index - 1, 1);
       prefix_ok =
         notAlphanumeric(charAtLeft) && notRepeatedChar(trigger, charAtLeft);
     }
 
     if (!postfix_ok) {
-      const charAtRight = match.input.substr(match.index + match[0].length, 1);
+      const charAtRight: string = match.input.substr(
+        match.index + match[0].length,
+        1
+      );
       postfix_ok =
         notAlphanumeric(charAtRight) && notRepeatedChar(trigger, charAtRight);
     }
@@ -2045,7 +2056,7 @@ convertFrom.irc = async (text: string) =>
     .replace(/\b_(\w+)_\b/g, "<i>$1</i>");
 
 async function convertToPlainText(text: string) {
-  const a = await generic.unescapeHTML(
+  let a = await generic.unescapeHTML(
     text
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
@@ -2060,6 +2071,9 @@ async function convertToPlainText(text: string) {
       .trim(),
     true
   );
+  if (a.split(/\r\n|\r|\n/).length > 1) {
+    a = "\n" + a;
+  }
   return a;
 }
 
@@ -2068,9 +2082,13 @@ convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
 convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["vkwall"] = convertTo["vkboard"];
 convertTo["slack"] = async (text: string) => slackify(text);
-convertTo["mattermost"] = async (text: string) => html2md.convert(text); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
+convertTo["mattermost"] = async (text: string) =>
+  html2md.convert({ string: text }); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
 convertTo["discord"] = async (text: string) =>
-  await generic.unescapeHTML(html2md.convert(text), true);
+  await generic.unescapeHTML(
+    html2md.convert({ string: text, hrefConvert: false }),
+    true
+  );
 // convertTo["discord"] = async (text: string) => await convertToPlainText(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
@@ -2195,13 +2213,15 @@ async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
     !R.path(["telegram", "myUser", "id"], config)
   )
     return;
+
   let [err, res] = await to(
     generic.telegram.client.getChatMember(
       message.chat.id,
       config.telegram.myUser.id
     )
   );
-  if (res && !res.can_delete_messages) {
+  if (!res) return true;
+  if (!res.can_delete_messages) {
     [err, res] = await to(generic.telegram.client.leaveChat(message.chat.id));
     generic.LogToAdmin(`leaving chat ${message.chat.id} ${message.chat.title}`);
     config.cache.telegram[message.chat.title] = undefined;

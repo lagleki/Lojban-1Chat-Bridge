@@ -39,7 +39,7 @@ module.exports = {
    * @param  {String} html
    * @return {String}
    */
-  convert(string: string) {
+  convert({string, hrefConvert}: {string: string,hrefConvert: boolean}) {
     /**
      * replacing unncessary html tags
      * @type {String}
@@ -63,7 +63,10 @@ module.exports = {
     html = html.replace(
       /<a.*href="(.*?)".*>(.*?)<\/a>/gi,
       (match: any, href: string, name: string) => {
-        if (href.endsWith(".jpg")) {
+        if (hrefConvert===false){
+          return `${href}`;
+        }
+        else if (href.endsWith(".jpg")) {
           return `\n\n![${name}](${href})`;
         } else {
           return `[${name}](${href})`;
