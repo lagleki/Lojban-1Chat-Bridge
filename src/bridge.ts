@@ -977,26 +977,26 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
     });
   }
   let matches = text.match(/<[\!&]?@[^# ]{2,32}>/g);
-  if (!matches || !matches[0]) return text;
-  for (let match of matches) {
-    const core = match.replace(/[@<>\!&]/g, "");
-    const member = message.channel.guild.members
-      .array()
-      .find(
-        (member: any) =>
-          member.user.username && member.user.id.toLowerCase() === core
-      );
-    if (member) text = text.replace(match, "@" + member.user.username);
-  }
+  if (matches && matches[0])
+    for (let match of matches) {
+      const core = match.replace(/[@<>\!&]/g, "");
+      const member = message.channel.guild.members
+        .array()
+        .find(
+          (member: any) =>
+            member.user.username && member.user.id.toLowerCase() === core
+        );
+      if (member) text = text.replace(match, "@" + member.user.username);
+    }
   matches = text.match(/<#[^# ]{2,32}>/g);
-  if (!matches || !matches[0]) return text;
-  for (let match of matches) {
-    const core = match.replace(/[<>#]/g, "");
-    const chan = Object.keys(config.cache.discord).filter(
-      i => config.cache.discord[i] === core
-    );
-    if (chan[0]) text = text.replace(match, "#" + chan[0]);
-  }
+  if (matches && matches[0])
+    for (let match of matches) {
+      const core = match.replace(/[<>#]/g, "");
+      const chan = Object.keys(config.cache.discord).filter(
+        i => config.cache.discord[i] === core
+      );
+      if (chan[0]) text = text.replace(match, "#" + chan[0]);
+    }
 
   return text;
 };
