@@ -1543,25 +1543,13 @@ receivedFrom.mattermost = async (message: any) => {
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
-    const post_id = R.path(
-      ["id"],
-      JSON.parse(R.pathOr("", ["data", "post"], message))
-    );
-    const user_id = R.path(
-      ["user_id"],
-      JSON.parse(R.pathOr("", ["data", "post"], message))
-    );
-    const channel_id = R.path(
-      ["channel_id"],
-      JSON.parse(R.pathOr("", ["data", "post"], message))
-    );
+    const post = JSON.parse(R.pathOr("", ["data", "post"], message));
+    if (!post.id) return;
     message.event = "posted";
     message.edited = true;
-    if (!post_id) return;
-    let err;
     await to(
       new Promise(resolve => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post_id}`;
+        const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post.id}`;
         request(
           {
             method: "GET",
@@ -1584,7 +1572,7 @@ receivedFrom.mattermost = async (message: any) => {
     );
     await to(
       new Promise(resolve => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user_id}`;
+        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user.id}`;
         request(
           {
             method: "GET",
@@ -1609,7 +1597,7 @@ receivedFrom.mattermost = async (message: any) => {
       new Promise(resolve => {
         const url = `${
           config.mattermost.ProviderUrl
-        }/api/v4/channels/${channel_id}`;
+        }/api/v4/channels/${channel.id}`;
         request(
           {
             method: "GET",
