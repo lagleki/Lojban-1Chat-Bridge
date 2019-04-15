@@ -1572,7 +1572,7 @@ receivedFrom.mattermost = async (message: any) => {
     );
     await to(
       new Promise(resolve => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user.id}`;
+        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${post.user_id}`;
         request(
           {
             method: "GET",
@@ -1597,7 +1597,7 @@ receivedFrom.mattermost = async (message: any) => {
       new Promise(resolve => {
         const url = `${
           config.mattermost.ProviderUrl
-        }/api/v4/channels/${channel.id}`;
+        }/api/v4/channels/${post.channel_id}`;
         request(
           {
             method: "GET",
