@@ -2661,7 +2661,7 @@ StartService.discord = async () => {
         resolve();
       });
       generic.discord.client.on("error", (error: any) => {
-        debug("discord")(JSON.stringify(error));
+        debug("discord")(error);
         resolve();
         // StartService.discord();
       });
