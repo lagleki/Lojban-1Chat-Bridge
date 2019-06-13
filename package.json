@@ -40,7 +40,7 @@
     "irc-upd": "^0.10.0",
     "libfb": "^1.4.10",
     "lojban": "0.0.35",
-    "marked": "^0.5.0",
+    "marked": "^0.6.2",
     "mkdirp": "^0.5.1",
     "node-emoji": "^1.8.1",
     "node-gitter": "^2.1.0",
