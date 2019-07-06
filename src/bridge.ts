@@ -647,7 +647,7 @@ receivedFrom.discord = async (message: any) => {
 			file = value.url;
 			localfile = value.url;
 		}
-		debug('discord')('sending text: ' + file);
+		debug('discord')('sending attachment text: ' + file);
 		sendFrom({
 			messenger: 'discord',
 			channelId: message.channel.id,
@@ -658,6 +658,7 @@ receivedFrom.discord = async (message: any) => {
 		});
 		//text of attachment
 		const text = generic.discord.reconstructPlainText(message, value.content);
+		debug('discord')('sending text of attachment: ' + text);
 		sendFrom({
 			messenger: 'discord',
 			channelId: message.channel.id,
@@ -666,8 +667,9 @@ receivedFrom.discord = async (message: any) => {
 			edited,
 		});
 	}
-
+	
 	const text = generic.discord.reconstructPlainText(message, message.content);
+	debug('discord')('sending reconstructed text: ' + text);
 	sendFrom({
 		messenger: 'discord',
 		channelId: message.channel.id,
@@ -2630,7 +2632,7 @@ generic.downloadFile = async ({
 			});
 		})
 	);
-	if (res) [rem_fullname, local_fullname] = res;
+	if (!err) [rem_fullname, local_fullname] = res;
 	if (!['.webp', '.tiff'].includes(path.extname(local_fullname))) {
 		return [rem_fullname, local_fullname];
 	}
@@ -2658,7 +2660,7 @@ generic.downloadFile = async ({
 			});
 		})
 	);
-	if (res) [rem_fullname, local_fullname] = res;
+	if (!err) [rem_fullname, local_fullname] = res;
 	return [rem_fullname, local_fullname];
 };
 
