@@ -39,7 +39,7 @@ Object.keys(globalStyles).forEach(key => {
 
 const globalRichMood = [
   ["bold", ["red", "red", "yellow"]],
-  ["bold", ["blue", "green", "black"]],
+  ["bold", ["blue", "white", "white"]],
   ["bold", ["navy", "green", "green"]],
   ["bold", ["teal", "navy"]],
   ["bold", ["red", "brown", "brown", "brown"]],
@@ -50,7 +50,7 @@ const globalRichMood = [
   ["bold", ["lightgreen", "lightgreen", "white"]],
   ["bold", ["lightgreen", "lightgreen", "olive"]],
   ["bold", ["white", "lightgreen", "white"]],
-  ["bold", ["yellow", "white"]],
+  ["bold", ["yellow", "white", "white"]],
   ["bold", ["teal", "teal", "green"]],
   ["bold", ["violet", "violet", "violet", "red"]],
   ["normal", ["blue"]],
