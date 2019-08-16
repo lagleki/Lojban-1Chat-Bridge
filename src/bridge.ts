@@ -2698,8 +2698,10 @@ StartService.discord = async () => {
   generic.discord.client.on(
     "messageUpdate",
     (oldMessage: any, message: any) => {
-      message.edited = true;
-      receivedFrom.discord(message);
+      if (oldMessage.content != message.content) {
+        message.edited = true;
+        receivedFrom.discord(message);
+      }
     }
   );
 };
