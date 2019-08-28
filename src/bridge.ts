@@ -655,7 +655,7 @@ prepareToWhom.irc = function({
   targetChannel: string | number;
 }) {
   const ColorificationMode = R.pathOr(
-    "color",
+    "mood",
     ["channelMapping", "irc", targetChannel, "settings", "nickcolor"],
     config
   );
@@ -683,7 +683,7 @@ prepareAuthor.irc = function({
   targetChannel: string | number;
 }) {
   const ColorificationMode = R.pathOr(
-    "color",
+    "mood",
     ["channelMapping", "irc", targetChannel, "settings", "nickcolor"],
     config
   );
