@@ -2992,7 +2992,8 @@ generic.downloadFile = async ({
             url: remote_path,
             headers: {
               Authorization: `Bearer ${config.slack.token}`
-            }
+            },
+            timeout:3000
           },
           err => {
             if (err) {
@@ -3027,7 +3028,8 @@ generic.downloadFile = async ({
         const stream = request(
           {
             method: "GET",
-            url: remote_path
+            url: remote_path,
+            timeout:3000
           },
           (err: any) => {
             if (err) {
