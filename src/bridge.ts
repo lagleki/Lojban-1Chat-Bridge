@@ -3033,7 +3033,7 @@ generic.downloadFile = async ({
           },
           (err: any) => {
             if (err) {
-              console.log(err.toString(), remote_path);
+              console.log({type: 'request error', error: err.toString(), remote_path});
               resolve([rem_fullname, local_fullname]);
             }
           }
@@ -3044,7 +3044,7 @@ generic.downloadFile = async ({
           resolve([rem_fullname, local_fullname]);
         });
         stream.on("error", (err: any) => {
-          console.log(remote_path, err.toString());
+          console.log({remote_path,error: err.toString(), type: 'stream error'});
           resolve([rem_fullname, local_fullname]);
         });
       })
@@ -3057,7 +3057,7 @@ generic.downloadFile = async ({
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
   }
   if (err) {
-    console.error(remote_path, err);
+    console.error({remote_path, error: err, type: 'generic'});
     return [remote_path || fileId, remote_path || fileId];
   }
   [err, res] = await to(
@@ -3067,7 +3067,7 @@ generic.downloadFile = async ({
       )}`;
       fs.rename(local_fullname, newname, (err: any) => {
         if (err) {
-          console.error(remote_path, err);
+          console.error({remote_path, error: err, type:'renaming'});
           resolve();
         } else {
           rem_fullname = `${rem_path}/${path.basename(newname)}`;
@@ -3089,7 +3089,7 @@ generic.downloadFile = async ({
     new Promise(resolve => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
-          console.error(remote_path, err.toString());
+          console.error({type: 'conversion', remote_path, error: err.toString()});
           resolve([rem_fullname, local_fullname]);
         } else {
           fs.unlink(local_fullname);

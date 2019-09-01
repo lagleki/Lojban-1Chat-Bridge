@@ -38,33 +38,35 @@ Object.keys(globalStyles).forEach(key => {
 });
 
 const globalRichMood = [
-  ["bold", ["red", "red", "yellow"]],
-  ["bold", ["blue", "white", "white"]],
-  ["bold", ["navy", "green", "green"]],
-  ["bold", ["teal", "navy"]],
-  ["bold", ["red", "brown", "brown", "brown"]],
   ["bold", ["white", "yellow", "red"]],
-  ["bold", ["blue", "blue", "teal"]],
-  ["bold", ["white", "olive", "white"]],
-  ["bold", ["red", "white", "white"]],
-  ["bold", ["lightgreen", "lightgreen", "white"]],
-  ["bold", ["lightgreen", "lightgreen", "gray"]],
-  ["bold", ["white", "lightgreen", "white"]],
-  ["bold", ["yellow", "white", "white"]],
-  ["bold", ["teal", "teal", "green"]],
-  ["bold", ["violet", "violet", "violet", "red"]],
-  ["normal", ["blue"]],
-  ["normal", ["silver","white","silver","silver"]],
+  ["bold", ["olive", "white", "white"]],
+  ["bold", ["red", "yellow", "yellow", "yellow"]],
+  ["bold", ["red", "white", "white", "white"]],
+  ["bold", ["red", "brown", "brown", "brown"]],
+
+  ["bold", ["white", "blue", "blue", "blue"]],
+  ["bold", ["navy", "green", "green", "green"]],
+  ["bold", ["silver", "white", "white"]],
+  ["bold", ["pink", "red", "red", "red"]],
+  ["bold", ["blue", "white", "white", "white"]],
+  ["normal", ["silver"]],
   ["normal", ["navy"]],
   ["normal", ["green"]],
-  ["normal", ["red"]],
-  ["normal", ["brown"]],
-  ["normal", ["olive","olive","olive","white"]],
   ["normal", ["lime"]],
   ["normal", ["teal"]],
   ["normal", ["cyan"]],
   ["normal", ["blue"]],
-  ["normal", ["violet"]]
+  ["normal", ["violet"]],
+  ["bold", ["lightgreen", "white", "white"]],
+  ["bold", ["lightgreen", "gray", "gray"]],
+
+  ["bold", ["cyan", "white", "white"]],
+  ["bold", ["yellow", "white", "white"]],
+  ["bold", ["red", "violet", "violet", "violet"]],
+  ["normal", ["silver", "white", "silver", "silver"]],
+  ["normal", ["red"]],
+  ["normal", ["brown"]],
+  ["normal", ["white", "olive", "olive", "olive"]]
 ];
 
 const globalSimpleMood = [
@@ -90,7 +92,7 @@ const globalBadStr = /^,\d/;
 const globalColorCodeStr = new RegExp(`^${globalC}\\d\\d`);
 
 function ColorifyText({
-  side = 'fg',
+  side = "fg",
   text,
   color
 }: {
