@@ -251,9 +251,7 @@ generic.mattermost.Start = async () => {
   [err, res] = await to(
     new Promise(resolve => {
       const user_id = config.mattermost.user_id;
-      const url = `${
-        config.mattermost.ProviderUrl
-      }/api/v4/users/${user_id}/teams`;
+      const url = `${config.mattermost.ProviderUrl}/api/v4/users/${user_id}/teams`;
       request(
         {
           method: "GET",
@@ -1589,9 +1587,7 @@ receivedFrom.mattermost = async (message: any) => {
     );
     await to(
       new Promise(resolve => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${
-          post.user_id
-        }`;
+        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${post.user_id}`;
         request(
           {
             method: "GET",
@@ -1614,9 +1610,7 @@ receivedFrom.mattermost = async (message: any) => {
     );
     await to(
       new Promise(resolve => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/channels/${
-          post.channel_id
-        }`;
+        const url = `${config.mattermost.ProviderUrl}/api/v4/channels/${post.channel_id}`;
         request(
           {
             method: "GET",
@@ -1657,9 +1651,7 @@ receivedFrom.mattermost = async (message: any) => {
     for (const file of file_ids) {
       const [err, promfile] = await to(
         new Promise(resolve => {
-          const url = `${
-            config.mattermost.ProviderUrl
-          }/api/v4/files/${file}/link`;
+          const url = `${config.mattermost.ProviderUrl}/api/v4/files/${file}/link`;
           request(
             {
               method: "GET",
@@ -1682,9 +1674,7 @@ receivedFrom.mattermost = async (message: any) => {
       );
       const [err2, promfile2] = await to(
         new Promise(resolve => {
-          const url = `${
-            config.mattermost.ProviderUrl
-          }/api/v4/files/${file}/info`;
+          const url = `${config.mattermost.ProviderUrl}/api/v4/files/${file}/info`;
           request(
             {
               method: "GET",
@@ -2148,9 +2138,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
           generic.telegram.DeleteMessage({ message, log: true });
       } else {
         generic.LogToAdmin(
-          `error ${err} on getting an invite link of the chat ${
-            message.chat.id
-          } ${message.chat.title}`
+          `error ${err} on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`
         );
       }
     } else {
@@ -2161,9 +2149,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
         generic.telegram.DeleteMessage({ message, log: true });
       } else {
         generic.LogToAdmin(
-          `error ${err} on getting an invite link of the chat ${
-            cloned_message.chat.id
-          } ${cloned_message.chat.title}`
+          `error ${err} on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`
         );
       }
     }
@@ -2371,13 +2357,9 @@ GetChannels.slack = async () => {
 GetChannels.mattermost = async () => {
   if (!config.MessengersAvailable.slack) return {};
   let json: Json = {};
-  let url: string = `${config.mattermost.ProviderUrl}/api/v4/teams/${
-    config.mattermost.team_id
-  }/channels`;
+  let url: string = `${config.mattermost.ProviderUrl}/api/v4/teams/${config.mattermost.team_id}/channels`;
   json = await GetChannelsMattermostCore(json, url);
-  url = `${config.mattermost.ProviderUrl}/api/v4/users/${
-    config.mattermost.user_id
-  }/teams/${config.mattermost.team_id}/channels`;
+  url = `${config.mattermost.ProviderUrl}/api/v4/users/${config.mattermost.user_id}/teams/${config.mattermost.team_id}/channels`;
   json = await GetChannelsMattermostCore(json, url);
   config.cache.mattermost = json;
   return json;
@@ -2975,81 +2957,76 @@ generic.downloadFile = async ({
   );
   mkdirp(`${process.env.HOME}/.${package_json.name}/files/${randomString}`);
   const rem_path = `${config.generic.httpLocation}/${randomString}`;
-  const local_path = `${process.env.HOME}/.${
-    package_json.name
-  }/files/${randomString}`;
+  const local_path = `${process.env.HOME}/.${package_json.name}/files/${randomString}`;
 
   let err: any, res: any;
   let rem_fullname: string = "";
   let local_fullname: string = "";
   if (type === "slack") {
+    let file = fs.createWriteStream(local_fullname);
     [err, res] = await to(
-      new Promise(resolve => {
+      new Promise((resolve: any) => {
         const local_fullname = `${local_path}/${path.basename(remote_path)}`;
-        const stream = request(
-          {
-            method: "GET",
-            url: remote_path,
-            headers: {
-              Authorization: `Bearer ${config.slack.token}`
+        file.on("open", () => {
+          const stream = request(
+            {
+              method: "GET",
+              url: remote_path,
+              headers: {
+                Authorization: `Bearer ${config.slack.token}`
+              },
+              timeout: 3000
             },
-            timeout:3000
-          },
-          err => {
-            if (err) {
-              console.log(remote_path, err.toString());
-              resolve();
+            err => {
+              if (err) {
+                console.log(remote_path, err.toString());
+                resolve();
+              }
             }
-          }
-        ).pipe(fs.createWriteStream(local_fullname));
+          ).pipe(file);
 
-        stream.on("finish", () => {
-          const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
-          resolve([rem_fullname, local_fullname]);
-        });
-        stream.on("error", (e: any) => {
-          console.error(remote_path, e);
-          resolve();
+          stream.on("finish", () => {
+            const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
+            resolve([rem_fullname, local_fullname]);
+          });
+          stream.on("error", (e: any) => {
+            console.error(remote_path, e);
+            resolve();
+          });
         });
       })
     );
     if (res) [rem_fullname, local_fullname] = res;
   } else if (type === "simple") {
-    [err, res] = await to(
-      new Promise(resolve => {
-        if (extension) {
-          extension = `.${extension}`;
-        } else {
-          extension = "";
-        }
-        const basename =
-          path.basename(remote_path).split(/[\?#]/)[0] + extension;
-        const local_fullname = `${local_path}/${basename}`;
-        const stream = request(
-          {
+    if (extension) {
+      extension = `.${extension}`;
+    } else {
+      extension = "";
+    }
+    const basename = path.basename(remote_path).split(/[\?#]/)[0] + extension;
+    local_fullname = `${local_path}/${basename}`;
+    let file = fs.createWriteStream(local_fullname);
+    await new Promise((resolve: any, reject: any) => {
+      file
+        .on("open", () => {
+          let stream = request({
             method: "GET",
             url: remote_path,
-            timeout:3000
-          },
-          (err: any) => {
-            if (err) {
-              console.log({type: 'request error', error: err.toString(), remote_path});
-              resolve([rem_fullname, local_fullname]);
-            }
-          }
-        ).pipe(fs.createWriteStream(local_fullname));
-
-        stream.on("finish", () => {
-          const rem_fullname = `${rem_path}/${basename}`;
-          resolve([rem_fullname, local_fullname]);
+            timeout: 3000
+          })
+            .pipe(file)
+            .on("finish", () => {
+              rem_fullname = `${rem_path}/${basename}`;
+              resolve();
+            })
+            .on("error", (error: any) => {
+              reject(error);
+            });
+        })
+        .catch((error: any) => {
+          console.log({ type: "streaming error", error });
         });
-        stream.on("error", (err: any) => {
-          console.log({remote_path,error: err.toString(), type: 'stream error'});
-          resolve([rem_fullname, local_fullname]);
-        });
-      })
-    );
-    if (res) [rem_fullname, local_fullname] = res;
+    });
   } else if (type === "telegram") {
     [err, local_fullname] = await to(
       generic.telegram.client.downloadFile(fileId, local_path)
@@ -3057,17 +3034,17 @@ generic.downloadFile = async ({
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
   }
   if (err) {
-    console.error({remote_path, error: err, type: 'generic'});
+    console.error({ remote_path, error: err, type: "generic" });
     return [remote_path || fileId, remote_path || fileId];
   }
   [err, res] = await to(
-    new Promise(resolve => {
+    new Promise((resolve: any) => {
       const newname = `${local_path}/${randomStringName}${path.extname(
         local_fullname
       )}`;
       fs.rename(local_fullname, newname, (err: any) => {
         if (err) {
-          console.error({remote_path, error: err, type:'renaming'});
+          console.error({ remote_path, error: err, type: "renaming" });
           resolve();
         } else {
           rem_fullname = `${rem_path}/${path.basename(newname)}`;
@@ -3089,7 +3066,11 @@ generic.downloadFile = async ({
     new Promise(resolve => {
       sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
         if (err) {
-          console.error({type: 'conversion', remote_path, error: err.toString()});
+          console.error({
+            type: "conversion",
+            remote_path,
+            error: err.toString()
+          });
           resolve([rem_fullname, local_fullname]);
         } else {
           fs.unlink(local_fullname);
