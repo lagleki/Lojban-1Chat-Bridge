@@ -2963,37 +2963,45 @@ generic.downloadFile = async ({
   let rem_fullname: string = "";
   let local_fullname: string = "";
   if (type === "slack") {
-    let file = fs.createWriteStream(local_fullname);
+    local_fullname = `${local_path}/${path.basename(remote_path)}`;
     [err, res] = await to(
       new Promise((resolve: any) => {
-        const local_fullname = `${local_path}/${path.basename(remote_path)}`;
-        file.on("open", () => {
-          const stream = request(
-            {
-              method: "GET",
-              url: remote_path,
-              headers: {
-                Authorization: `Bearer ${config.slack.token}`
+        let file = fs.createWriteStream(local_fullname);
+        file
+          .on("open", () => {
+            const stream = request(
+              {
+                method: "GET",
+                url: remote_path,
+                headers: {
+                  Authorization: `Bearer ${config.slack.token}`
+                },
+                timeout: 3000
               },
-              timeout: 3000
-            },
-            err => {
-              if (err) {
-                console.log(remote_path, err.toString());
-                resolve();
+              err => {
+                if (err) {
+                  console.log(remote_path, err.toString());
+                  resolve();
+                }
               }
-            }
-          ).pipe(file);
+            ).pipe(file);
 
-          stream.on("finish", () => {
-            const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
-            resolve([rem_fullname, local_fullname]);
+            stream.on("finish", () => {
+              const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
+              resolve([rem_fullname, local_fullname]);
+            });
+            stream.on("error", (error: any) => {
+              console.error({
+                type: "streaming error",
+                path: remote_path,
+                error
+              });
+              resolve();
+            });
+          })
+          .catch((error: any) => {
+            console.log({ type: "opening error", error });
           });
-          stream.on("error", (e: any) => {
-            console.error(remote_path, e);
-            resolve();
-          });
-        });
       })
     );
     if (res) [rem_fullname, local_fullname] = res;
@@ -3005,8 +3013,8 @@ generic.downloadFile = async ({
     }
     const basename = path.basename(remote_path).split(/[\?#]/)[0] + extension;
     local_fullname = `${local_path}/${basename}`;
-    let file = fs.createWriteStream(local_fullname);
     await new Promise((resolve: any, reject: any) => {
+      let file = fs.createWriteStream(local_fullname);
       file
         .on("open", () => {
           let stream = request({
@@ -3020,7 +3028,12 @@ generic.downloadFile = async ({
               resolve();
             })
             .on("error", (error: any) => {
-              reject(error);
+              console.error({
+                type: "streaming error",
+                path: remote_path,
+                error
+              });
+              resolve();
             });
         })
         .catch((error: any) => {
