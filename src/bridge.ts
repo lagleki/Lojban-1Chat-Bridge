@@ -2966,42 +2966,51 @@ generic.downloadFile = async ({
     local_fullname = `${local_path}/${path.basename(remote_path)}`;
     [err, res] = await to(
       new Promise((resolve: any) => {
-        let file = fs.createWriteStream(local_fullname);
-        file
-          .on("open", () => {
-            const stream = request(
-              {
-                method: "GET",
-                url: remote_path,
-                headers: {
-                  Authorization: `Bearer ${config.slack.token}`
+        try {
+          let file = fs.createWriteStream(local_fullname);
+          file
+            .on("open", () => {
+              const stream = request(
+                {
+                  method: "GET",
+                  url: remote_path,
+                  headers: {
+                    Authorization: `Bearer ${config.slack.token}`
+                  },
+                  timeout: 3000
                 },
-                timeout: 3000
-              },
-              err => {
-                if (err) {
-                  console.log(remote_path, err.toString());
-                  resolve();
+                err => {
+                  if (err) {
+                    console.log(remote_path, err.toString());
+                    resolve();
+                  }
                 }
-              }
-            ).pipe(file);
-
-            stream.on("finish", () => {
-              const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
-              resolve([rem_fullname, local_fullname]);
-            });
-            stream.on("error", (error: any) => {
+              )
+                .pipe(file)
+                .on("finish", () => {
+                  const rem_fullname = `${rem_path}/${path.basename(
+                    remote_path
+                  )}`;
+                  resolve([rem_fullname, local_fullname]);
+                })
+                .on("error", (error: any) => {
+                  console.error({
+                    type: "streaming error",
+                    path: remote_path,
+                    error
+                  });
+                  resolve();
+                });
+            })
+            .on("error", (error: any) => {
               console.error({
-                type: "streaming error",
-                path: remote_path,
+                type: "opening error",
                 error
               });
-              resolve();
             });
-          })
-          .catch((error: any) => {
-            console.log({ type: "opening error", error });
-          });
+        } catch (error) {
+          console.log({ type: "creation error", error });
+        }
       })
     );
     if (res) [rem_fullname, local_fullname] = res;
@@ -3014,31 +3023,38 @@ generic.downloadFile = async ({
     const basename = path.basename(remote_path).split(/[\?#]/)[0] + extension;
     local_fullname = `${local_path}/${basename}`;
     await new Promise((resolve: any, reject: any) => {
-      let file = fs.createWriteStream(local_fullname);
-      file
-        .on("open", () => {
-          let stream = request({
-            method: "GET",
-            url: remote_path,
-            timeout: 3000
-          })
-            .pipe(file)
-            .on("finish", () => {
-              rem_fullname = `${rem_path}/${basename}`;
-              resolve();
+      try {
+        let file = fs.createWriteStream(local_fullname);
+        file
+          .on("open", () => {
+            let stream = request({
+              method: "GET",
+              url: remote_path,
+              timeout: 3000
             })
-            .on("error", (error: any) => {
-              console.error({
-                type: "streaming error",
-                path: remote_path,
-                error
+              .pipe(file)
+              .on("finish", () => {
+                rem_fullname = `${rem_path}/${basename}`;
+                resolve();
+              })
+              .on("error", (error: any) => {
+                console.error({
+                  type: "streaming error",
+                  path: remote_path,
+                  error
+                });
+                resolve();
               });
-              resolve();
+          })
+          .on("error", (error: any) => {
+            console.error({
+              type: "opening error",
+              error
             });
-        })
-        .catch((error: any) => {
-          console.log({ type: "streaming error", error });
-        });
+          });
+      } catch (error) {
+        console.log({ type: "creation error", error });
+      }
     });
   } else if (type === "telegram") {
     [err, local_fullname] = await to(
