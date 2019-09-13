@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypt = require("crypto");
 //regular expressions for gismu forms
 const C = "(" + "[bcdfgjklmnprstvxz]" + ")";
 const V = "(" + "[aeiou]" + ")";
@@ -37,7 +37,7 @@ module.exports = {
     R.randInt = (a: number, b: number) => {
       const seed =
         parseInt(
-          crypto
+          crypt
             .createHash("md5")
             .update(url + gAcc)
             .digest("hex"),

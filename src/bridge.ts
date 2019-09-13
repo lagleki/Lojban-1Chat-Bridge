@@ -31,6 +31,11 @@ const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 
+function markedParse(text: string) {
+  return marked.parser(
+    lexer.lex(generic.unescapeHTML(text.replace(/\\/g, "\\\\")))
+  );
+}
 const html2md = require("./formatting-converters/html2md-ts");
 
 const Irc = require("irc-upd");
@@ -51,7 +56,7 @@ const blalalavla = require("./sugar/blalalavla.js");
 // file system and network libs
 const fs = require("fs-extra");
 const path = require("path");
-const mkdirp = require("mkdirp");
+const mkdir = require("mkdirp-sync");
 import * as request from "request";
 
 // NLP & spam libs
@@ -1856,8 +1861,7 @@ GetName.telegram = (user: Telegram.User) => {
 };
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) =>
-  marked.parser(lexer.lex(generic.escapeHTML(text)));
+convertFrom.telegram = async (text: string) => markedParse(text);
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.vkwall = convertFrom.vkboard;
@@ -2042,10 +2046,8 @@ convertFrom.slack = async (text: string) => {
   const [err, str] = await to(publicParse(text));
   return str || text;
 };
-convertFrom.mattermost = async (text: string) =>
-  marked.parser(lexer.lex(generic.escapeHTML(text)));
-convertFrom.discord = async (text: string) =>
-  marked.parser(lexer.lex(generic.escapeHTML(text)));
+convertFrom.mattermost = async (text: string) => markedParse(text);
+convertFrom.discord = async (text: string) => markedParse(text);
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -2080,12 +2082,12 @@ convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
 convertTo["vkwall"] = convertTo["vkboard"];
 convertTo["slack"] = async (text: string) => slackify(text);
 convertTo["mattermost"] = async (text: string) =>
-  html2md.convert({ string: text }); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
+  html2md.convert({ string: text }).replace(/\\/g,'\\\\'); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
 convertTo["discord"] = async (text: string) =>
   await generic.unescapeHTML(
     html2md.convert({ string: text, hrefConvert: false }),
     true
-  );
+  ).replace(/\\/g,'\\\\');
 // convertTo["discord"] = async (text: string) => await convertToPlainText(text);
 convertTo["irc"] = async (text: string) => await convertToPlainText(text);
 
@@ -2249,7 +2251,7 @@ generic.telegram.DeleteMessage = async ({
 // generic
 generic.ConfigBeforeStart = () => {
   if (process.argv[2] === "--genconfig") {
-    mkdirp(`${process.env.HOME}/.${package_json.name}`);
+    mkdir(`${process.env.HOME}/.${package_json.name}`);
 
     // read default config using readFile to include comments
     const config = fs.readFileSync(`${__dirname}/../config/defaults.js`);
@@ -2844,19 +2846,21 @@ const htmlEntities: any = {
   apos: "'"
 };
 generic.unescapeHTML = (str: string, convertHtmlEntities: boolean) => {
-  return str.replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
-    let match: any;
+  return str
+    .replace(/\\/g, "\\")
+    .replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
+      let match: any;
 
-    if (convertHtmlEntities && htmlEntities[entityCode]) {
-      return htmlEntities[entityCode];
-    } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
-      return String.fromCharCode(parseInt(match[1], 16));
-    } else if ((match = entityCode.match(/^#(\d+)$/))) {
-      return String.fromCharCode(~~match[1]);
-    } else {
-      return entity;
-    }
-  });
+      if (convertHtmlEntities && htmlEntities[entityCode]) {
+        return htmlEntities[entityCode];
+      } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
+        return String.fromCharCode(parseInt(match[1], 16));
+      } else if ((match = entityCode.match(/^#(\d+)$/))) {
+        return String.fromCharCode(~~match[1]);
+      } else {
+        return entity;
+      }
+    });
 };
 
 function splitSlice(str: string, len: number) {
@@ -2955,7 +2959,7 @@ generic.downloadFile = async ({
   const randomStringName = blalalavla.cupra(
     (remote_path || fileId.toString()) + "1"
   );
-  mkdirp(`${process.env.HOME}/.${package_json.name}/files/${randomString}`);
+  mkdir(`${process.env.HOME}/.${package_json.name}/files/${randomString}`);
   const rem_path = `${config.generic.httpLocation}/${randomString}`;
   const local_path = `${process.env.HOME}/.${package_json.name}/files/${randomString}`;
 
@@ -3004,7 +3008,7 @@ generic.downloadFile = async ({
             })
             .on("error", (error: any) => {
               console.error({
-                type: "opening error",
+                type: "slack opening error",
                 error
               });
             });
@@ -3048,8 +3052,9 @@ generic.downloadFile = async ({
           })
           .on("error", (error: any) => {
             console.error({
-              type: "opening error",
-              error
+              type: "simple opening error",
+              error,
+              local_fullname
             });
           });
       } catch (error) {
@@ -3172,7 +3177,7 @@ StartServices();
 
 // start HTTP server for media files if configured to do so
 if (config.generic.showMedia) {
-  mkdirp(`${process.env.HOME}/.${package_json.name}/files`);
+  mkdir(`${process.env.HOME}/.${package_json.name}/files`);
   const serve = serveStatic(`${process.env.HOME}/.${package_json.name}/files`, {
     lastModified: false,
     index: false,

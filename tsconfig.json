@@ -5,7 +5,18 @@
     "target": "es2018",
     "module": "commonjs",
     "noImplicitAny": true,
-    "lib": ["es2018"],
+    "lib": [
+      "esnext",
+      "es2018",
+      "es2017",
+      "es2016",
+      "es2015",
+      "es7",
+      "es6",
+      "es5",
+      "dom",
+      "dom.iterable"
+    ],
     "baseUrl": "./",
     "paths": {
       "*": ["src/@types/*"]
