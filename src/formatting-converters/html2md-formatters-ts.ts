@@ -122,7 +122,7 @@ function replaceParagraph(doc: string) {
  * @return {String}           [description]
  */
 function replacePre(doc: string) {
-  return makeRegex(preRegex, doc, "`", "`");
+  return makeRegex(preRegex, doc, "```\n", "\n```");
 }
 
 /**

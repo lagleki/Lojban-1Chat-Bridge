@@ -28,6 +28,9 @@ function walk(dom: any) {
           case "b":
             out += `*${walk(el.children)}*`;
             break;
+          case "code":
+            out += `\`\`\`\n${walk(el.children)}\`\`\``;
+            break;
           case "i":
           case "em":
             out += `_${walk(el.children)}_`;

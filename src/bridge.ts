@@ -32,9 +32,7 @@ lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 
 function markedParse(text: string) {
-  return marked.parser(
-    lexer.lex(generic.unescapeHTML(text.replace(/\\/g, "\\\\")))
-  );
+  return marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")).replace(/<pre>\\n/g,'<pre>'));
 }
 const html2md = require("./formatting-converters/html2md-ts");
 
@@ -187,9 +185,9 @@ generic.slack.Start = async () => {
     if (!R.path(["data", "ok"], e)) {
       config.MessengersAvailable.slack = false;
       console.log("couldn't start Slack");
-      return;
     }
   });
+  return true;
 };
 generic.discord.Start = async () => {
   return new Promise(resolve => {
@@ -385,6 +383,7 @@ sendTo.facebook = async ({
       resolve();
     }, 500);
   });
+  return true;
 };
 
 sendTo.telegram = async ({
@@ -403,6 +402,7 @@ sendTo.telegram = async ({
   )
     return;
   queueOf.telegram.pushTask((resolve: any) => {
+    debug("telegram")({ "sending text": chunk });
     generic.telegram.client
       .sendMessage(channelId, chunk, {
         parse_mode: "HTML"
@@ -411,16 +411,17 @@ sendTo.telegram = async ({
       .catch((err: any) => {
         generic.LogToAdmin(
           channelId +
-            "<br/>\n" +
+            "\n\n" +
             err.toString() +
-            "<br/>\n" +
+            "\n\n" +
             chunk +
-            "<br/>\n" +
+            "\n\n" +
             JSON.stringify(config.channelMapping, null, 2)
         );
         resolve();
       });
   });
+  return true;
 };
 
 sendTo.discord = async ({
@@ -1860,17 +1861,14 @@ GetName.telegram = (user: Telegram.User) => {
   return name;
 };
 
-convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => markedParse(text);
-convertFrom.vkboard = async (text: string) =>
-  generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
-convertFrom.vkwall = convertFrom.vkboard;
 convertFrom.slack = async (text: string) => {
+  const source = text;
   const RE_ALPHANUMERIC = new RegExp("^\\w?$"),
     RE_TAG = new RegExp("<(.+?)>", "g"),
     RE_BOLD = new RegExp("\\*([^\\*]+?)\\*", "g"),
     RE_ITALIC = new RegExp("_([^_]+?)_", "g"),
-    RE_FIXED = new RegExp("`([^`]+?)`", "g");
+    RE_FIXED = new RegExp("(?<!`)`([^`]+?)`(?!`)", "g"),
+    RE_MULTILINE_FIXED = new RegExp("```([\\s\\S]+?)```", "gm");
 
   const pipeSplit: any = (payload: any) => payload.split`|`;
   const payloads: any = (tag: any, start: number) => {
@@ -1955,6 +1953,8 @@ convertFrom.slack = async (text: string) => {
 
   const matchFixed = (match: RegExpExecArray | null) =>
     safeMatch(match, tag("code", payloads(match[1])));
+  const matchPre = (match: RegExpExecArray | null) =>
+    safeMatch(match, tag("pre", payloads(match[1])));
 
   const notAlphanumeric = (input: string) => !RE_ALPHANUMERIC.test(input);
 
@@ -2027,6 +2027,7 @@ convertFrom.slack = async (text: string) => {
       { p: RE_TAG, cb: matchTag },
       { p: RE_BOLD, cb: matchBold },
       { p: RE_ITALIC, cb: matchItalic },
+      { p: RE_MULTILINE_FIXED, cb: matchPre },
       { p: RE_FIXED, cb: matchFixed }
     ];
     text = await parseSlackText(text);
@@ -2044,10 +2045,29 @@ convertFrom.slack = async (text: string) => {
   };
   text = generic.escapeHTML(text);
   const [err, str] = await to(publicParse(text));
+  debug("slack")({ "converting source text": source, result: str || text });
   return str || text;
 };
+
+convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
+convertFrom.telegram = async (text: string) => {
+  const res = markedParse(
+    text
+      .replace(/<p><code>/g, "<p><pre>")
+      .replace(/<\/code><\/p>/g, "</pre></p>")
+  );
+  debug("telegram")({ "converting source text": text, result: res });
+  return res;
+};
+convertFrom.vkboard = async (text: string) =>
+  generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
+convertFrom.vkwall = convertFrom.vkboard;
 convertFrom.mattermost = async (text: string) => markedParse(text);
-convertFrom.discord = async (text: string) => markedParse(text);
+convertFrom.discord = async (text: string) => {
+  const res = markedParse(text);
+  debug("discord")({ "converting source text": text, result: res });
+  return res;
+};
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -2076,20 +2096,33 @@ async function convertToPlainText(text: string) {
   return a;
 }
 
-convertTo["facebook"] = async (text: string) => convertToPlainText(text);
-convertTo["telegram"] = async (text: string) => generic.sanitizeHtml(text);
-convertTo["vkboard"] = async (text: string) => await convertToPlainText(text);
-convertTo["vkwall"] = convertTo["vkboard"];
-convertTo["slack"] = async (text: string) => slackify(text);
-convertTo["mattermost"] = async (text: string) =>
-  html2md.convert({ string: text }).replace(/\\/g,'\\\\'); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
-convertTo["discord"] = async (text: string) =>
-  await generic.unescapeHTML(
-    html2md.convert({ string: text, hrefConvert: false }),
-    true
-  ).replace(/\\/g,'\\\\');
-// convertTo["discord"] = async (text: string) => await convertToPlainText(text);
-convertTo["irc"] = async (text: string) => await convertToPlainText(text);
+convertTo.facebook = async (text: string) => convertToPlainText(text);
+convertTo.telegram = async (text: string) => {
+  const res = generic
+    .sanitizeHtml(text)
+    .replace(/<pre><code>/g, "<pre>")
+    .replace(/<\/code><\/pre>/g, "</pre>");
+  debug("telegram")({ "converting text": text, result: res });
+  return res;
+};
+convertTo.vkboard = async (text: string) => await convertToPlainText(text);
+convertTo.vkwall = convertTo.vkboard;
+convertTo.slack = async (text: string) => {
+  const res = slackify(text);
+  debug("slack")({ "converting text": text, result: res });
+  return res;
+};
+convertTo.mattermost = async (text: string) =>
+  html2md.convert({ string: text }).replace(/\\/g, "\\\\"); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
+convertTo.discord = async (text: string) => {
+  const res = await generic
+    .unescapeHTML(html2md.convert({ string: text, hrefConvert: false }), true)
+    .replace(/\\/g, "\\\\");
+  debug("discord")({ "converting text": text, result: res });
+  return res;
+};
+// convertTo.discord = async (text: string) => await convertToPlainText(text);
+convertTo.irc = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
 generic.telegram.serveFile = (fileId: number) =>
@@ -3125,7 +3158,7 @@ generic.downloadFile = async ({
 
 generic.sanitizeHtml = (text: string) => {
   return sanitizeHtml(text, {
-    allowedTags: ["b", "strong", "i", "code", "pre", "a", "em"],
+    allowedTags: ["b", "strong", "i", "pre", "code", "a", "em"],
     allowedAttributes: {
       a: ["href"]
     }
