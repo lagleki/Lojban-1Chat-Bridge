@@ -31,7 +31,7 @@ function makeRegex(
   before?: string,
   after?: string,
   replaceFn?: any
-) {
+): string {
   let matches = [];
   let newDoc = doc;
   let replaceString;
@@ -67,7 +67,7 @@ function addHashes(count: number) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceHeading(doc: string) {
+function replaceHeading(doc: string): string {
   return makeRegex(
     headingRegex,
     doc,
@@ -84,7 +84,7 @@ function replaceHeading(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceUl(doc: string) {
+function replaceUl(doc: string): string {
   return makeRegex(ulRegex, doc, null, null, (match: any) =>
     replaceLi(match[1], "ul")
   );
@@ -97,7 +97,7 @@ function replaceUl(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceOl(doc: string) {
+function replaceOl(doc: string): string {
   return makeRegex(olRegex, doc, null, null, (match: any) =>
     replaceLi(match[1], "ol")
   );
@@ -110,7 +110,7 @@ function replaceOl(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceParagraph(doc: string) {
+function replaceParagraph(doc: string): string {
   return makeRegex(pRegex, doc);
 }
 
@@ -121,8 +121,8 @@ function replaceParagraph(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replacePre(doc: string) {
-  return makeRegex(preRegex, doc, "```\n", "\n```");
+function replacePre(doc: string): string {
+  return makeRegex(preRegex, doc, "\n```\n", "\n```\n");
 }
 
 /**
@@ -132,7 +132,7 @@ function replacePre(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceCode(doc: string) {
+function replaceCode(doc: string): string {
   return makeRegex(codeRegex, doc, "`", "`");
 }
 
@@ -143,7 +143,7 @@ function replaceCode(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBlockQuote(doc: string) {
+function replaceBlockQuote(doc: string): string {
   return makeRegex(blockQuoteRegex, doc, "> ");
 }
 
@@ -154,7 +154,7 @@ function replaceBlockQuote(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBold(doc: string) {
+function replaceBold(doc: string): string {
   return makeRegex(boldRegex, doc, "**", "**");
 }
 
@@ -165,7 +165,7 @@ function replaceBold(doc: string) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceItalic(doc: string) {
+function replaceItalic(doc: string): string {
   return makeRegex(italicRegex, doc, "*", "*");
 }
 
@@ -177,7 +177,7 @@ function replaceItalic(doc: string) {
  * @param  {String}  tag [description]
  * @return {String}      [description]
  */
-function replaceLi(doc: string, tag: string) {
+function replaceLi(doc: string, tag: string): string {
   let matches = [];
   let newDoc = doc;
   let replaceIndex = 0;

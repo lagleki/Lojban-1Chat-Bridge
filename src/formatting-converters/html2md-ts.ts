@@ -69,8 +69,7 @@ module.exports = {
     }
     html = html
       .replace(/\\/g, "\\\\")
-      .replace(/<pre><code>/g, "<pre>")
-      .replace(/<\/code><\/pre>/g, "</pre>")
+      .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>")
       .replace(
         /<a.*href="(.*?)".*>(.*?)<\/a>/gi,
         (match: any, href: string, name: string) => {

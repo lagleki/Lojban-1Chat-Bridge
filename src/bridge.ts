@@ -31,8 +31,10 @@ const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 
-function markedParse(text: string) {
-  return marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")));
+function markedParse({ text, messenger }: { text: string; messenger: string }) {
+  const res = marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")));
+  debug(messenger)({ "converting source text": text, result: res });
+  return res;
 }
 const html2md = require("./formatting-converters/html2md-ts");
 
@@ -2052,23 +2054,23 @@ convertFrom.slack = async (text: string) => {
 
 convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
 convertFrom.telegram = async (text: string) => {
-  const res = markedParse(
-    text
-      .replace(/<p><code>/g, "<p><pre>")
-      .replace(/<\/code><\/p>/g, "</pre></p>")
-  );
+  const res = markedParse({
+    text: text.replace(
+      /<p><code>([\\s\\S]*?<\/code><\/p>)/gim,
+      "<p><pre>$1</pre></p>"
+    ),
+    messenger: "telegram"
+  });
   debug("telegram")({ "converting source text": text, result: res });
   return res;
 };
 convertFrom.vkboard = async (text: string) =>
   generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.vkwall = convertFrom.vkboard;
-convertFrom.mattermost = async (text: string) => markedParse(text);
-convertFrom.discord = async (text: string) => {
-  const res = markedParse(text);
-  debug("discord")({ "converting source text": text, result: res });
-  return res;
-};
+convertFrom.mattermost = async (text: string) =>
+  markedParse({ text, messenger: "mattermost" });
+convertFrom.discord = async (text: string) =>
+  markedParse({ text, messenger: "discord" });
 convertFrom.irc = async (text: string) =>
   generic
     .escapeHTML(text)
@@ -2101,8 +2103,7 @@ convertTo.facebook = async (text: string) => convertToPlainText(text);
 convertTo.telegram = async (text: string) => {
   const res = generic
     .sanitizeHtml(text)
-    .replace(/<pre><code>/g, "<pre>")
-    .replace(/<\/code><\/pre>/g, "</pre>");
+    .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</to.ma");
   debug("telegram")({ "converting text": text, result: res });
   return res;
 };
@@ -2113,8 +2114,14 @@ convertTo.slack = async (text: string) => {
   debug("slack")({ "converting text": text, result: res });
   return res;
 };
-convertTo.mattermost = async (text: string) =>
-  html2md.convert({ string: text });
+convertTo.mattermost = async (text: string) => {
+  const res = await generic.unescapeHTML({
+    text: html2md.convert({ string: text, hrefConvert: false }),
+    convertHtmlEntities: true
+  });
+  debug("mattermost")({ "converting text": text, result: res });
+  return res;
+};
 convertTo.discord = async (text: string) => {
   const res = await generic.unescapeHTML({
     text: html2md.convert({ string: text, hrefConvert: false }),
@@ -2123,7 +2130,6 @@ convertTo.discord = async (text: string) => {
   debug("discord")({ "converting text": text, result: res });
   return res;
 };
-// convertTo.discord = async (text: string) => await convertToPlainText(text);
 convertTo.irc = async (text: string) => await convertToPlainText(text);
 
 // generic.telegram
