@@ -32,7 +32,7 @@ lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 
 function markedParse(text: string) {
-  return marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")).replace(/<pre>\\n/g,'<pre>'));
+  return marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")));
 }
 const html2md = require("./formatting-converters/html2md-ts");
 
@@ -1993,6 +1993,7 @@ convertFrom.slack = async (text: string) => {
     return (
       emoji
         .emojify(text)
+        .replace(/<pre>\\n/g,'<pre>')
         .replace(":simple_smile:", ":)")
         .replace(/<!channel>/g, "@channel")
         .replace(/<!group>/g, "@group")
