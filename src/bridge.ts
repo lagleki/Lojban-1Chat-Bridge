@@ -1993,7 +1993,7 @@ convertFrom.slack = async (text: string) => {
     return (
       emoji
         .emojify(text)
-        .replace(/<pre>\\n/g,'<pre>')
+        .replace(/<pre>\\n/g, "<pre>")
         .replace(":simple_smile:", ":)")
         .replace(/<!channel>/g, "@channel")
         .replace(/<!group>/g, "@group")
@@ -2076,8 +2076,8 @@ convertFrom.irc = async (text: string) =>
     .replace(/\b_(\w+)_\b/g, "<i>$1</i>");
 
 async function convertToPlainText(text: string) {
-  let a = await generic.unescapeHTML(
-    text
+  let a = await generic.unescapeHTML({
+    text: text
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
       .replace(/<br\/?>/gi, "\n")
@@ -2089,8 +2089,8 @@ async function convertToPlainText(text: string) {
       })
       .replace(/<(?:.|\s)*?>/g, "")
       .trim(),
-    true
-  );
+    convertHtmlEntities: true
+  });
   if (a.split(/\r\n|\r|\n/).length > 1) {
     a = "\n" + a;
   }
@@ -2114,11 +2114,12 @@ convertTo.slack = async (text: string) => {
   return res;
 };
 convertTo.mattermost = async (text: string) =>
-  html2md.convert({ string: text }).replace(/\\/g, "\\\\"); // .replace(/\*/g, "&#42;").replace(/\_/g, "&#95;")
+  html2md.convert({ string: text });
 convertTo.discord = async (text: string) => {
-  const res = await generic
-    .unescapeHTML(html2md.convert({ string: text, hrefConvert: false }), true)
-    .replace(/\\/g, "\\\\");
+  const res = await generic.unescapeHTML({
+    text: html2md.convert({ string: text, hrefConvert: false }),
+    convertHtmlEntities: true
+  });
   debug("discord")({ "converting text": text, result: res });
   return res;
 };
@@ -2879,8 +2880,14 @@ const htmlEntities: any = {
   amp: "&",
   apos: "'"
 };
-generic.unescapeHTML = (str: string, convertHtmlEntities: boolean) => {
-  return str
+generic.unescapeHTML = ({
+  text,
+  convertHtmlEntities
+}: {
+  text: string;
+  convertHtmlEntities?: boolean;
+}) => {
+  return text
     .replace(/\\/g, "\\")
     .replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
       let match: any;

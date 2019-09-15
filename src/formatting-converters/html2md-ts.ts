@@ -11,7 +11,7 @@ const extrasRegex = /<\/?(?:div|address|section|article|span)>/gim;
  * @param  {String}      doc
  * @return {String}
  */
-function replaceExtras(doc: string) {
+function replaceExtras(doc: string): string {
   const matches = [];
   let newDoc = doc;
   newDoc = newDoc.replace(extrasRegex, "");
@@ -40,12 +40,18 @@ module.exports = {
    * @param  {String} html
    * @return {String}
    */
-  convert({string, hrefConvert}: {string: string,hrefConvert: boolean}) {
+  convert({
+    string,
+    hrefConvert
+  }: {
+    string: string;
+    hrefConvert: boolean;
+  }): string {
     /**
-     * replacing unncessary html tags
+     * replacing unnecessary html tags
      * @type {String}
      */
-    let html = replaceExtras(
+    let html: string = replaceExtras(
       replacements.reduce((string: string, replacement: string[]) => {
         return string.replace(replacement[0], replacement[1]);
       }, string)
@@ -61,19 +67,22 @@ module.exports = {
       const formatter: any = formatters_1[_i];
       if (typeof formatter === "function") html = formatter(html);
     }
-    html = html.replace(
-      /<a.*href="(.*?)".*>(.*?)<\/a>/gi,
-      (match: any, href: string, name: string) => {
-        if (hrefConvert===false){
-          return `${href}`;
+    html = html
+      .replace(/\\/g, "\\\\")
+      .replace(/<pre><code>/g, "<pre>")
+      .replace(/<\/code><\/pre>/g, "</pre>")
+      .replace(
+        /<a.*href="(.*?)".*>(.*?)<\/a>/gi,
+        (match: any, href: string, name: string) => {
+          if (hrefConvert === false) {
+            return `${href}`;
+          } else if (href.endsWith(".jpg")) {
+            return `\n\n![${name}](${href})`;
+          } else {
+            return `[${name}](${href})`;
+          }
         }
-        else if (href.endsWith(".jpg")) {
-          return `\n\n![${name}](${href})`;
-        } else {
-          return `[${name}](${href})`;
-        }
-      }
-    );
+      );
     return html;
   },
   /**
@@ -82,7 +91,7 @@ module.exports = {
    * @param  {Function} formatter
    * @return {void}
    */
-  use(formatter: any) {
+  use(formatter: any): void {
     formatters.push(formatter);
   }
 };
