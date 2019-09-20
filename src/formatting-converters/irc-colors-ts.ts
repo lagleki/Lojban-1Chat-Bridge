@@ -42,6 +42,7 @@ const globalRichMood = [
 
   ["bold", ["silver","silver","white","white"]],
   ["bold", ["navy","navy","white","white"]],
+  ["bold", ["green","yellow","white","white"]],
   ["bold", ["green","green","white","white"]],
   ["bold", ["red","red","white","white"]],
   ["bold", ["brown","brown","white","white"]],
@@ -51,17 +52,18 @@ const globalRichMood = [
   ["bold", ["teal","teal","white","white"]],
   ["bold", ["cyan","cyan","white","white"]],
   ["bold", ["pink","pink","white","white"]],
+  ["bold", ["red","pink","white","white"]],
   ["bold", ["violet","violet","white","white"]],
   
   ["bold", ["red","red","brown","brown"]],
   ["bold", ["navy","navy","yellow","yellow"]],
-  ["bold", ["lime","lime","yellow","yellow"]],
-  ["bold", ["violet","violet","yellow","yellow"]],
+  ["bold", ["lime","lime","silver","silver"]],
+  ["bold", ["violet","violet","silver","silver"]],
 
   ["bold", ["red","red","red","brown","brown","brown"]],
   ["bold", ["white","white","white","pink","pink","pink"]],
-  ["bold", ["lime","lime","lime","yellow","yellow","yellow"]],
-  ["bold", ["violet","violet","violet","yellow","yellow","yellow"]],
+  ["bold", ["lime","lime","lime","silver","silver","silver"]],
+  ["bold", ["violet","violet","violet","silver","silver","silver"]],
 
   ["bold", ["white"]],
   ["bold", ["navy"]],

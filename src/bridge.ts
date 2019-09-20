@@ -77,7 +77,13 @@ interface IMessengerInfo {
   [x: string]: any;
 }
 
-type TextFormatConverterType = (x: string) => Promise<any>;
+type TextFormatConverterType = ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => Promise<any>;
 
 interface IMessengerFunctions {
   [x: string]: TextFormatConverterType;
@@ -737,7 +743,7 @@ async function sendFrom({
       `error finding assignment to ${messenger} channel with id ${channelId}`
     );
   if (!text || text === "") return;
-  text = await convertFrom[messenger](text);
+  text = await convertFrom[messenger]({ text, messenger });
   text = text.replace(/^(<br\/>)+/, "");
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (
@@ -771,7 +777,7 @@ async function sendFrom({
       debug("generic")(
         `converting for messenger ${messengerTo} the text "` + text + `"`
       );
-      let textTo = await convertTo[messengerTo](text);
+      let textTo = await convertTo[messengerTo]({ text, messenger });
       debug("generic")(
         `converted for messenger ${messengerTo} to text "` + textTo + `"`
       );
@@ -1863,14 +1869,20 @@ GetName.telegram = (user: Telegram.User) => {
   return name;
 };
 
-convertFrom.slack = async (text: string) => {
+convertFrom.slack = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
   const source = text;
   const RE_ALPHANUMERIC = new RegExp("^\\w?$"),
     RE_TAG = new RegExp("<(.+?)>", "g"),
     RE_BOLD = new RegExp("\\*([^\\*]+?)\\*", "g"),
     RE_ITALIC = new RegExp("_([^_]+?)_", "g"),
     RE_FIXED = new RegExp("(?<!`)`([^`]+?)`(?!`)", "g"),
-    RE_MULTILINE_FIXED = new RegExp("```([\\s\\S]+?)```", "gm");
+    RE_MULTILINE_FIXED = new RegExp("```((?:(?!```)[\\s\\S])+?)```", "gm");
 
   const pipeSplit: any = (payload: any) => payload.split`|`;
   const payloads: any = (tag: any, start: number) => {
@@ -2052,8 +2064,20 @@ convertFrom.slack = async (text: string) => {
   return str || text;
 };
 
-convertFrom.facebook = async (text: string) => generic.escapeHTML(text);
-convertFrom.telegram = async (text: string) => {
+convertFrom.facebook = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => generic.escapeHTML(text);
+convertFrom.telegram = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
   const res = markedParse({
     text: text.replace(
       /<p><code>([\\s\\S]*?<\/code><\/p>)/gim,
@@ -2061,17 +2085,37 @@ convertFrom.telegram = async (text: string) => {
     ),
     messenger: "telegram"
   });
-  debug("telegram")({ "converting source text": text, result: res });
   return res;
 };
-convertFrom.vkboard = async (text: string) =>
-  generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
+convertFrom.vkboard = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => generic.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 convertFrom.vkwall = convertFrom.vkboard;
-convertFrom.mattermost = async (text: string) =>
-  markedParse({ text, messenger: "mattermost" });
-convertFrom.discord = async (text: string) =>
-  markedParse({ text, messenger: "discord" });
-convertFrom.irc = async (text: string) =>
+convertFrom.mattermost = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => markedParse({ text, messenger: "mattermost" });
+convertFrom.discord = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => markedParse({ text, messenger: "discord" });
+convertFrom.irc = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) =>
   generic
     .escapeHTML(text)
     .replace(/\b\*(\w+)\*\b/g, "<b>$1</b>")
@@ -2099,38 +2143,68 @@ async function convertToPlainText(text: string) {
   return a;
 }
 
-convertTo.facebook = async (text: string) => convertToPlainText(text);
-convertTo.telegram = async (text: string) => {
+convertTo.facebook = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => convertToPlainText(text);
+convertTo.telegram = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
   const res = generic
     .sanitizeHtml(text)
     .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</to.ma");
-  debug("telegram")({ "converting text": text, result: res });
+  debug(messenger)({ "converting text": text, result: res });
   return res;
 };
-convertTo.vkboard = async (text: string) => await convertToPlainText(text);
+convertTo.vkboard = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => await convertToPlainText(text);
 convertTo.vkwall = convertTo.vkboard;
-convertTo.slack = async (text: string) => {
+convertTo.slack = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
   const res = slackify(text);
-  debug("slack")({ "converting text": text, result: res });
+  debug(messenger)({ "converting text": text, result: res });
   return res;
 };
-convertTo.mattermost = async (text: string) => {
+convertTo.mattermost = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
   const res = await generic.unescapeHTML({
     text: html2md.convert({ string: text, hrefConvert: false }),
     convertHtmlEntities: true
   });
-  debug("mattermost")({ "converting text": text, result: res });
+  debug(messenger)({ "converting text": text, result: res });
   return res;
 };
-convertTo.discord = async (text: string) => {
-  const res = await generic.unescapeHTML({
-    text: html2md.convert({ string: text, hrefConvert: false }),
-    convertHtmlEntities: true
-  });
-  debug("discord")({ "converting text": text, result: res });
-  return res;
-};
-convertTo.irc = async (text: string) => await convertToPlainText(text);
+convertTo.discord = convertTo.mattermost;
+
+convertTo.irc = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => await convertToPlainText(text);
 
 // generic.telegram
 generic.telegram.serveFile = (fileId: number) =>
