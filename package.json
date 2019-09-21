@@ -29,7 +29,7 @@
   "homepage": "https://github.com/lagleki/Lojban-1Chat-Bridge",
   "dependencies": {
     "@slack/client": "^5.0.2",
-    "@types/debug": "^4.1.5",
+    "@types/marked": "^0.6.5",
     "await-to-js": "^2.1.1",
     "bootbot": "^1.0.16",
     "debug": "^4.1.1",
@@ -59,8 +59,9 @@
     "ws": "^7.1.2"
   },
   "devDependencies": {
+    "@types/debug": "^4.1.5",
     "@types/mkdirp": "^0.5.2",
-    "@types/node": "^12.7.2",
+    "@types/node": "^12.7.5",
     "@types/node-telegram-bot-api": "^0.31.0",
     "@types/slack-node": "^0.1.2",
     "@types/ws": "^6.0.2",

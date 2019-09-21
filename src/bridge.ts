@@ -19,7 +19,7 @@ const sanitizeHtml = require("sanitize-html");
 const { VK } = require("vk-io");
 const VkBot = require("node-vk-bot-api");
 
-const Discord = require("discord.js");
+import Discord = require("discord.js");
 
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
@@ -30,9 +30,13 @@ const marked = require("marked");
 const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
+const markedRenderer = new marked.Renderer();
+markedRenderer.code = function (string: string) {
+  return string.replace(/\\\\/g, "\\")
+};
 
 function markedParse({ text, messenger }: { text: string; messenger: string }) {
-  const res = marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")));
+  const res = marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")),{renderer: markedRenderer});
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -42,7 +46,7 @@ const Irc = require("irc-upd");
 const ircolors = require("./formatting-converters/irc-colors-ts");
 
 const finalhandler = require("finalhandler");
-const http = require("http");
+import * as http from "http";
 const serveStatic = require("serve-static");
 
 // syntactic sugar
@@ -2943,8 +2947,8 @@ generic.escapeHTML = (arg: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;")
-    .replace(/'/g, "&#039;");
+    .replace(/'/g, "&#039;")
+    .replace(/'/g, "&apos;");
 
 const htmlEntities: any = {
   nbsp: " ",
