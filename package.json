@@ -35,7 +35,7 @@
     "html-entities": "^1.2.1",
     "htmlparser": "^1.7.7",
     "irc-upd": "^0.10.0",
-    "libfb": "^2.3.3",
+    "libfb": "^2.3.4",
     "lojban": "^1.0.17",
     "marked": "^0.7.0",
     "mkdirp-sync": "0.0.3",
@@ -46,7 +46,7 @@
     "p-queue": "^6.1.1",
     "ramda": "^0.26.1",
     "randexp": "^0.5.3",
-    "reconnecting-websocket": "^4.1.10",
+    "reconnecting-websocket": "^4.2.0",
     "request": "^2.88.0",
     "sanitize-html": "^1.20.1",
     "serve-static": "^1.14.1",
@@ -62,8 +62,8 @@
     "@types/node": "^12.7.5",
     "@types/node-telegram-bot-api": "^0.31.0",
     "@types/slack-node": "^0.1.2",
-    "@types/ws": "^6.0.2",
-    "eslint": "^6.2.0",
+    "@types/ws": "^6.0.3",
+    "eslint": "^6.4.0",
     "eslint-config-airbnb": "^18.0.1",
     "eslint-config-airbnb-base": "^14.0.0",
     "eslint-plugin-import": "^2.18.2",
@@ -73,10 +73,10 @@
     "mocha-jscs": "^5.0.1",
     "mocha-jshint": "^2.3.1",
     "prettier": "1.18.2",
-    "ts-loader": "^6.0.4",
+    "ts-loader": "^6.1.2",
     "tslint-config-prettier": "^1.18.0",
-    "typescript": "^3.5.3",
-    "webpack": "^4.39.2",
-    "webpack-cli": "^3.3.7"
+    "typescript": "^3.6.3",
+    "webpack": "^4.40.2",
+    "webpack-cli": "^3.3.9"
   }
 }
