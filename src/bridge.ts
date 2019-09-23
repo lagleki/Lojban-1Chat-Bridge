@@ -31,12 +31,10 @@ const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 const markedRenderer = new marked.Renderer();
-markedRenderer.code = function (string: string) {
-  return string.replace(/\\\\/g, "\\")
-};
+markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
 function markedParse({ text, messenger }: { text: string; messenger: string }) {
-  const res = marked.parser(lexer.lex(text.replace(/\\/g, "\\\\")),{renderer: markedRenderer});
+  const res = marked.parser(lexer.lex(text), { renderer: markedRenderer });
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -53,7 +51,9 @@ const serveStatic = require("serve-static");
 import debug from "debug";
 
 const R = require("ramda");
-const Queue = require("../lib/sugar/promise-queue");
+const { default: PQueue } = require("p-queue");
+const queue = new PQueue({ concurrency: 1 });
+
 const { to } = require("await-to-js");
 const { or } = require("./sugar/await-or.js");
 const blalalavla = require("./sugar/blalalavla.js");
@@ -385,15 +385,17 @@ sendTo.facebook = async ({
     !generic.facebook.client
   )
     return;
-  queueOf.facebook.pushTask((resolve: any) => {
-    setTimeout(() => {
-      const jsonMessage: Json = {
-        body: chunk
-      };
-      if (file) jsonMessage.attachment = fs.createReadStream(file);
-      generic.facebook.client.sendMessage(channelId, chunk).catch(catchError);
-      resolve();
-    }, 500);
+  queueOf.facebook.add(async () => {
+    await new Promise((resolve: any) => {
+      setTimeout(() => {
+        const jsonMessage: Json = {
+          body: chunk
+        };
+        if (file) jsonMessage.attachment = fs.createReadStream(file);
+        generic.facebook.client.sendMessage(channelId, chunk).catch(catchError);
+        resolve();
+      }, 500);
+    });
   });
   return true;
 };
@@ -413,25 +415,27 @@ sendTo.telegram = async ({
     )
   )
     return;
-  queueOf.telegram.pushTask((resolve: any) => {
-    debug("telegram")({ "sending text": chunk });
-    generic.telegram.client
-      .sendMessage(channelId, chunk, {
-        parse_mode: "HTML"
-      })
-      .then(() => resolve())
-      .catch((err: any) => {
-        generic.LogToAdmin(
-          channelId +
-            "\n\n" +
-            err.toString() +
-            "\n\n" +
-            chunk +
-            "\n\n" +
-            JSON.stringify(config.channelMapping, null, 2)
-        );
-        resolve();
-      });
+  queueOf.telegram.add(async () => {
+    await new Promise((resolve: any) => {
+      debug("telegram")({ "sending text": chunk });
+      generic.telegram.client
+        .sendMessage(channelId, chunk, {
+          parse_mode: "HTML"
+        })
+        .then(() => resolve())
+        .catch((err: any) => {
+          generic.LogToAdmin(
+            channelId +
+              "\n\n" +
+              err.toString() +
+              "\n\n" +
+              chunk +
+              "\n\n" +
+              JSON.stringify(config.channelMapping, null, 2)
+          );
+          resolve();
+        });
+    });
   });
   return true;
 };
@@ -452,12 +456,14 @@ sendTo.discord = async ({
   )
     return;
 
-  queueOf.discord.pushTask((resolve: any) => {
-    generic.discord.client.channels
-      .get(channelId)
-      .send(chunk)
-      .catch(catchError);
-    resolve();
+  queueOf.discord.add(async () => {
+    await new Promise((resolve: any) => {
+      generic.discord.client.channels
+        .get(channelId)
+        .send(chunk)
+        .catch(catchError);
+      resolve();
+    });
   });
 };
 
@@ -476,17 +482,22 @@ sendTo.mattermost = async ({
     )
   )
     return;
-  queueOf.mattermost.pushTask((resolve: any) => {
-    const option = {
-      url: config.mattermost.HookUrl,
-      json: {
-        text: chunk,
-        // username: author,
-        channel: channelId
-      }
-    };
-    const req = request.post(option, (error: any, response: any, body: any) => {
-      resolve();
+  queueOf.mattermost.add(async () => {
+    await new Promise((resolve: any) => {
+      const option = {
+        url: config.mattermost.HookUrl,
+        json: {
+          text: chunk,
+          // username: author,
+          channel: channelId
+        }
+      };
+      const req = request.post(
+        option,
+        (error: any, response: any, body: any) => {
+          resolve();
+        }
+      );
     });
   });
 };
@@ -510,21 +521,23 @@ sendTo.vkwall = async ({
     return;
   }
   const token = generic.vkwall.client.app.token;
-  queueOf.vk.pushTask((resolve: any) => {
-    setTimeout(() => {
-      generic.vkwall.client.bot
-        .api("wall.createComment", {
-          access_token: token,
-          owner_id: "-" + config.vkwall.group_id,
-          post_id: channelId,
-          from_group: config.vkwall.group_id,
-          reply_to_comment: 1,
-          message: chunk
-        })
-        .then((res: any) => {})
-        .catch(catchError);
-      resolve();
-    }, 60000);
+  queueOf.vk.add(async () => {
+    await new Promise((resolve: any) => {
+      setTimeout(() => {
+        generic.vkwall.client.bot
+          .api("wall.createComment", {
+            access_token: token,
+            owner_id: "-" + config.vkwall.group_id,
+            post_id: channelId,
+            from_group: config.vkwall.group_id,
+            reply_to_comment: 1,
+            message: chunk
+          })
+          .then((res: any) => {})
+          .catch(catchError);
+        resolve();
+      }, 60000);
+    });
   });
 };
 
@@ -548,20 +561,22 @@ sendTo.vkboard = async ({
     return;
   }
   const token = generic.vkboard.client.app.token;
-  queueOf.vk.pushTask((resolve: any) => {
-    setTimeout(() => {
-      generic.vkboard.client.bot
-        .api("board.createComment", {
-          access_token: token,
-          group_id: config.vkboard.group_id,
-          topic_id: channelId,
-          message: chunk,
-          from_group: 1
-        })
-        .then((res: any) => {})
-        .catch(catchError);
-      resolve();
-    }, 60000);
+  queueOf.vk.add(async () => {
+    await new Promise((resolve: any) => {
+      setTimeout(() => {
+        generic.vkboard.client.bot
+          .api("board.createComment", {
+            access_token: token,
+            group_id: config.vkboard.group_id,
+            topic_id: channelId,
+            message: chunk,
+            from_group: 1
+          })
+          .then((res: any) => {})
+          .catch(catchError);
+        resolve();
+      }, 60000);
+    });
   });
   // if (err.error.error_code === 14) {
   //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
@@ -597,19 +612,21 @@ sendTo.slack = async ({
     )
   )
     return;
-  queueOf.slack.pushTask((resolve: any) => {
-    chunk = emoji.unemojify(chunk);
-    generic.slack.client.web.chat
-      .postMessage({
-        channel: channelId,
-        username: (author || "").replace(/(^.{21}).*$/, "$1"),
-        text: chunk
-      })
-      .then(() => resolve())
-      .catch((err: any) => {
-        console.error(err);
-        resolve();
-      });
+  queueOf.slack.add(async () => {
+    await new Promise((resolve: any) => {
+      chunk = emoji.unemojify(chunk);
+      generic.slack.client.web.chat
+        .postMessage({
+          channel: channelId,
+          username: (author || "").replace(/(^.{21}).*$/, "$1"),
+          text: chunk
+        })
+        .then(() => resolve())
+        .catch((err: any) => {
+          console.error(err);
+          resolve();
+        });
+    });
   });
 };
 
@@ -625,11 +642,13 @@ sendTo.irc = async ({
     R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
   )
     return;
-  queueOf.irc.pushTask((resolve: any) => {
-    // if (config.irc.Actions.includes(action))
-    //   chunk = ircolors.underline(chunk);
-    generic.irc.client.say(channelId, chunk);
-    resolve();
+  queueOf.irc.add(async () => {
+    await new Promise((resolve: any) => {
+      // if (config.irc.Actions.includes(action))
+      //   chunk = ircolors.underline(chunk);
+      generic.irc.client.say(channelId, chunk);
+      resolve();
+    });
   });
 };
 
@@ -2637,10 +2656,7 @@ generic.MessengersAvailable = () => {
 StartService.facebook = async (force: boolean) => {
   //facebook
   if (!force && !config.MessengersAvailable.facebook) return;
-  queueOf.facebook = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.facebook = new PQueue({ concurrency: 1 });
   try {
     generic.facebook.client = await login(
       config.facebook.email,
@@ -2664,10 +2680,7 @@ StartService.telegram = async () => {
   //telegram
   if (!config.MessengersAvailable.telegram) return;
   generic.telegram.client = generic.telegram.Start();
-  queueOf.telegram = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.telegram = new PQueue({ concurrency: 1 });
   generic.telegram.client.on("message", (message: any) => {
     receivedFrom.telegram(message);
   });
@@ -2688,11 +2701,7 @@ StartService.vkwall = async () => {
   //vkboard
   if (!config.MessengersAvailable.vkwall) return;
   generic.vkwall.client = await generic.vkwall.Start();
-  if (!queueOf.vk)
-    queueOf.vk = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
+  if (!queueOf.vk) queueOf.vk = new PQueue({ concurrency: 1 });
   generic.vkwall.client.bot.event("wall_reply_new", async (ctx: any) => {
     receivedFrom.vkwall(ctx.message);
   });
@@ -2707,11 +2716,7 @@ StartService.vkboard = async () => {
   //vkboard
   if (!config.MessengersAvailable.vkboard) return;
   generic.vkboard.client = await generic.vkboard.Start();
-  if (!queueOf.vk)
-    queueOf.vk = new Queue({
-      autoStart: true,
-      concurrency: 1
-    });
+  if (!queueOf.vk) queueOf.vk = new PQueue({ concurrency: 1 });
   generic.vkboard.client.bot.event("board_post_new", async (ctx: any) => {
     receivedFrom.vkboard(ctx.message);
   });
@@ -2726,10 +2731,7 @@ StartService.slack = async () => {
   //slack
   await generic.slack.Start();
   if (!config.MessengersAvailable.slack) return;
-  queueOf.slack = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.slack = new PQueue({ concurrency: 1 });
   generic.slack.client.rtm.on("message", (message: any) => {
     receivedFrom.slack(message);
   });
@@ -2739,10 +2741,7 @@ StartService.mattermost = async () => {
   //mattermost
   generic.mattermost.client = await generic.mattermost.Start();
   if (!config.MessengersAvailable.mattermost) return;
-  queueOf.mattermost = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.mattermost = new PQueue({ concurrency: 1 });
   generic.mattermost.client.addEventListener("open", () => {
     generic.mattermost.client.send(
       JSON.stringify({
@@ -2772,16 +2771,9 @@ StartService.discord = async () => {
   await generic.discord.Start();
   if (!config.MessengersAvailable.discord) return;
 
-  queueOf.discord = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.discord = new PQueue({ concurrency: 1 });
   await new Promise(resolve => {
     if (config.MessengersAvailable.discord) {
-      queueOf.discord = new Queue({
-        autoStart: true,
-        concurrency: 1
-      });
       generic.discord.client.on("ready", () => {
         resolve();
       });
@@ -2817,10 +2809,7 @@ StartService.irc = async () => {
     config.irc.ircOptions
   );
   if (!config.MessengersAvailable.irc) return;
-  queueOf.irc = new Queue({
-    autoStart: true,
-    concurrency: 1
-  });
+  queueOf.irc = new PQueue({ concurrency: 1 });
   generic.irc.client.on("error", (error: any) => {
     receivedFrom.irc({
       error,

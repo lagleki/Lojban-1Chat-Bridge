@@ -61,7 +61,7 @@ const globalRichMood = [
   ["bold", ["violet","violet","silver","silver"]],
 
   ["bold", ["red","red","red","brown","brown","brown"]],
-  ["bold", ["white","white","white","pink","pink","pink"]],
+  ["bold", ["white","white","white","brown","pink","pink"]],
   ["bold", ["lime","lime","lime","silver","silver","silver"]],
   ["bold", ["violet","violet","violet","silver","silver","silver"]],
 
