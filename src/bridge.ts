@@ -196,7 +196,9 @@ generic.slack.Start = async () => {
   generic.slack.client.rtm.start().catch((e: any) => {
     if (!R.path(["data", "ok"], e)) {
       config.MessengersAvailable.slack = false;
-      console.log("couldn't start Slack");
+      debug("slack")({
+        error: "Couldn't start Slack"
+      });
     }
   });
   return true;
@@ -2022,7 +2024,9 @@ convertFrom.slack = async ({
       if (!err) {
         jsonChannels[channelId] = channel.name;
       } else {
-        console.log(err);
+        debug("slack")({
+          error: err
+        });
       }
     }
     for (const userId of Object.keys(jsonUsers)) {
@@ -2030,7 +2034,9 @@ convertFrom.slack = async ({
         generic.slack.client.web.users.info({ user: userId })
       );
       if (err) {
-        console.log(err);
+        debug("slack")({
+          error: err
+        });
       }
       jsonUsers[userId] = AdaptName.slack(user);
     }
@@ -2322,7 +2328,11 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
             parse_mode: "Markdown"
           }
         )
-        .catch((e: any) => console.log(e.toString()));
+        .catch((e: any) =>
+          debug("telegram")({
+            error: e.toString()
+          })
+        );
       return true;
     }
   }
@@ -2888,7 +2898,7 @@ async function StartServices() {
 
   await generic.PopulateChannelMapping();
 
-  console.log('bridge started');
+  console.log("bridge started");
 }
 
 // helper functions
@@ -2919,7 +2929,11 @@ generic.sendOnlineUsersTo = ({
 
     generic.telegram.client
       .sendMessage(objChannel.id, strNames)
-      .catch((e: any) => console.log(e.toString()));
+      .catch((e: any) =>
+        debug("telegram")({
+          error: e.toString()
+        })
+      );
   }
 };
 
