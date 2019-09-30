@@ -2019,12 +2019,19 @@ convertFrom.slack = async ({
       const [err, { channel }] = await to(
         generic.slack.client.web.conversations.info({ channel: channelId })
       );
-      if (!err) jsonChannels[channelId] = channel.name;
+      if (!err) {
+        jsonChannels[channelId] = channel.name;
+      } else {
+        console.log(err);
+      }
     }
     for (const userId of Object.keys(jsonUsers)) {
-      const [err, { user }] = await to(
+      const [err, user] = await to(
         generic.slack.client.web.users.info({ user: userId })
       );
+      if (err) {
+        console.log(err);
+      }
       jsonUsers[userId] = AdaptName.slack(user);
     }
     return (
@@ -2081,10 +2088,14 @@ convertFrom.slack = async ({
 
     return text;
   };
-  text = generic.escapeHTML(text);
-  const [err, str] = await to(publicParse(text));
-  debug("slack")({ "converting source text": source, result: str || text });
-  return str || text;
+  // text = generic.escapeHTML(text);
+  const [error, result] = await to(publicParse(text));
+  debug("slack")({
+    "converting source text": source,
+    result: result || text,
+    error
+  });
+  return result || text;
 };
 
 convertFrom.facebook = async ({
@@ -2876,6 +2887,8 @@ async function StartServices() {
   await StartService.irc();
 
   await generic.PopulateChannelMapping();
+
+  console.log('bridge started');
 }
 
 // helper functions
