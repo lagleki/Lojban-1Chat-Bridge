@@ -62,6 +62,7 @@ const fs = require("fs-extra");
 const path = require("path");
 const mkdir = require("mkdirp-sync");
 import * as request from "request";
+let webwidget: any;
 
 // NLP & spam libs
 const lojban = require("lojban");
@@ -116,6 +117,7 @@ const generic: Igeneric = {
   mattermost: {},
   discord: {},
   irc: {},
+  webwidget: {},
   fallback: {}
 };
 
@@ -134,6 +136,7 @@ interface IsendToArgs {
   action: string;
   quotation: boolean;
   file?: string;
+  edited?: boolean;
 }
 
 const convertTo: IMessengerFunctions = {};
@@ -150,6 +153,9 @@ generic.telegram.Start = () => {
   return new Telegram(config.telegram.token, {
     polling: true
   });
+};
+generic.webwidget.Start = () => {
+  return;
 };
 
 generic.vkboard.Start = async () => {
@@ -370,6 +376,41 @@ async function FormatMessageChunkForSending({
   }
   return chunk;
 }
+sendTo.webwidget = async ({
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file,
+  edited
+}: IsendToArgs) => {
+  if (
+    R.path(
+      ["channelMapping", "webwidget", channelId, "settings", "readonly"],
+      config
+    )
+  )
+    return;
+  const data = {
+    channelId,
+    author,
+    chunk,
+    action,
+    quotation,
+    file,
+    edited
+  };
+  webwidget.Lojban1ChatHistory.unshift(data);
+  webwidget.Lojban1ChatHistory.length = Math.min(
+    webwidget.Lojban1ChatHistory.length,
+    config.webwidget.historyLength || 201
+  );
+  webwidget.emit("sentFrom", {
+    data
+  });
+  return true;
+};
 
 sendTo.facebook = async ({
   channelId,
@@ -377,7 +418,8 @@ sendTo.facebook = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -408,7 +450,8 @@ sendTo.telegram = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -448,7 +491,8 @@ sendTo.discord = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -475,7 +519,8 @@ sendTo.mattermost = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -509,7 +554,8 @@ sendTo.vkwall = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -549,7 +595,8 @@ sendTo.vkboard = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -596,8 +643,7 @@ sendTo.vkboard = async ({
   //   });
   // }
 };
-
-async function myAwesomeCaptchaHandler() {}
+// async function myAwesomeCaptchaHandler() {}
 
 sendTo.slack = async ({
   channelId,
@@ -605,7 +651,8 @@ sendTo.slack = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(
@@ -638,7 +685,8 @@ sendTo.irc = async ({
   chunk,
   action,
   quotation,
-  file
+  file,
+  edited
 }: IsendToArgs) => {
   if (
     R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
@@ -654,7 +702,6 @@ sendTo.irc = async ({
   });
 };
 
-// sendFrom
 async function prepareChunks({
   messenger,
   channelId,
@@ -740,7 +787,6 @@ prepareAuthor.fallback = function({
   return `${text}`;
 };
 
-// sendFrom
 async function sendFrom({
   messenger,
   channelId,
@@ -770,6 +816,7 @@ async function sendFrom({
   if (!text || text === "") return;
   text = await convertFrom[messenger]({ text, messenger });
   text = text.replace(/^(<br\/>)+/, "");
+
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (
       config.MessengersAvailable[messengerTo] &&
@@ -806,6 +853,7 @@ async function sendFrom({
       debug("generic")(
         `converted for messenger ${messengerTo} to text "` + textTo + `"`
       );
+
       let Chunks = await prepareChunks({
         messenger,
         channelId,
@@ -833,7 +881,8 @@ async function sendFrom({
           chunk,
           quotation,
           action,
-          file
+          file,
+          edited
         });
       });
     }
@@ -2149,6 +2198,13 @@ convertFrom.discord = async ({
   text: string;
   messenger: string;
 }) => markedParse({ text, messenger: "discord" });
+convertFrom.webwidget = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => text;
 convertFrom.irc = async ({
   text,
   messenger
@@ -2236,6 +2292,13 @@ convertTo.mattermost = async ({
   debug(messenger)({ "converting text": text, result: res });
   return res;
 };
+convertTo.webwidget = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => text;
 convertTo.discord = convertTo.mattermost;
 
 convertTo.irc = async ({
@@ -2583,6 +2646,7 @@ async function PopulateChannelMappingCore({
     "slack",
     "mattermost",
     "discord",
+    "webwidget",
     "irc"
   ];
   config.channels.map((i: any) => {
@@ -2625,6 +2689,7 @@ generic.PopulateChannelMapping = async () => {
   await PopulateChannelMappingCore({ messenger: "mattermost" });
   await PopulateChannelMappingCore({ messenger: "discord" });
 
+  await PopulateChannelMappingCore({ messenger: "webwidget" });
   await PopulateChannelMappingCore({ messenger: "irc" });
   // console.log(
   //   "started services with these channel mapping:\n",
@@ -2643,6 +2708,7 @@ generic.MessengersAvailable = () => {
     if (i.mattermost) config.MessengersAvailable.mattermost = true;
     if (i.discord) config.MessengersAvailable.discord = true;
 
+    if (i.webwidget) config.MessengersAvailable.webwidget = true;
     if (i.irc) config.MessengersAvailable.irc = true;
   });
   if (
@@ -2898,7 +2964,7 @@ async function StartServices() {
 
   await generic.PopulateChannelMapping();
 
-  console.log("bridge started");
+  console.log("Lojban-1Chat-Bridge started!");
 }
 
 // helper functions
@@ -3060,6 +3126,9 @@ GetChunks.irc = async (text: string, messenger: string) => {
   return await GetChunks.fallback(text, messenger);
 };
 
+GetChunks.webwidget = async (text: string, messenger: string) => {
+  return [text];
+};
 GetChunks.fallback = async (text: string, messenger: string) => {
   // text = await appendPageTitles(text);
   const limit = config[messenger].MessageLength || 400;
@@ -3325,7 +3394,15 @@ if (config.generic.showMedia) {
     maxAge: 86400000
   });
   const server = http.createServer((req: any, res: any) => {
+    // if ((request.url || "").indexOf("/emailing/templates") === 0) {
     serve(req, res, finalhandler(req, res));
   });
+  if (config.MessengersAvailable.webwidget) {
+    webwidget = require("socket.io")(server);
+    webwidget.Lojban1ChatHistory = [];
+    webwidget.sockets.on("connection", (socket: any) => {
+      socket.emit("history", webwidget.Lojban1ChatHistory);
+    });
+  }
   server.listen(config.generic.httpPort);
 }
