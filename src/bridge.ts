@@ -34,7 +34,10 @@ const markedRenderer = new marked.Renderer();
 markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
 function markedParse({ text, messenger }: { text: string; messenger: string }) {
-  const res = marked.parser(lexer.lex(text.replace(/^(>[^\n]*?\n)/gm,'$1\n')), { renderer: markedRenderer });
+  const res = marked.parser(
+    lexer.lex(text.replace(/^(>[^\n]*?\n)/gm, "$1\n")),
+    { renderer: markedRenderer }
+  );
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -402,11 +405,13 @@ sendTo.webwidget = async ({
     edited
   };
   webwidget.Lojban1ChatHistory.push(data);
-  webwidget.Lojban1ChatHistory = webwidget.Lojban1ChatHistory.slice((config.webwidget.historyLength || 201)*-1);
+  webwidget.Lojban1ChatHistory = webwidget.Lojban1ChatHistory.slice(
+    (config.webwidget.historyLength || 201) * -1
+  );
   webwidget.emit("sentFrom", {
     data
   });
-  debug("webwidget")({'sending message': data});
+  debug("webwidget")({ "sending message": data });
   return true;
 };
 
@@ -2218,7 +2223,9 @@ convertFrom.irc = async ({
 async function convertToPlainText(text: string) {
   let a = await generic.unescapeHTML({
     text: text
+      .replace(/<strong>(\w)<\/strong>/g, "*$1*")
       .replace(/<b>(\w)<\/b>/g, "*$1*")
+      .replace(/<em>(\w)<\/em>/g, "_$1_")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
       .replace(/<blockquote>([\\s\\S])<\/blockquote>[\n\r]?/gm, "> $1\n")
       .replace(/<br\/?>/gi, "\n")
@@ -2291,6 +2298,16 @@ convertTo.mattermost = async ({
   debug(messenger)({ "converting text": text, result: res });
   return res;
 };
+convertTo.discord = async ({
+  text,
+  messenger
+}: {
+  text: string;
+  messenger: string;
+}) => {
+  return await convertTo.mattermost({ text, messenger });
+};
+
 convertTo.webwidget = async ({
   text,
   messenger
@@ -2298,7 +2315,6 @@ convertTo.webwidget = async ({
   text: string;
   messenger: string;
 }) => text;
-convertTo.discord = convertTo.mattermost;
 
 convertTo.irc = async ({
   text,

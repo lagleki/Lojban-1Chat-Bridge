@@ -38,7 +38,7 @@ Object.keys(globalStyles).forEach(key => {
 });
 
 const globalRichMood = [
-  ["bold", ["yellow","yellow","white","white"]],
+  // ["bold", ["yellow","yellow","white","white"]],
 
   ["bold", ["silver","silver","white","white"]],
   ["bold", ["navy","navy","white","white"]],
@@ -55,15 +55,15 @@ const globalRichMood = [
   ["bold", ["red","pink","white","white"]],
   ["bold", ["violet","violet","white","white"]],
   
-  ["bold", ["red","red","brown","brown"]],
-  ["bold", ["navy","navy","yellow","yellow"]],
-  ["bold", ["lime","lime","silver","silver"]],
-  ["bold", ["violet","violet","silver","silver"]],
+  // ["bold", ["red","red","brown","brown"]],
+  // ["bold", ["navy","navy","yellow","yellow"]],
+  // ["bold", ["lime","lime","silver","silver"]],
+  // ["bold", ["violet","violet","silver","silver"]],
 
-  ["bold", ["red","red","red","brown","brown","brown"]],
-  ["bold", ["white","white","white","brown","pink","pink"]],
-  ["bold", ["lime","lime","lime","silver","silver","silver"]],
-  ["bold", ["violet","violet","violet","silver","silver","silver"]],
+  // ["bold", ["red","red","red","brown","brown","brown"]],
+  // ["bold", ["white","white","white","brown","pink","pink"]],
+  // ["bold", ["lime","lime","lime","silver","silver","silver"]],
+  // ["bold", ["violet","violet","violet","silver","silver","silver"]],
 
   ["bold", ["white"]],
   ["bold", ["navy"]],
