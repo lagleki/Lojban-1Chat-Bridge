@@ -34,7 +34,7 @@ const markedRenderer = new marked.Renderer();
 markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
 function markedParse({ text, messenger }: { text: string; messenger: string }) {
-  const res = marked.parser(lexer.lex(text), { renderer: markedRenderer });
+  const res = marked.parser(lexer.lex(text.replace(/^(>[^\n]*?\n)/gm,'$1\n')), { renderer: markedRenderer });
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -401,14 +401,12 @@ sendTo.webwidget = async ({
     file,
     edited
   };
-  webwidget.Lojban1ChatHistory.unshift(data);
-  webwidget.Lojban1ChatHistory.length = Math.min(
-    webwidget.Lojban1ChatHistory.length,
-    config.webwidget.historyLength || 201
-  );
+  webwidget.Lojban1ChatHistory.push(data);
+  webwidget.Lojban1ChatHistory = webwidget.Lojban1ChatHistory.slice((config.webwidget.historyLength || 201)*-1);
   webwidget.emit("sentFrom", {
     data
   });
+  debug("webwidget")({'sending message': data});
   return true;
 };
 
@@ -724,7 +722,7 @@ async function prepareChunks({
       arrChunks[i] = generic.LocalizeString({
         messenger,
         channelId,
-        localized_string_key: "OverlayMessageWithEditedMark",
+        localized_string_key: `OverlayMessageWithEditedMark.${messengerTo}`,
         arrElemsToInterpolate: [["message", arrChunks[i]]]
       });
   }
@@ -2222,6 +2220,7 @@ async function convertToPlainText(text: string) {
     text: text
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
+      .replace(/<blockquote>([\\s\\S])<\/blockquote>[\n\r]?/gm, "> $1\n")
       .replace(/<br\/?>/gi, "\n")
       .replace(/<a.*?href="(.+?)".*?>(.+?)<\/a>/gi, (...arr) => {
         const url = arr[1];
