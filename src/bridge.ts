@@ -2305,7 +2305,12 @@ convertTo.discord = async ({
   text: string;
   messenger: string;
 }) => {
-  return await convertTo.mattermost({ text, messenger });
+  const res = await generic.unescapeHTML({
+    text: html2md.convert({ string: text, hrefConvert: false }),
+    convertHtmlEntities: true
+  });
+  debug(messenger)({ "converting text": text, result: res });
+  return res;
 };
 
 convertTo.webwidget = async ({
