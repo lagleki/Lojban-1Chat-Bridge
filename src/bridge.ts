@@ -3,6 +3,7 @@ declare var process: {
   env: {
     NTBA_FIX_319: number;
     HOME: string;
+    log?: string;
   };
   argv: string[];
 };
@@ -50,8 +51,11 @@ const finalhandler = require("finalhandler");
 import * as http from "http";
 const serveStatic = require("serve-static");
 
-// syntactic sugar
 import debug from "debug";
+const winston = require("winston");
+const logger = winston.createLogger({
+  transports: [new winston.transports.File({ filename: "log.log" })]
+});
 
 const R = require("ramda");
 const { default: PQueue } = require("p-queue");
@@ -1646,6 +1650,12 @@ receivedFrom.slack = async (message: any) => {
 };
 
 receivedFrom.mattermost = async (message: any) => {
+  debug("mattermost")(message);
+  if (process.env.log)
+    logger.log({
+      level: "info",
+      message: JSON.stringify(message)
+    });
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
@@ -2259,9 +2269,20 @@ convertTo.telegram = async ({
   text: string;
   messenger: string;
 }) => {
+  // const res = await generic.unescapeHTML({
+  //   text: html2md.convert({ string: text, hrefConvert: false, blockQuoteStyle: 'telegram' }),
+  //   convertHtmlEntities: true
+  // });
+  // debug(messenger)({ "converting text": text, result: res });
+  // return res;
   const res = generic
-    .sanitizeHtml(text)
-    .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</to.ma");
+    .sanitizeHtml(
+      text.replace(
+        /<blockquote>([\s\S]*?)<\/blockquote>/gim,
+        "\n<pre>$1</pre>\n"
+      )
+    )
+    .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>");
   debug(messenger)({ "converting text": text, result: res });
   return res;
 };
@@ -3038,7 +3059,7 @@ generic.LogToAdmin = (msg_text: string) => {
   if (config.telegram.admins_userid)
     generic.telegram.client
       .sendMessage(config.telegram.admins_userid, msg_text, {
-        parse_mode: "HTML"
+        parse_mode: "Markdown"
       })
       .catch((e: any) => console.log(e.toString()));
 };

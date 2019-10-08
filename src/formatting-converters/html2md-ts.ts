@@ -42,10 +42,12 @@ module.exports = {
    */
   convert({
     string,
-    hrefConvert
+    hrefConvert,
+    blockQuoteStyle
   }: {
     string: string;
     hrefConvert: boolean;
+    blockQuoteStyle?: string;
   }): string {
     /**
      * replacing unnecessary html tags
@@ -65,7 +67,7 @@ module.exports = {
       _i++
     ) {
       const formatter: any = formatters_1[_i];
-      if (typeof formatter === "function") html = formatter(html);
+      if (typeof formatter === "function") html = formatter(html, blockQuoteStyle);
     }
     html = html
       .replace(/\\/g, "\\\\")
