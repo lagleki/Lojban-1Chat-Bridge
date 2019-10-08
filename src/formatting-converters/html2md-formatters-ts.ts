@@ -67,7 +67,7 @@ function addHashes(count: number) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceHeading(doc: string, blockQuoteStyle?: string): string {
+function replaceHeading(doc: string): string {
   return makeRegex(
     headingRegex,
     doc,
@@ -84,9 +84,9 @@ function replaceHeading(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceUl(doc: string, blockQuoteStyle?: string): string {
+function replaceUl(doc: string): string {
   return makeRegex(ulRegex, doc, null, null, (match: any) =>
-    replaceLi(match[1], blockQuoteStyle, "ul")
+    replaceLi(match[1], "ul")
   );
 }
 
@@ -97,9 +97,9 @@ function replaceUl(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceOl(doc: string, blockQuoteStyle?: string): string {
+function replaceOl(doc: string): string {
   return makeRegex(olRegex, doc, null, null, (match: any) =>
-    replaceLi(match[1], blockQuoteStyle, "ol")
+    replaceLi(match[1], "ol")
   );
 }
 
@@ -110,7 +110,7 @@ function replaceOl(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceParagraph(doc: string, blockQuoteStyle?: string): string {
+function replaceParagraph(doc: string): string {
   return makeRegex(pRegex, doc);
 }
 
@@ -121,7 +121,7 @@ function replaceParagraph(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replacePre(doc: string, blockQuoteStyle?: string): string {
+function replacePre(doc: string): string {
   return makeRegex(preRegex, doc, "\n```\n", "\n```\n");
 }
 
@@ -132,7 +132,7 @@ function replacePre(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceCode(doc: string, blockQuoteStyle?: string): string {
+function replaceCode(doc: string): string {
   return makeRegex(codeRegex, doc, "`", "`");
 }
 
@@ -143,9 +143,8 @@ function replaceCode(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBlockQuote(doc: string, blockQuoteStyle?: string): string {
-  if (blockQuoteStyle==='telegram') return makeRegex(blockQuoteRegex, doc, "\n> ");
-  return makeRegex(blockQuoteRegex, doc, "\n```","\n```\n");
+function replaceBlockQuote(doc: string): string {
+  return makeRegex(blockQuoteRegex, doc, "\n> ","\n");
 }
 
 /**
@@ -155,7 +154,7 @@ function replaceBlockQuote(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBold(doc: string, blockQuoteStyle?: string): string {
+function replaceBold(doc: string): string {
   return makeRegex(boldRegex, doc, "**", "**");
 }
 
@@ -166,7 +165,7 @@ function replaceBold(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceItalic(doc: string, blockQuoteStyle?: string): string {
+function replaceItalic(doc: string): string {
   return makeRegex(italicRegex, doc, "*", "*");
 }
 
@@ -178,7 +177,7 @@ function replaceItalic(doc: string, blockQuoteStyle?: string): string {
  * @param  {String}  tag [description]
  * @return {String}      [description]
  */
-function replaceLi(doc: string, blockQuoteStyle?: string, tag?: string): string {
+function replaceLi(doc: string, tag?: string): string {
   let matches = [];
   let newDoc = doc;
   let replaceIndex = 0;

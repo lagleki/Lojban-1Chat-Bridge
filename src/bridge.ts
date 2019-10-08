@@ -2269,17 +2269,11 @@ convertTo.telegram = async ({
   text: string;
   messenger: string;
 }) => {
-  // const res = await generic.unescapeHTML({
-  //   text: html2md.convert({ string: text, hrefConvert: false, blockQuoteStyle: 'telegram' }),
-  //   convertHtmlEntities: true
-  // });
-  // debug(messenger)({ "converting text": text, result: res });
-  // return res;
   const res = generic
     .sanitizeHtml(
       text.replace(
-        /<blockquote>([\s\S]*?)<\/blockquote>/gim,
-        "\n<pre>$1</pre>\n"
+        /<blockquote>\\n<p>([\s\S]*?)<\/p>\\n<\/blockquote>/gim,
+        "<pre>$1</pre>"
       )
     )
     .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>");
