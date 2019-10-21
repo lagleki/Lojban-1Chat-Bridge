@@ -36,7 +36,7 @@ markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
 function markedParse({ text, messenger }: { text: string; messenger: string }) {
   const res = marked.parser(
-    lexer.lex(text.replace(/^(>[^\n]*?\n)/gm, "$1\n")),
+    lexer.lex(text),
     { renderer: markedRenderer }
   );
   debug(messenger)({ "converting source text": text, result: res });
@@ -91,10 +91,12 @@ interface IMessengerInfo {
 
 type TextFormatConverterType = ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo?: string;
 }) => Promise<any>;
 
 interface IMessengerFunctions {
@@ -856,7 +858,11 @@ async function sendFrom({
       debug("generic")(
         `converting for messenger ${messengerTo} the text "` + text + `"`
       );
-      let textTo = await convertTo[messengerTo]({ text, messenger });
+      let textTo = await convertTo[messengerTo]({
+        text,
+        messenger,
+        messengerTo
+      });
       debug("generic")(
         `converted for messenger ${messengerTo} to text "` + textTo + `"`
       );
@@ -1702,7 +1708,8 @@ receivedFrom.mattermost = async (message: any) => {
             if (error) {
               console.error(error.toString());
             } else {
-              author = JSON.parse(body).username;
+              body = JSON.parse(body);
+              author = body.username || body.nickname || body.first_name || '';
             }
             resolve();
           }
@@ -2210,7 +2217,7 @@ convertFrom.discord = async ({
 }: {
   text: string;
   messenger: string;
-}) => markedParse({ text, messenger: "discord" });
+}) => markedParse({ text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n"), messenger: "discord" });
 convertFrom.webwidget = async ({
   text,
   messenger
@@ -2237,7 +2244,7 @@ async function convertToPlainText(text: string) {
       .replace(/<b>(\w)<\/b>/g, "*$1*")
       .replace(/<em>(\w)<\/em>/g, "_$1_")
       .replace(/<i>(\w)<\/i>/g, "_$1_")
-      .replace(/<blockquote>([\\s\\S])<\/blockquote>[\n\r]?/gm, "> $1\n")
+      .replace(/<blockquote>([\s\S]*?[\n\r]?)<\/blockquote>/gm, "> $1\n")
       .replace(/<br\/?>/gi, "\n")
       .replace(/<a.*?href="(.+?)".*?>(.+?)<\/a>/gi, (...arr) => {
         const url = arr[1];
@@ -2257,91 +2264,124 @@ async function convertToPlainText(text: string) {
 
 convertTo.facebook = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => convertToPlainText(text);
+
 convertTo.telegram = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => {
   const res = generic
     .sanitizeHtml(
       text.replace(
-        /<blockquote>\\n<p>([\s\S]*?)<\/p>\\n<\/blockquote>/gim,
+        /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
         "<pre>$1</pre>"
       )
     )
-    .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>");
-  debug(messenger)({ "converting text": text, result: res });
+    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
+  debug(messenger)({
+    messengerTo,
+    "converting text": text,
+    intermediate: text.replace(
+      /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
+      "<pre>$1</pre>"
+    ),
+    result: res
+  });
   return res;
 };
 convertTo.vkboard = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => await convertToPlainText(text);
 convertTo.vkwall = convertTo.vkboard;
 convertTo.slack = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => {
   const res = slackify(text);
-  debug(messenger)({ "converting text": text, result: res });
+  debug(messenger)({ messengerTo, "converting text": text, result: res });
   return res;
 };
 convertTo.mattermost = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => {
   const res = await generic.unescapeHTML({
-    text: html2md.convert({ string: text, hrefConvert: false }),
+    text: html2md.convert({
+      string: text,
+      hrefConvert: false,
+      dialect: messengerTo
+    }),
     convertHtmlEntities: true
   });
-  debug(messenger)({ "converting text": text, result: res });
+  debug(messenger)({ messengerTo, "converting text": text, result: res });
   return res;
 };
 convertTo.discord = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => {
   const res = await generic.unescapeHTML({
-    text: html2md.convert({ string: text, hrefConvert: false }),
+    text: html2md.convert({
+      string: text,
+      hrefConvert: false,
+      dialect: messengerTo
+    }),
     convertHtmlEntities: true
   });
-  debug(messenger)({ "converting text": text, result: res });
+  debug(messenger)({ messengerTo, "converting text": text, result: res });
   return res;
 };
 
 convertTo.webwidget = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => text;
 
 convertTo.irc = async ({
   text,
-  messenger
+  messenger,
+  messengerTo
 }: {
   text: string;
   messenger: string;
+  messengerTo: string;
 }) => await convertToPlainText(text);
 
 // generic.telegram

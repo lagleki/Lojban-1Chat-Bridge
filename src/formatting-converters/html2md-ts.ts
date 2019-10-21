@@ -42,10 +42,12 @@ module.exports = {
    */
   convert({
     string,
-    hrefConvert
+    hrefConvert,
+    dialect
   }: {
     string: string;
     hrefConvert: boolean;
+    dialect?: string;
   }): string {
     /**
      * replacing unnecessary html tags
@@ -65,13 +67,14 @@ module.exports = {
       _i++
     ) {
       const formatter: any = formatters_1[_i];
-      if (typeof formatter === "function") html = formatter(html);
+      if (typeof formatter === "function")
+        html = formatter({ doc: html, dialect });
     }
     html = html
       .replace(/\\/g, "\\\\")
       .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>")
       .replace(
-        /<a.*href="(.*?)".*>(.*?)<\/a>/gi,
+        /<a.*?href="(.*?)".*?>(.*?)<\/a>/gi,
         (match: any, href: string, name: string) => {
           if (hrefConvert === false) {
             return `${href}`;

@@ -25,13 +25,21 @@ const italicRegex = /<(?:i|em)>([\s\S]*?)<\/\w*>/gim;
  * @param  {String}  after  [description]
  * @return {String}         [description]
  */
-function makeRegex(
-  regex: RegExp,
-  doc: string,
-  before?: string,
-  after?: string,
-  replaceFn?: any
-): string {
+function makeRegex({
+  regex,
+  doc,
+  before,
+  after,
+  replaceFn,
+  dialect
+}: {
+  regex: RegExp;
+  doc: string;
+  before?: string;
+  after?: string;
+  replaceFn?: any;
+  dialect?: string;
+}): string {
   let matches = [];
   let newDoc = doc;
   let replaceString;
@@ -67,14 +75,19 @@ function addHashes(count: number) {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceHeading(doc: string): string {
-  return makeRegex(
-    headingRegex,
+function replaceHeading({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({
+    regex: headingRegex,
     doc,
-    null,
-    null,
-    (match: any) => addHashes(match[1]) + match[2]
-  );
+    replaceFn: (match: any) => addHashes(match[1]) + match[2],
+    dialect
+  });
 }
 
 /**
@@ -84,10 +97,18 @@ function replaceHeading(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceUl(doc: string): string {
-  return makeRegex(ulRegex, doc, null, null, (match: any) =>
-    replaceLi(match[1], "ul")
-  );
+function replaceUl({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({
+    regex: ulRegex,
+    doc,
+    replaceFn: (match: any) => replaceLi({ doc: match[1], tag: "ul", dialect })
+  });
 }
 
 /**
@@ -97,10 +118,18 @@ function replaceUl(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceOl(doc: string): string {
-  return makeRegex(olRegex, doc, null, null, (match: any) =>
-    replaceLi(match[1], "ol")
-  );
+function replaceOl({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({
+    regex: olRegex,
+    doc,
+    replaceFn: (match: any) => replaceLi({ doc: match[1], tag: "ol", dialect })
+  });
 }
 
 /**
@@ -110,8 +139,14 @@ function replaceOl(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceParagraph(doc: string): string {
-  return makeRegex(pRegex, doc);
+function replaceParagraph({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({ regex: pRegex, doc });
 }
 
 /**
@@ -121,8 +156,19 @@ function replaceParagraph(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replacePre(doc: string): string {
-  return makeRegex(preRegex, doc, "\n```\n", "\n```\n");
+function replacePre({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({
+    regex: preRegex,
+    doc,
+    before: "\n```\n",
+    after: "\n```\n"
+  });
 }
 
 /**
@@ -132,8 +178,14 @@ function replacePre(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceCode(doc: string): string {
-  return makeRegex(codeRegex, doc, "`", "`");
+function replaceCode({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({ regex: codeRegex, doc, before: "`", after: "`" });
 }
 
 /**
@@ -143,8 +195,25 @@ function replaceCode(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBlockQuote(doc: string): string {
-  return makeRegex(blockQuoteRegex, doc, "\n> ","\n");
+function replaceBlockQuote({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  if (dialect === "discord")
+    return makeRegex({
+      regex: blockQuoteRegex,
+      doc,
+      before: "\n> "
+    });
+  return makeRegex({
+    regex: blockQuoteRegex,
+    doc,
+    before: "\n> ",
+    after: "\n"
+  });
 }
 
 /**
@@ -154,8 +223,14 @@ function replaceBlockQuote(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceBold(doc: string): string {
-  return makeRegex(boldRegex, doc, "**", "**");
+function replaceBold({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({ regex: boldRegex, doc, before: "**", after: "**" });
 }
 
 /**
@@ -165,8 +240,14 @@ function replaceBold(doc: string): string {
  * @param  {String}       doc [description]
  * @return {String}           [description]
  */
-function replaceItalic(doc: string): string {
-  return makeRegex(italicRegex, doc, "*", "*");
+function replaceItalic({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({ regex: italicRegex, doc, before: "*", after: "*" });
 }
 
 /**
@@ -177,7 +258,15 @@ function replaceItalic(doc: string): string {
  * @param  {String}  tag [description]
  * @return {String}      [description]
  */
-function replaceLi(doc: string, tag?: string): string {
+function replaceLi({
+  doc,
+  dialect,
+  tag
+}: {
+  doc: string;
+  dialect?: string;
+  tag?: string;
+}): string {
   let matches = [];
   let newDoc = doc;
   let replaceIndex = 0;
