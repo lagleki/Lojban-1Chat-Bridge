@@ -11,10 +11,9 @@
 - several links ia message are merged into one
 - add comments to config.json via stripJsonComments
   ReceivedFrom: config,facebook,sendFrom,AdaptName.facebook, generic.downloadFile
-- split code by messenger
+- split code into files by messenger
 - remove spam via telegram user
 - qq support qq.js
-- discord support
 - topic set in slack not sent anywhere
 - get rid of all ".then"
 - fork await-to-js to "or"
@@ -46,7 +45,6 @@
 - check what happens on removing from slack channel: too hard, would need to delete the bot
 - check what happens on removing from telegram channel
 - check what happens on removing from irc channel
-- eilojbo flag for chats
 
 # done
 

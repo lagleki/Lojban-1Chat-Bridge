@@ -1,5 +1,4 @@
-A [Telegram](https://telegram.org/) ↔ [Slack](https://slack.com) ↔ IRC ↔ [Mattermost](https://mattermost.com/) ↔ [Facebook Messenger](https://facebook.com) gateway.
-
+A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [Slack](https://slack.com) ↔ IRC ↔ [Mattermost](https://mattermost.com/) ↔ [Facebook Messenger](https://facebook.com)  ↔ vk.com (board) ↔ vk.com (wall)  ↔ websocket (API for external use in custom apps or custom messengers) gateway.
 
 [![Build Status](https://travis-ci.org/lagleki/Lojban-1Chat-Bridge.svg?branch=develop)](https://travis-ci.org/lagleki/Lojban-1Chat-Bridge)
 [![dependencies](https://david-dm.org/lagleki/Lojban-1Chat-Bridge.svg)](https://david-dm.org/lagleki/Lojban-1Chat-Bridge#info=Dependencies)
@@ -7,13 +6,15 @@ A [Telegram](https://telegram.org/) ↔ [Slack](https://slack.com) ↔ IRC ↔ [
 
 #### Features:
 
-* Supports multiple Telegram group ↔ IRC channel ↔ Slack channel bridges
-* Telegram messages are always relayed to their respective IRC channel and Slack channel and vice versa
+* Supports multiple Telegram group ↔ IRC channel ↔ Slack channel ... bridges
+* e.g. Telegram messages are always relayed to their respective IRC channel and Slack channel and Mattermost channels ... and vice versa
 * IRC messages can be configured to relay to Slack and Telegram but not from Telegram/Slack into them (thus making them readonly)
-* Supports Telegram/Slack media files, URL to file sent to the other messengers
+* Supports Telegram/Slack/Mattermost/Discord media files, URL to file is sent to the other messengers
 
 Quick start
 -----------
+
+Read config/defaults.js file for in-place instructions
 
 Make sure you've installed Node.js.
 1. Install the Lojban-1Chat-Bridge npm module with `npm install -g Lojban-1Chat-Bridge` (might need sudo)
