@@ -6,15 +6,20 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 
 #### Features:
 
-* Supports multiple Telegram group ↔ IRC channel ↔ Slack channel ... bridges
-* e.g. Telegram messages are always relayed to their respective IRC channel and Slack channel and Mattermost channels ... and vice versa
+* makes a bridge where message from one messenger is sent to the rest. Both sending and receeving messages is possible.
+* e.g. Telegram messages are relayed to their respective IRC channel and Slack channel and Mattermost channels ... and vice versa
+* Supported messengers: [Telegram](https://telegram.org/), [Discord](https://discordapp.com), [Slack](https://slack.com), IRC, [Mattermost](https://mattermost.com/), [Facebook Messenger](https://facebook.com) (not stable currently, not recommended), vk.com (board), vk.com (wall), websocket (API for external use in custom apps, web widgets or custom messengers)
 * IRC messages can be configured to relay to Slack and Telegram but not from Telegram/Slack into them (thus making them readonly)
-* Supports Telegram/Slack/Mattermost/Discord media files, URL to file is sent to the other messengers
+* Supports Telegram/Slack/Mattermost/Discord media files, URL to file is sent to the other messengers. Local hosting of images
 
-Quick start
------------
+# Quick start
+
+Currently there are only short docs. You need to study yourself how to make users or bots for each messenger and get their credentials.
 
 Read config/defaults.js file for in-place instructions
+
+
+# Future docs (not ready)
 
 Make sure you've installed Node.js.
 1. Install the Lojban-1Chat-Bridge npm module with `npm install -g Lojban-1Chat-Bridge` (might need sudo)
@@ -49,8 +54,7 @@ Optional:
   [`commands.txt`](/commands.txt) to show all supported commands to Telegram
   clients.
 
-Developer install (from git)
-----------------------------
+# Developer install (from git)
 
     git clone https://github.com/lagleki/Lojban-1Chat-Bridge
     cd Lojban-1Chat-Bridge
@@ -63,7 +67,6 @@ Use the [`develop`](https://github.com/lagleki/Lojban-1Chat-Bridge/tree/develop)
 
 Make sure that the unit tests pass before submitting your pull request, using `npm test`.
 
-Docker install
---------------
+# Docker install (not ready)
 
 See the [README for Docker](Docker_README.md)
