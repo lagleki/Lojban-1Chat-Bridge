@@ -1669,7 +1669,8 @@ receivedFrom.mattermost = async (message: any) => {
     if (!post.id) return;
     message.event = "posted";
     message.edited = true;
-    await to(
+    let err: any;
+    [err] = await to(
       new Promise(resolve => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post.id}`;
         request(
@@ -1692,7 +1693,8 @@ receivedFrom.mattermost = async (message: any) => {
         );
       })
     );
-    await to(
+    if (err) console.error(err.toString());
+    [err] = await to(
       new Promise(resolve => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/users/${post.user_id}`;
         request(
@@ -1716,7 +1718,8 @@ receivedFrom.mattermost = async (message: any) => {
         );
       })
     );
-    await to(
+    if (err) console.error(err.toString());
+    [err] = await to(
       new Promise(resolve => {
         const url = `${config.mattermost.ProviderUrl}/api/v4/channels/${post.channel_id}`;
         request(
@@ -1739,6 +1742,7 @@ receivedFrom.mattermost = async (message: any) => {
         );
       })
     );
+    if (err) console.error(err.toString());
   } else {
     message.edited = false;
     if (R.path(["data", "team_id"], message) !== config.mattermost.team_id)
@@ -1780,6 +1784,7 @@ receivedFrom.mattermost = async (message: any) => {
           );
         })
       );
+      if (err) console.error(err.toString());
       const [err2, promfile2] = await to(
         new Promise(resolve => {
           const url = `${config.mattermost.ProviderUrl}/api/v4/files/${file}/info`;
@@ -1803,6 +1808,7 @@ receivedFrom.mattermost = async (message: any) => {
           );
         })
       );
+      if (err2) console.error(err.toString());
       if (promfile && promfile2) files.push([promfile2, promfile]);
     }
     if (!author) author = R.path(["data", "sender_name"], message);
