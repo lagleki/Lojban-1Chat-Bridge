@@ -1666,6 +1666,7 @@ receivedFrom.mattermost = async (message: any) => {
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
     const post = JSON.parse(R.pathOr("", ["data", "post"], message));
+    
     if (!post.id) return;
     message.event = "posted";
     message.edited = true;
@@ -1735,7 +1736,7 @@ receivedFrom.mattermost = async (message: any) => {
             if (error) {
               console.error(error.toString());
             } else {
-              channelId = JSON.parse(body).display_name;
+              channelId = JSON.parse(body).name;
             }
             resolve();
           }
@@ -1812,6 +1813,7 @@ receivedFrom.mattermost = async (message: any) => {
       if (promfile && promfile2) files.push([promfile2, promfile]);
     }
     if (!author) author = R.path(["data", "sender_name"], message);
+    author = author.replace(/^@/,'');
     if (files.length > 0) {
       for (const [extension, file] of files) {
         const [file_, localfile]: [string, string] = await generic.downloadFile(
@@ -2700,7 +2702,7 @@ async function GetChannelsMattermostCore(json: Json, url: string) {
             body = JSON.parse(body);
             if (body[0]) {
               body.map((i: any) => {
-                json[i.display_name] = i.name;
+                json[i.name] = i.name;
               });
             }
           }
