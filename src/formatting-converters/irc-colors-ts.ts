@@ -156,8 +156,8 @@ function MoodifyText({
 
   let hash = 0;
   const prettyStr = text
-    .toLowerCase()
-    .replace(/(\[.*)|[.,\/#!$%^&*;:{}=\-_`~()[\]]/g, "");
+    // .toLowerCase()
+    // .replace(/(\[.*)|[.,\/#!$%^&*;:{}=\-_`~()[\]]/g, "");
   for (let i = 0; i < prettyStr.length; ++i) {
     // mult by 32
     hash = (hash << 5) - hash + prettyStr.charCodeAt(i);
