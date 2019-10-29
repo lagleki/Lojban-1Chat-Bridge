@@ -18,6 +18,13 @@ Currently there are only short docs. You need to study yourself how to make user
 
 Read config/defaults.js file for in-place instructions
 
+Run `npm run tsc` to compile.
+
+Run `npm run start` to start the process.
+
+## Debug
+
+Run `DEBUG=telegram,mattermost,discord npm run start` to output messages to and from Telegram, Mattermost, Discord. Messengers to be separated with a comma. 
 
 # Future docs (not ready)
 
