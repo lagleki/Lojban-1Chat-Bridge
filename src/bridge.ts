@@ -32,13 +32,52 @@ const lexer = new marked.Lexer();
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 const markedRenderer = new marked.Renderer();
-markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+// markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
-function markedParse({ text, messenger }: { text: string; messenger: string }) {
-  const res = marked.parser(
-    lexer.lex(text),
-    { renderer: markedRenderer }
-  );
+function markedParse({
+  text,
+  messenger,
+  dontEscapeBackslash
+}: {
+  text: string;
+  messenger: string;
+  dontEscapeBackslash?: boolean;
+}) {
+  if (!dontEscapeBackslash) text = text.replace(/\\/gim, "\\\\");
+  markedRenderer.codespan = (text: string) => {
+    if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
+    return `<code>${text}</code>`;
+  };
+  markedRenderer.code = (
+    code: string,
+    infostring: string,
+    escaped: boolean
+  ) => {
+    if (!dontEscapeBackslash) code = code.replace(/\\\\/gim, "&#92;");
+    const lang = (infostring || "").match(/\S*/)[0];
+    if (this.options.highlight) {
+      const out = this.options.highlight(code, lang);
+      if (out != null && out !== code) {
+        escaped = true;
+        code = out;
+      }
+    }
+
+    if (!lang)
+      return (
+        "<pre><code>" + (escaped ? code : escape(code)) + "</code></pre>"
+      );
+
+    return (
+      '<pre><code class="' +
+      this.options.langPrefix +
+      escape(lang) +
+      '">' +
+      (escaped ? code : escape(code)) +
+      "</code></pre>\n"
+    );
+  };
+  const res = marked.parser(lexer.lex(text), { renderer: markedRenderer });
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -1656,17 +1695,17 @@ receivedFrom.slack = async (message: any) => {
 };
 
 receivedFrom.mattermost = async (message: any) => {
-  debug("mattermost")(message);
-  if (process.env.log)
-    logger.log({
-      level: "info",
-      message: JSON.stringify(message)
-    });
+  // debug("mattermost")(message);
+  // if (process.env.log)
+  //   logger.log({
+  //     level: "info",
+  //     message: JSON.stringify(message)
+  //   });
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (R.path(["event"], message) === "post_edited") {
     const post = JSON.parse(R.pathOr("", ["data", "post"], message));
-    
+
     if (!post.id) return;
     message.event = "posted";
     message.edited = true;
@@ -1712,7 +1751,7 @@ receivedFrom.mattermost = async (message: any) => {
               console.error(error.toString());
             } else {
               body = JSON.parse(body);
-              author = body.username || body.nickname || body.first_name || '';
+              author = body.username || body.nickname || body.first_name || "";
             }
             resolve();
           }
@@ -1813,7 +1852,7 @@ receivedFrom.mattermost = async (message: any) => {
       if (promfile && promfile2) files.push([promfile2, promfile]);
     }
     if (!author) author = R.path(["data", "sender_name"], message);
-    author = author.replace(/^@/,'');
+    author = author.replace(/^@/, "");
     if (files.length > 0) {
       for (const [extension, file] of files) {
         const [file_, localfile]: [string, string] = await generic.downloadFile(
@@ -2197,7 +2236,7 @@ convertFrom.telegram = async ({
 }) => {
   const res = markedParse({
     text: text.replace(
-      /<p><code>([\\s\\S]*?<\/code><\/p>)/gim,
+      /<p><code>([\s\S]*?)<\/code><\/p>/gim,
       "<p><pre>$1</pre></p>"
     ),
     messenger: "telegram"
@@ -2225,7 +2264,12 @@ convertFrom.discord = async ({
 }: {
   text: string;
   messenger: string;
-}) => markedParse({ text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n"), messenger: "discord" });
+}) =>
+  markedParse({
+    text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n"),
+    messenger: "discord",
+    dontEscapeBackslash: true
+  });
 convertFrom.webwidget = async ({
   text,
   messenger

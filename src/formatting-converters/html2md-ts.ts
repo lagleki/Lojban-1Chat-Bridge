@@ -49,6 +49,9 @@ module.exports = {
     hrefConvert: boolean;
     dialect?: string;
   }): string {
+    string = string
+      .replace(/\\/g, "\\\\")
+      .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
     /**
      * replacing unnecessary html tags
      * @type {String}
@@ -70,21 +73,18 @@ module.exports = {
       if (typeof formatter === "function")
         html = formatter({ doc: html, dialect });
     }
-    html = html
-      .replace(/\\/g, "\\\\")
-      .replace(/<pre><code>([\\s\\S]*?<\/code><\/pre>)/gim, "<pre>$1</pre>")
-      .replace(
-        /<a.*?href="(.*?)".*?>(.*?)<\/a>/gi,
-        (match: any, href: string, name: string) => {
-          if (hrefConvert === false) {
-            return `${href}`;
-          } else if (href.endsWith(".jpg")) {
-            return `\n\n![${name}](${href})`;
-          } else {
-            return `[${name}](${href})`;
-          }
+    html = html.replace(
+      /<a.*?href="(.*?)".*?>(.*?)<\/a>/gi,
+      (match: any, href: string, name: string) => {
+        if (hrefConvert === false) {
+          return `${href}`;
+        } else if (/\.(jpg|png|gif)/.test(href)) {
+          return `\n\n![${name}](${href})`;
+        } else {
+          return `[${name}](${href})`;
         }
-      );
+      }
+    );
     return html;
   },
   /**
