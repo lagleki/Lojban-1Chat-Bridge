@@ -55,8 +55,8 @@ function markedParse({
   ) => {
     if (!dontEscapeBackslash) code = code.replace(/\\\\/gim, "&#92;");
     const lang = (infostring || "").match(/\S*/)[0];
-    if (this.options.highlight) {
-      const out = this.options.highlight(code, lang);
+    if (markedRenderer.options.highlight) {
+      const out = markedRenderer.options.highlight(code, lang);
       if (out != null && out !== code) {
         escaped = true;
         code = out;
@@ -70,7 +70,7 @@ function markedParse({
 
     return (
       '<pre><code class="' +
-      this.options.langPrefix +
+      markedRenderer.options.langPrefix +
       escape(lang) +
       '">' +
       (escaped ? code : escape(code)) +
