@@ -976,7 +976,7 @@ receivedFrom.discord = async (message: any) => {
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
-      author: message.member.nickname,
+      author: AdaptName.discord(message),
       text: file,
       file: localfile,
       edited
@@ -987,7 +987,7 @@ receivedFrom.discord = async (message: any) => {
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
-      author: message.member.nickname,
+      author: AdaptName.discord(message),
       text,
       edited
     });
@@ -998,7 +998,7 @@ receivedFrom.discord = async (message: any) => {
   sendFrom({
     messenger: "discord",
     channelId: message.channel.id,
-    author: message.member.nickname,
+    author: AdaptName.discord(message),
     text,
     edited
   });
@@ -1139,9 +1139,9 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
         .array()
         .find(
           (member: any) =>
-            member.nickname && member.user.id.toLowerCase() === core
+            (member.nickname || member.user.username) && member.user.id.toLowerCase() === core
         );
-      if (member) text = text.replace(match, "@" + member.nickname);
+      if (member) text = text.replace(match, "@" + (member.nickname || member.user.username));
     }
   matches = text.match(/<#[^# ]{2,32}>/g);
   if (matches && matches[0])
@@ -1971,6 +1971,7 @@ receivedFrom.irc = async ({
 };
 
 // AdaptName
+AdaptName.discord = (message: any) => message.member.nickname || message.author.username;
 AdaptName.facebook = (user: any) => user.name; // || user.vanity || user.firstName;
 AdaptName.telegram = (name: string) =>
   config.telegram.userMapping[name] || name;
