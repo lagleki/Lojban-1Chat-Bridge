@@ -976,7 +976,7 @@ receivedFrom.discord = async (message: any) => {
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
-      author: message.author.username,
+      author: message.member.nickname,
       text: file,
       file: localfile,
       edited
@@ -987,7 +987,7 @@ receivedFrom.discord = async (message: any) => {
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
-      author: message.author.username,
+      author: message.member.nickname,
       text,
       edited
     });
@@ -998,7 +998,7 @@ receivedFrom.discord = async (message: any) => {
   sendFrom({
     messenger: "discord",
     channelId: message.channel.id,
-    author: message.author.username,
+    author: message.member.nickname,
     text,
     edited
   });
@@ -1139,9 +1139,9 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
         .array()
         .find(
           (member: any) =>
-            member.user.username && member.user.id.toLowerCase() === core
+            member.nickname && member.user.id.toLowerCase() === core
         );
-      if (member) text = text.replace(match, "@" + member.user.username);
+      if (member) text = text.replace(match, "@" + member.nickname);
     }
   matches = text.match(/<#[^# ]{2,32}>/g);
   if (matches && matches[0])
