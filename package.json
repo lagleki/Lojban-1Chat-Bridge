@@ -8,6 +8,7 @@
   },
   "scripts": {
     "tsc": "tsc",
+    "genconfig": "node ./dist/bridge.js --genconfig",
     "webpack-build": "node_modules/.bin/webpack --config webpack.config.js",
     "build": "npm install ; npm run start",
     "start": "nodemon --watch dist --exec \"node ./dist/bridge.js\"",
