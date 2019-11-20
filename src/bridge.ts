@@ -659,7 +659,7 @@ sendTo.slack = async ({
   edited
 }: IsendToArgs) => {
   if (
-    config?.channelMapping?.slck?.[channelId]?.settings?.readonly
+    config?.channelMapping?.slack?.[channelId]?.settings?.readonly
 
   )
     return;
@@ -1376,7 +1376,7 @@ receivedFrom.vkwall = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = res?.response?.[0];
+        replyuser = res?.response?.[0]||'';
         replyuser = AdaptName.vkwall(replyuser);
       }
       sendFrom({
