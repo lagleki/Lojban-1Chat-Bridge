@@ -1376,7 +1376,7 @@ receivedFrom.vkwall = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = res?.response?.[0]||'';
+        replyuser = res?.response?.[0] || '';
         replyuser = AdaptName.vkwall(replyuser);
       }
       sendFrom({
@@ -3425,7 +3425,7 @@ generic.LocalizeString = ({
   arrElemsToInterpolate: Array<Array<string>>;
 }) => {
   try {
-    const language = config?.channelMapping?.[messenger]?.[channelId]?.settings?.language;
+    const language = config?.channelMapping?.[messenger]?.[channelId]?.settings?.language || "English";
     let template = localConfig[language][localized_string_key];
     const def_template = localConfig["English"][localized_string_key];
     if (!def_template) {
