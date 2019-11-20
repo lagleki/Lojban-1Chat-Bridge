@@ -48,34 +48,9 @@ function markedParse({
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
     return `<code>${text}</code>`;
   };
-  markedRenderer.code = (
-    code: string,
-    infostring: string,
-    escaped: boolean
-  ) => {
-    if (!dontEscapeBackslash) code = code.replace(/\\\\/gim, "&#92;");
-    const lang = (infostring || "").match(/\S*/)[0];
-    if (markedRenderer.options.highlight) {
-      const out = markedRenderer.options.highlight(code, lang);
-      if (out != null && out !== code) {
-        escaped = true;
-        code = out;
-      }
-    }
-
-    if (!lang)
-      return (
-        "<pre><code>" + (escaped ? code : escape(code)) + "</code></pre>"
-      );
-
-    return (
-      '<pre><code class="' +
-      markedRenderer.options.langPrefix +
-      escape(lang) +
-      '">' +
-      (escaped ? code : escape(code)) +
-      "</code></pre>\n"
-    );
+  markedRenderer.code = (text: string) => {
+    if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
+    return `<pre><code>${text}</code></pre>\n`;
   };
   const res = marked.parser(lexer.lex(text), { renderer: markedRenderer });
   debug(messenger)({ "converting source text": text, result: res });
@@ -1139,9 +1114,14 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
         .array()
         .find(
           (member: any) =>
-            (member.nickname || member.user.username) && member.user.id.toLowerCase() === core
+            (member.nickname || member.user.username) &&
+            member.user.id.toLowerCase() === core
         );
-      if (member) text = text.replace(match, "@" + (member.nickname || member.user.username));
+      if (member)
+        text = text.replace(
+          match,
+          "@" + (member.nickname || member.user.username)
+        );
     }
   matches = text.match(/<#[^# ]{2,32}>/g);
   if (matches && matches[0])
@@ -1971,7 +1951,8 @@ receivedFrom.irc = async ({
 };
 
 // AdaptName
-AdaptName.discord = (message: any) => message.member.nickname || message.author.username;
+AdaptName.discord = (message: any) =>
+  message.member.nickname || message.author.username;
 AdaptName.facebook = (user: any) => user.name; // || user.vanity || user.firstName;
 AdaptName.telegram = (name: string) =>
   config.telegram.userMapping[name] || name;
