@@ -95,7 +95,7 @@
     "sendTo.discord.ChunkOnly": "%chunk%",
     "sendTo.discord.action": "**%author%** _%chunk%_",
     "OverlayMessageWithQuotedMark.discord": "> %author%: %chunk%",
-    "OverlayMessageWithEditedMark.discord": "✎ %message%",
+    "OverlayMessageWithEditedMark.discord": ":pencil2: %message%",
     "OverlayMessageWithEditedMark": "✎ %message%"
   }
 }

@@ -76,8 +76,7 @@ const { default: PQueue } = require("p-queue");
 const queue = new PQueue({ concurrency: 1 });
 
 const { to } = require("await-to-js");
-const { or } = require("./sugar/await-or.js");
-const blalalavla = require("./sugar/blalalavla.js");
+const blalalavla = require("./sugar/blalalavla");
 // file system and network libs
 const fs = require("fs-extra");
 const path = require("path");
