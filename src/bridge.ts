@@ -278,7 +278,7 @@ generic.mattermost.Start = async () => {
             resolve();
           } else {
             resolve({
-              token: response?.header?.token || '',
+              token: response?.headers?.token || '',
               id: JSON.parse(body).id
             });
           }
@@ -365,7 +365,7 @@ async function FormatMessageChunkForSending({
         ["title", title]
       ]
     });
-  } else if (author && author !== "") {
+  } else if ((author || '') !== "") {
     if ((config[messenger].Actions || []).includes(action)) {
       chunk = generic.LocalizeString({
         messenger,
@@ -409,10 +409,7 @@ sendTo.webwidget = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "webwidget", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.webwidget?.[channelId]?.settings?.readonly
   )
     return;
   const data = {
@@ -445,10 +442,8 @@ sendTo.facebook = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "facebook", channelId, "settings", "readonly"],
-      config
-    ) ||
+    config?.channelMapping?.facebook?.[channelId]?.settings.readonly
+    ||
     !generic.facebook.client
   )
     return;
@@ -477,10 +472,7 @@ sendTo.telegram = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "telegram", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.telegram?.[channelId]?.settings?.readonly
   )
     return;
   queueOf.telegram.add(async () => {
@@ -518,10 +510,7 @@ sendTo.discord = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "discord", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.discord?.[channelId]?.settings?.readonly
   )
     return;
 
@@ -546,10 +535,7 @@ sendTo.mattermost = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "mattermost", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.mattermost?.[channelId]?.settings?.readonly
   )
     return;
   queueOf.mattermost.add(async () => {
@@ -581,10 +567,7 @@ sendTo.vkwall = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "vkwall", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.vkwall?.[channelId]?.settings?.readonly
   )
     return;
   if (!generic.vkwall.client.app) {
@@ -622,10 +605,8 @@ sendTo.vkboard = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "vkboard", channelId, "settings", "readonly"],
-      config
-    ) //todo: !vk.WaitingForCaptcha
+    config?.channelMapping?.vkboard?.[channelId]?.settings?.readonly
+    //todo: !vk.WaitingForCaptcha
   )
     return;
   if (!generic.vkboard.client.app) {
@@ -678,10 +659,8 @@ sendTo.slack = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(
-      ["channelMapping", "slack", channelId, "settings", "readonly"],
-      config
-    )
+    config?.channelMapping?.slck?.[channelId]?.settings?.readonly
+
   )
     return;
   queueOf.slack.add(async () => {
@@ -712,7 +691,7 @@ sendTo.irc = async ({
   edited
 }: IsendToArgs) => {
   if (
-    R.path(["channelMapping", "irc", channelId, "settings", "readonly"], config)
+    config?.channelMapping?.irc?.[channelId]?.settings?.readonly
   )
     return;
   queueOf.irc.add(async () => {
@@ -761,11 +740,7 @@ prepareToWhom.irc = function ({
   text: string;
   targetChannel: string | number;
 }) {
-  const ColorificationMode = R.pathOr(
-    "mood",
-    ["channelMapping", "irc", targetChannel, "settings", "nickcolor"],
-    config
-  );
+  const ColorificationMode = config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || 'mood'
   return `${ircolors.MoodifyText({
     text,
     mood: ColorificationMode
@@ -789,11 +764,8 @@ prepareAuthor.irc = function ({
   text: string;
   targetChannel: string | number;
 }) {
-  const ColorificationMode = R.pathOr(
-    "mood",
-    ["channelMapping", "irc", targetChannel, "settings", "nickcolor"],
-    config
-  );
+  const ColorificationMode =
+    config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || 'mood'
   return `${ircolors.MoodifyText({
     text,
     mood: ColorificationMode
@@ -831,7 +803,7 @@ async function sendFrom({
   file?: string;
   edited?: boolean;
 }) {
-  const ConfigNode = R.path(["channelMapping", messenger, channelId], config);
+  const ConfigNode = config?.channelMapping?.[messenger]?.[channelId];
   if (!ConfigNode)
     return generic.LogToAdmin(
       `error finding assignment to ${messenger} channel with id ${channelId}`
@@ -918,14 +890,7 @@ async function sendFrom({
 
 receivedFrom.discord = async (message: any) => {
   if (
-    !R.path(
-      [
-        "channelMapping",
-        "discord",
-        R.pathOr("", ["channel", "id"], message).toString()
-      ],
-      config
-    )
+    !config?.channelMapping?.discord?.[(message?.channel?.id || '').toString()]
   )
     return;
   if (message.author.bot || message.channel.type !== "text") return;
@@ -941,7 +906,7 @@ receivedFrom.discord = async (message: any) => {
     );
     let file: string, localfile: string;
 
-    if (R.path([1], res)) {
+    if (res?.[1]) {
       [file, localfile] = res;
     } else {
       file = value.url;
@@ -982,10 +947,7 @@ receivedFrom.discord = async (message: any) => {
 // receivedFrom
 receivedFrom.facebook = async (message: any) => {
   if (
-    !R.path(
-      ["channelMapping", "facebook", (message.threadId || "").toString()],
-      config
-    )
+    !(config?.channelMapping?.facebook?.[(message.threadId || '').toString()])
   )
     return;
   let err, res;
@@ -1371,7 +1333,7 @@ receivedFrom.vkwall = async (message: any) => {
       fields: "nickname,screen_name"
     })
   );
-  res = R.pathOr(fromwhomId, ["response", 0], res);
+  res = res?.response?.[0] || fromwhomId;
   const author = AdaptName.vkwall(res);
 
   let arrQuotes: string[] = [];
@@ -1397,7 +1359,7 @@ receivedFrom.vkwall = async (message: any) => {
       [err, res] = await to(
         generic.vkwall.client.bot.api("board.getComments", opts)
       );
-      let text: string = R.path(["response", "items", 0, "text"], res);
+      let text: string = res?.response?.items?.[0]?.text;
       if (!text) continue;
       let replyuser: string;
       const rg = new RegExp(
@@ -1406,7 +1368,7 @@ receivedFrom.vkwall = async (message: any) => {
       if (rg.test(text)) {
         [, replyuser, text] = text.match(rg);
       } else {
-        let authorId = R.path(["response", "items", 0, "from_id"], res);
+        let authorId = res?.response?.items?.[0]?.from_id;
         [err, res] = await to(
           generic.vkwall.client.bot.api("users.get", {
             user_ids: authorId,
@@ -1414,7 +1376,7 @@ receivedFrom.vkwall = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = R.pathOr("", ["response", 0], res);
+        replyuser = res?.response?.[0];
         replyuser = AdaptName.vkwall(replyuser);
       }
       sendFrom({
@@ -1426,7 +1388,7 @@ receivedFrom.vkwall = async (message: any) => {
       });
     }
   }
-  const attachments = R.pathOr([], ["attachments"], message);
+  const attachments = message.attachments || [];
   let texts = [];
   if (attachments.length > 0) {
     for (let a of attachments) {
@@ -1493,7 +1455,7 @@ receivedFrom.vkboard = async (message: any) => {
       fields: "nickname,screen_name"
     })
   );
-  res = R.pathOr(fromwhomId, ["response", 0], res);
+  res = res?.response?.[0] || fromwhomId;
   const author = AdaptName.vkboard(res);
 
   let arrQuotes: string[] = [];
@@ -1519,7 +1481,7 @@ receivedFrom.vkboard = async (message: any) => {
       [err, res] = await to(
         generic.vkboard.client.bot.api("board.getComments", opts)
       );
-      let text: string = R.path(["response", "items", 0, "text"], res);
+      let text: string = res?.response?.items?.[0]?.text;
       if (!text) continue;
       let replyuser: string;
       const rg = new RegExp(
@@ -1528,7 +1490,7 @@ receivedFrom.vkboard = async (message: any) => {
       if (rg.test(text)) {
         [, replyuser, text] = text.match(rg);
       } else {
-        let authorId = R.path(["response", "items", 0, "from_id"], res);
+        let authorId = res?.response?.items?.[0]?.from_id;
         [err, res] = await to(
           generic.vkboard.client.bot.api("users.get", {
             user_ids: authorId,
@@ -1536,7 +1498,7 @@ receivedFrom.vkboard = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = R.pathOr("", ["response", 0], res);
+        replyuser = res?.response?.[0] || '';
         replyuser = AdaptName.vkboard(replyuser);
       }
       sendFrom({
@@ -1548,7 +1510,7 @@ receivedFrom.vkboard = async (message: any) => {
       });
     }
   }
-  const attachments = R.pathOr([], ["attachments"], message);
+  const attachments = message.attachments || [];
   let texts = [];
   if (attachments.length > 0) {
     for (let a of attachments) {
@@ -1634,7 +1596,7 @@ receivedFrom.slack = async (message: any) => {
   [err, files] = await to(Promise.all(promFiles));
   if (err) files = [];
   const author = AdaptName.slack(user);
-  const channelId = R.pathOr(message.channel, ["channel", "name"], chan);
+  const channelId = chan.channel.name || message.channel;
 
   let action;
   if (message.subtype === "me_message") action = "action";
@@ -1683,8 +1645,8 @@ receivedFrom.mattermost = async (message: any) => {
   //   });
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
-  if (R.path(["event"], message) === "post_edited") {
-    const post = JSON.parse(R.pathOr("", ["data", "post"], message));
+  if (message.event === "post_edited") {
+    const post = JSON.parse(message.data?.post || '');
 
     if (!post.id) return;
     message.event = "posted";
@@ -1775,7 +1737,7 @@ receivedFrom.mattermost = async (message: any) => {
   }
   if (
     config.channelMapping.mattermost[channelId] &&
-    !R.path(["props", "from_webhook"], postParsed) &&
+    !postParsed?.props?.from_webhook &&
     (postParsed?.type || '') === ""
   ) {
     if (!file_ids) file_ids = postParsed?.file_ids || [];
@@ -2761,7 +2723,7 @@ async function PopulateChannelMappingCore({
   config.channels.map((i: any) => {
     let i_mapped = i[messenger];
     if (config.cache[messenger])
-      i_mapped = R.path(["cache", messenger, i[messenger]], config);
+      i_mapped = config?.cache?.[messenger]?.[i[messenger]];
     if (!i_mapped) return;
     const mapping: any = {
       settings: {
@@ -2772,7 +2734,7 @@ async function PopulateChannelMappingCore({
       }
     };
     for (const key of arrMappingKeys)
-      mapping[key] = R.pathOr(i[key], ["cache", key, i[key]], config);
+      mapping[key] = config?.cache?.[key]?.[i[key]] || i[key];
 
     config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(
       mapping,
@@ -3089,7 +3051,7 @@ generic.sendOnlineUsersTo = ({
   if (network === "telegram") {
     const objChannel: any =
       generic.irc.client.chans[
-      R.path(["channelMapping", "telegram", channel, "irc"], config)
+      config?.channelMapping?.telegram?.[channel]?.irc
       ];
 
     if (!objChannel) return;
@@ -3463,11 +3425,7 @@ generic.LocalizeString = ({
   arrElemsToInterpolate: Array<Array<string>>;
 }) => {
   try {
-    const language = R.pathOr(
-      "English",
-      ["channelMapping", messenger, channelId, "settings", "language"],
-      config
-    );
+    const language = config?.channelMapping?.[messenger]?.[channelId]?.settings?.language;
     let template = localConfig[language][localized_string_key];
     const def_template = localConfig["English"][localized_string_key];
     if (!def_template) {
