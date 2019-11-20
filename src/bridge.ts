@@ -29,8 +29,8 @@ const slackify = require("./formatting-converters/slackify-html-ts");
 
 const marked = require("marked");
 const lexer = new marked.Lexer();
-lexer.rules.list = { exec: () => {} };
-lexer.rules.listitem = { exec: () => {} };
+lexer.rules.list = { exec: () => { } };
+lexer.rules.listitem = { exec: () => { } };
 const markedRenderer = new marked.Renderer();
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
@@ -223,7 +223,7 @@ generic.slack.Start = async () => {
     web: new WebClient(config.slack.token)
   };
   generic.slack.client.rtm.start().catch((e: any) => {
-    if (!R.path(["data", "ok"], e)) {
+    if (!e?.data?.ok) {
       config.MessengersAvailable.slack = false;
       debug("slack")({
         error: "Couldn't start Slack"
@@ -278,7 +278,7 @@ generic.mattermost.Start = async () => {
             resolve();
           } else {
             resolve({
-              token: R.pathOr("", ["headers", "token"], response),
+              token: response?.header?.token || '',
               id: JSON.parse(body).id
             });
           }
@@ -494,12 +494,12 @@ sendTo.telegram = async ({
         .catch((err: any) => {
           generic.LogToAdmin(
             channelId +
-              "\n\n" +
-              err.toString() +
-              "\n\n" +
-              chunk +
-              "\n\n" +
-              JSON.stringify(config.channelMapping, null, 2)
+            "\n\n" +
+            err.toString() +
+            "\n\n" +
+            chunk +
+            "\n\n" +
+            JSON.stringify(config.channelMapping, null, 2)
           );
           resolve();
         });
@@ -604,7 +604,7 @@ sendTo.vkwall = async ({
             reply_to_comment: 1,
             message: chunk
           })
-          .then((res: any) => {})
+          .then((res: any) => { })
           .catch(catchError);
         resolve();
       }, 60000);
@@ -644,7 +644,7 @@ sendTo.vkboard = async ({
             message: chunk,
             from_group: 1
           })
-          .then((res: any) => {})
+          .then((res: any) => { })
           .catch(catchError);
         resolve();
       }, 60000);
@@ -754,7 +754,7 @@ async function prepareChunks({
   return arrChunks;
 }
 
-prepareToWhom.irc = function({
+prepareToWhom.irc = function ({
   text,
   targetChannel
 }: {
@@ -772,7 +772,7 @@ prepareToWhom.irc = function({
   })}: `;
 };
 
-prepareToWhom.fallback = function({
+prepareToWhom.fallback = function ({
   text,
   targetChannel
 }: {
@@ -782,7 +782,7 @@ prepareToWhom.fallback = function({
   return `${text}: `;
 };
 
-prepareAuthor.irc = function({
+prepareAuthor.irc = function ({
   text,
   targetChannel
 }: {
@@ -800,7 +800,7 @@ prepareAuthor.irc = function({
   })}`;
 };
 
-prepareAuthor.fallback = function({
+prepareAuthor.fallback = function ({
   text,
   targetChannel
 }: {
@@ -893,7 +893,7 @@ async function sendFrom({
         Chunks[i] = await FormatMessageChunkForSending({
           messenger: messengerTo,
           channelId,
-          title: R.path(["vkboard", "group_id"], config),
+          title: config?.vkboard?.group_id,
           author,
           chunk: thisToWhom + chunk,
           action,
@@ -1444,12 +1444,12 @@ receivedFrom.vkwall = async (message: any) => {
               );
             texts.push(sizes[0].url);
             texts.push(a.photo.text);
-          } catch (e) {}
+          } catch (e) { }
           break;
         case "doc":
           try {
             texts.push(a.doc.url);
-          } catch (e) {}
+          } catch (e) { }
           break;
       }
     }
@@ -1566,12 +1566,12 @@ receivedFrom.vkboard = async (message: any) => {
               );
             texts.push(sizes[0].url);
             texts.push(a.photo.text);
-          } catch (e) {}
+          } catch (e) { }
           break;
         case "doc":
           try {
             texts.push(a.doc.url);
-          } catch (e) {}
+          } catch (e) { }
           break;
       }
     }
@@ -1765,20 +1765,20 @@ receivedFrom.mattermost = async (message: any) => {
     if (err) console.error(err.toString());
   } else {
     message.edited = false;
-    if (R.path(["data", "team_id"], message) !== config.mattermost.team_id)
+    if (message.data?.team_id !== config.mattermost.team_id)
       return;
-    if (R.path(["event"], message) !== "posted") return;
-    const post = R.path(["data", "post"], message);
+    if (message.event !== "posted") return;
+    const post = message.data?.post;
     if (!post) return;
     postParsed = JSON.parse(post);
-    channelId = R.path(["data", "channel_name"], message);
+    channelId = message.data?.channel_name;
   }
   if (
     config.channelMapping.mattermost[channelId] &&
     !R.path(["props", "from_webhook"], postParsed) &&
-    R.pathOr("", ["type"], postParsed) === ""
+    (postParsed?.type || '') === ""
   ) {
-    if (!file_ids) file_ids = R.pathOr([], ["file_ids"], postParsed);
+    if (!file_ids) file_ids = postParsed?.file_ids || [];
     let files = [];
     for (const file of file_ids) {
       const [err, promfile] = await to(
@@ -1831,7 +1831,7 @@ receivedFrom.mattermost = async (message: any) => {
       if (err2) console.error(err.toString());
       if (promfile && promfile2) files.push([promfile2, promfile]);
     }
-    if (!author) author = R.path(["data", "sender_name"], message);
+    author = author || message.data?.sender_name;
     author = author.replace(/^@/, "");
     if (files.length > 0) {
       for (const [extension, file] of files) {
@@ -1858,7 +1858,7 @@ receivedFrom.mattermost = async (message: any) => {
       messenger: "mattermost",
       channelId,
       author,
-      text: msgText || R.path(["message"], postParsed),
+      text: msgText || postParsed?.message,
       action,
       edited: message.edited
     });
@@ -1965,9 +1965,9 @@ AdaptName.vkboard = (user: any) => {
 };
 AdaptName.vkwall = AdaptName.vkboard;
 AdaptName.slack = (user: any) =>
-  R.path(["user", "profile", "display_name"], user) ||
-  R.path(["user", "real_name"], user) ||
-  R.path(["user", "name"], user);
+  user?.user?.profile?.display_name ||
+  user?.user?.real_name ||
+  user?.user?.name;
 
 // GetName
 GetName.telegram = (user: Telegram.User) => {
@@ -2512,8 +2512,8 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
 
 function TelegramRemoveAddedBots(message: Telegram.Message) {
   if (config.telegram.remove_added_bots)
-    R.pathOr([], ["new_chat_members"], message).map((u: Telegram.User) => {
-      if (u.is_bot && R.path(["telegram", "myUser", "id"], config) !== u.id)
+    (message?.new_chat_members || []).map((u: Telegram.User) => {
+      if (u.is_bot && config?.telegram?.myUser?.id !== u.id)
         generic.telegram.client
           .kickChatMember(message.chat.id, u.id)
           .catch(catchError);
@@ -2522,8 +2522,8 @@ function TelegramRemoveAddedBots(message: Telegram.Message) {
 
 function TelegramRemoveNewMemberMessage(message: Telegram.Message) {
   if (
-    message.left_chat_member ||
-    R.pathOr([], ["new_chat_members"], message).filter(
+    message?.left_chat_member ||
+    (message?.new_chat_members || []).filter(
       (u: Telegram.User) =>
         (u.username || "").length > 100 ||
         (u.first_name || "").length > 100 ||
@@ -2538,8 +2538,8 @@ function TelegramRemoveNewMemberMessage(message: Telegram.Message) {
 
 async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
   if (
-    !R.path(["chat", "id"], message) ||
-    !R.path(["telegram", "myUser", "id"], config)
+    !message?.chat?.id ||
+    !config?.telegram?.myUser?.id
   )
     return;
 
@@ -2600,8 +2600,8 @@ generic.ConfigBeforeStart = () => {
   } catch (e) {
     throw new Error(
       `ERROR while reading config:\n${e}\n\nPlease make sure ` +
-        'it exists and is valid. Run "node bridge --genconfig" to ' +
-        "generate a default config."
+      'it exists and is valid. Run "node bridge --genconfig" to ' +
+      "generate a default config."
     );
   }
 
@@ -2678,7 +2678,7 @@ GetChannels.slack = async () => {
   if (err) {
     console.error(err);
   }
-  res = R.pathOr([], ["channels"], res);
+  res = res?.channels || [];
   const json: Json = {};
   res.map((i: any) => {
     json[i.name] = i.name;
@@ -2821,30 +2821,30 @@ generic.MessengersAvailable = () => {
     if (i.irc) config.MessengersAvailable.irc = true;
   });
   if (
-    R.pathOr("", ["facebook", "email"], config) === "" ||
-    R.pathOr("", ["facebook", "password"], config) === ""
+    (config?.facebook?.email || '') === "" ||
+    (config?.facebook?.password || '') === ""
   )
     config.MessengersAvailable.facebook = false;
   if (
-    R.pathOr("", ["discord", "client"], config) === "" ||
-    R.pathOr("", ["discord", "token"], config) === "" ||
-    R.pathOr("", ["discord", "guildId"], config) === ""
+    (config?.discord?.client || '') === "" ||
+    (config?.discord?.token || '') === "" ||
+    (config?.discord?.guildId || '') === ""
   )
     config.MessengersAvailable.discord = false;
-  if (R.pathOr("", ["telegram", "token"], config) === "")
+  if ((config?.telegram?.token || '') === "")
     config.MessengersAvailable.telegram = false;
   if (
-    R.pathOr("", ["vkboard", "token"], config) === "" ||
-    R.pathOr("", ["vkboard", "group_id"], config) === "" ||
-    R.pathOr("", ["vkboard", "login"], config) === "" ||
-    R.pathOr("", ["vkboard", "password"], config) === ""
+    (config?.vkboard?.token || '') === "" ||
+    (config?.vkboard?.group_id || '') === "" ||
+    (config?.vkboard?.login || '') === "" ||
+    (config?.vkboard?.password || '') === ""
   )
     config.MessengersAvailable.vkboard = false;
   if (
-    R.pathOr("", ["vkwall", "token"], config) === "" ||
-    R.pathOr("", ["vkwall", "group_id"], config) === "" ||
-    R.pathOr("", ["vkwall", "login"], config) === "" ||
-    R.pathOr("", ["vkwall", "password"], config) === ""
+    (config?.vkwall?.token || '') === "" ||
+    (config?.vkwall?.group_id || '') === "" ||
+    (config?.vkwall?.login || '') === "" ||
+    (config?.vkwall?.password || '') === ""
   )
     config.MessengersAvailable.vkwall = false;
 };
@@ -2950,7 +2950,7 @@ StartService.mattermost = async () => {
     );
   });
   generic.mattermost.client.addEventListener("message", (message: any) => {
-    if (!R.path(["data"], message) || !config.mattermost.team_id) return;
+    if (!message?.data || !config.mattermost.team_id) return;
     message = JSON.parse(message.data);
     receivedFrom.mattermost(message);
   });
@@ -3089,7 +3089,7 @@ generic.sendOnlineUsersTo = ({
   if (network === "telegram") {
     const objChannel: any =
       generic.irc.client.chans[
-        R.path(["channelMapping", "telegram", channel, "irc"], config)
+      R.path(["channelMapping", "telegram", channel, "irc"], config)
       ];
 
     if (!objChannel) return;
