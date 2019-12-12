@@ -165,7 +165,8 @@ config.channels = [
     irc: "#lojbanme", // IRC channel with "#"
     webwidget: "#lojbanme", //how theexternal websocket service will tag this relay entity 
     "irc-nickcolor": "mood", //options: mood / color / none
-    "irc-readonly": true // if true then the channel can'tbe sent to, can only be read from. Comment out for two-way bridge
+    "irc-readonly": true, // if true then the channel can'tbe sent to, can only be read from. Comment out for two-way bridge
+    "irc-dontProcessOtherBridges": true  // if true then messages like "<another_bridge>: <user>: user's message" will be sent as if from another_bridge, not from user
   },
   {
     // another relay entity

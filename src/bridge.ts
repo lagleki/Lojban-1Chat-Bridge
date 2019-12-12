@@ -1841,18 +1841,21 @@ receivedFrom.irc = async ({
   error: any;
   type: string;
 }) => {
-  if (!config.channelMapping.irc) return;
+  if (!config?.channelMapping?.irc) return;
   if (type === "message") {
     if (text.search(new RegExp(config.spamremover.irc.source, "i")) >= 0)
       return;
     text = ircolors.stripColorsAndStyle(text);
+
     text = `<${ircolors
       .stripColorsAndStyle(author)
-      .replace(/_+$/g, "")}>: ${text}`
-      .replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
-      .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ")
-      .replace(/^<([^<>]+?)>: /, "*$1*: ")
+      .replace(/_+$/g, "")}>: ${text}`;
+    if (!config?.channelMapping?.irc?.[channelId]?.settings?["irc-dontProcessOtherBridges"])
+      text = text.replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
+        .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ");
+    text = text.replace(/^<([^<>]+?)>: /, "*$1*: ")
       .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ");
+
     [, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/);
     if (text && text !== "") {
       sendFrom({
