@@ -16,6 +16,10 @@ const { login } = require("libfb");
 
 import * as Telegram from "node-telegram-bot-api";
 const sanitizeHtml = require("sanitize-html");
+const createDOMPurify = require('dompurify');
+const { JSDOM } = require('jsdom');
+const window = (new JSDOM('')).window;
+const DOMPurify = createDOMPurify(window);
 
 const { VK } = require("vk-io");
 const VkBot = require("node-vk-bot-api");
@@ -1850,7 +1854,7 @@ receivedFrom.irc = async ({
     text = `<${ircolors
       .stripColorsAndStyle(author)
       .replace(/_+$/g, "")}>: ${text}`;
-    if (!config?.channelMapping?.irc?.[channelId]?.settings?["irc-dontProcessOtherBridges"])
+    if (!config?.channelMapping?.irc?.[channelId]?.settings?.["irc-dontProcessOtherBridges"])
       text = text.replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
         .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ");
     text = text.replace(/^<([^<>]+?)>: /, "*$1*: ")
@@ -3202,11 +3206,13 @@ GetChunks.irc = async (text: string, messenger: string) => {
 GetChunks.webwidget = async (text: string, messenger: string) => {
   return [text];
 };
+const diffTwo = (diffMe: string, diffBy: string) => diffMe.split(diffBy).join('')
+
 GetChunks.fallback = async (text: string, messenger: string) => {
   // text = await appendPageTitles(text);
   const limit = config[messenger].MessageLength || 400;
   const r = new RegExp(`(.{${limit - 40},${limit}})(?= )`, "g");
-  const arrText: string[] = text
+  let arrText: string[] = text
     .replace(r, "$1\r")
     .split(/\r/)
     .reduce((acc: string[], i: string) => {
@@ -3222,9 +3228,20 @@ GetChunks.fallback = async (text: string, messenger: string) => {
         acc = acc.concat(arrI);
       } else acc.push(i);
       return acc;
-    }, [])
-    .filter((i: string) => i !== "");
-  return arrText;
+    }, []);
+  let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
+  arrText2 = arrText2.filter((i: string) => i !== "");
+  arrText2 = arrText2.map((chunk, index) => {
+    let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
+    if (diff !== '') {
+      // add opening tags
+      diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
+      chunk = DOMPurify.sanitize(diff + arrText2[index]);
+    }
+    return chunk;
+  })
+
+  return arrText2;
 };
 
 generic.downloadFile = async ({
