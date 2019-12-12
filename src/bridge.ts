@@ -12,7 +12,7 @@ process.env.NTBA_FIX_319 = 1;
 const package_json = require("../package");
 
 // messengers' libs
-const { login } = require("../lib/libfb-js/dist/FBMessenger.js");
+const { login } = require("libfb");
 
 import * as Telegram from "node-telegram-bot-api";
 const sanitizeHtml = require("sanitize-html");

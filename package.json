@@ -36,6 +36,7 @@
     "html-entities": "^1.2.1",
     "htmlparser": "^1.7.7",
     "irc-upd": "^0.10.0",
+    "libfb": "^2.3.5",
     "lojban": "^1.1.0",
     "marked": "^0.7.0",
     "mkdirp-sync": "0.0.3",
