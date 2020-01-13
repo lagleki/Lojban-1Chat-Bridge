@@ -21,7 +21,9 @@ const { JSDOM } = require('jsdom');
 const window = (new JSDOM('')).window;
 const DOMPurify = createDOMPurify(window);
 
-const { VK } = require("vk-io");
+import { VK } from 'vk-io';
+import { Authorization } from '@vk-io/authorization';
+
 const VkBot = require("node-vk-bot-api");
 
 import Discord = require("discord.js");
@@ -185,13 +187,16 @@ generic.webwidget.Start = () => {
 };
 
 generic.vkboard.Start = async () => {
-  const vkio = new VK();
-  vkio.setOptions({
+  const vkio = new VK({
     appId: config.vkboard.appId,
     login: config.vkboard.login,
-    password: config.vkboard.password
+    password: config.vkboard.password,
+    authScope: 'all!messages'
   });
-  const [err, app] = await to(vkio.auth.implicitFlowUser().run());
+  const authorization = new Authorization(vkio);
+  const direct = authorization.implicitFlowUser();
+  const [err, app] = await to(direct.run());
+
   if (err) {
     console.error("vkboard", err.toString());
   }
@@ -203,13 +208,15 @@ generic.vkboard.Start = async () => {
 };
 
 generic.vkwall.Start = async () => {
-  const vkio = new VK();
-  vkio.setOptions({
-    appId: config.vkwall.appId,
-    login: config.vkwall.login,
-    password: config.vkwall.password
+  const vkio = new VK({
+    appId: config.vkboard.appId,
+    login: config.vkboard.login,
+    password: config.vkboard.password,
+    authScope: 'all!messages'
   });
-  const [err, app] = await to(vkio.auth.implicitFlowUser().run());
+  const authorization = new Authorization(vkio);
+  const direct = authorization.implicitFlowUser();
+  const [err, app] = await to(direct.run());
   if (err) {
     console.error("vkwall", err.toString());
   }
@@ -3229,19 +3236,19 @@ GetChunks.fallback = async (text: string, messenger: string) => {
       } else acc.push(i);
       return acc;
     }, []);
-  let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
-  arrText2 = arrText2.filter((i: string) => i !== "");
-  arrText2 = arrText2.map((chunk, index) => {
-    let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
-    if (diff !== '') {
-      // add opening tags
-      diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
-      chunk = DOMPurify.sanitize(diff + arrText2[index]);
-    }
-    return chunk;
-  })
+  // let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
+  // arrText2 = arrText2.filter((i: string) => i !== "");
+  // arrText2 = arrText2.map((chunk, index) => {
+  //   let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
+  //   if (diff !== '') {
+  //     // add opening tags
+  //     diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
+  //     chunk = DOMPurify.sanitize(diff + arrText2[index]);
+  //   }
+  //   return chunk;
+  // })
 
-  return arrText2;
+  return arrText;
 };
 
 generic.downloadFile = async ({
