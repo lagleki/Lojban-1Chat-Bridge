@@ -191,7 +191,7 @@ generic.vkboard.Start = async () => {
     appId: config.vkboard.appId,
     login: config.vkboard.login,
     password: config.vkboard.password,
-    authScope: 'all!messages'
+    authScope: 'offline,wall,messages,groups'
   });
   const authorization = new Authorization(vkio);
   const direct = authorization.implicitFlowUser();
@@ -212,7 +212,7 @@ generic.vkwall.Start = async () => {
     appId: config.vkboard.appId,
     login: config.vkboard.login,
     password: config.vkboard.password,
-    authScope: 'all!messages'
+    authScope: 'offline,wall,messages,groups'
   });
   const authorization = new Authorization(vkio);
   const direct = authorization.implicitFlowUser();
@@ -3468,7 +3468,7 @@ generic.LocalizeString = ({
 };
 
 function catchError(err: any) {
-  console.log(err);
+  console.log(JSON.stringify(err));
 }
 
 //START
