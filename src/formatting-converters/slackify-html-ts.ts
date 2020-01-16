@@ -10,7 +10,7 @@ module.exports = function slackify(html: string) {
   const parser = new htmlparser.Parser(handler);
   parser.parseComplete(html);
   const dom = handler.dom;
-  if (dom) return entities.decode(walk(dom));
+  if (dom) return (walk(dom));
   else return "";
 };
 
@@ -27,6 +27,9 @@ function walk(dom: any) {
           case "strong":
           case "b":
             out += `*${walk(el.children)}*`;
+            break;
+          case "del":
+            out += `~${walk(el.children)}~`;
             break;
           case "code":
             out += `\`\`\`\n${walk(el.children)}\`\`\``;

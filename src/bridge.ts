@@ -58,7 +58,7 @@ function markedParse({
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
     return `<pre><code>${text}</code></pre>\n`;
   };
-  const res = marked.parser(lexer.lex(text), { renderer: markedRenderer });
+  const res = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer });
   debug(messenger)({ "converting source text": text, result: res });
   return res;
 }
@@ -1926,8 +1926,9 @@ receivedFrom.irc = async ({
 };
 
 // AdaptName
-AdaptName.discord = (message: any) =>
-  message.member.nickname || message.author.username;
+AdaptName.discord = (message: any) => {
+  return message.member?.nickname || message.author?.username;
+}
 AdaptName.facebook = (user: any) => user.name; // || user.vanity || user.firstName;
 AdaptName.telegram = (name: string) =>
   config.telegram.userMapping[name] || name;
@@ -2223,7 +2224,7 @@ convertFrom.discord = async ({
   messenger: string;
 }) =>
   markedParse({
-    text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n"),
+    text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
     messenger: "discord",
     dontEscapeBackslash: true
   });
@@ -2347,7 +2348,7 @@ convertTo.mattermost = async ({
       hrefConvert: false,
       dialect: messengerTo
     }),
-    convertHtmlEntities: true
+    convertHtmlEntities: false
   });
   debug(messenger)({ messengerTo, "converting text": text, result: res });
   return res;
@@ -3236,17 +3237,19 @@ GetChunks.fallback = async (text: string, messenger: string) => {
       } else acc.push(i);
       return acc;
     }, []);
-  // let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
-  // arrText2 = arrText2.filter((i: string) => i !== "");
-  // arrText2 = arrText2.map((chunk, index) => {
-  //   let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
-  //   if (diff !== '') {
-  //     // add opening tags
-  //     diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
-  //     chunk = DOMPurify.sanitize(diff + arrText2[index]);
-  //   }
-  //   return chunk;
-  // })
+  //discord:
+  let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
+  arrText2 = arrText2.filter((i: string) => i !== "");
+  arrText = arrText2.map((chunk, index) => {
+    let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
+    if (diff !== '') {
+      // add opening tags
+      diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
+      chunk = DOMPurify.sanitize(diff + arrText2[index]);
+    }
+    return chunk;
+  });
+  ///discord
 
   return arrText;
 };

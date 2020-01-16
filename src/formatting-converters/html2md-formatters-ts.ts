@@ -5,6 +5,7 @@
  */
 
 const headingRegex = /<h(\d*)>([\s\S]*?)<\/h\d*>/gim;
+const delRegex = /<del>([\s\S]*?)<\/del>/gim;
 const pRegex = /<p>([\s\S]*?)<\/p>/gim;
 const ulRegex = /<ul>([\s\S]*?)<\/ul>/gim;
 const olRegex = /<ol>([\s\S]*?)<\/ol>/gim;
@@ -150,6 +151,23 @@ function replaceParagraph({
 }
 
 /**
+ * @description replaces del section with equalent markdown
+ * syntax
+ * @method replaceDel
+ * @param  {String}       doc [description]
+ * @return {String}           [description]
+ */
+function replaceDel({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({ regex: delRegex, doc });
+}
+
+/**
  * @description replaces pre section with equalent markdown
  * syntax
  * @method replacePre
@@ -288,6 +306,7 @@ function replaceLi({
 module.exports = [
   replaceHeading,
   replaceParagraph,
+  replaceDel,
   replacePre,
   replaceCode,
   replaceUl,
