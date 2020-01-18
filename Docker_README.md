@@ -30,7 +30,7 @@ This only calls the command `teleirc --genconfig` which creates the file `/home/
 
 **Step 4: Create your bot on Telegram**
 
-- Set up your bot with [BotFather](https://telegram.me/botfather)
+- Set up your bot with [BotFather](https://t.me/botfather)
 - After the creation of the bot you will get a token for the HTTP API to be used in the next step.
 - Use the `/setprivacy` command with `BotFather` to allow the bot to see all Telegram messages
 

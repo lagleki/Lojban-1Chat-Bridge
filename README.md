@@ -1,5 +1,7 @@
 A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [Slack](https://slack.com) ↔ IRC ↔ [Mattermost](https://mattermost.com/) ↔ [Facebook Messenger](https://facebook.com)  ↔ vk.com (board) ↔ vk.com (wall)  ↔ websocket (API for external use in custom apps or custom messengers) gateway.
 
+![standards](https://imgs.xkcd.com/comics/standards.png)
+
 [![Build Status](https://travis-ci.org/lagleki/Lojban-1Chat-Bridge.svg?branch=develop)](https://travis-ci.org/lagleki/Lojban-1Chat-Bridge)
 [![dependencies](https://david-dm.org/lagleki/Lojban-1Chat-Bridge.svg)](https://david-dm.org/lagleki/Lojban-1Chat-Bridge#info=Dependencies)
 [![devDependencies](https://david-dm.org/lagleki/Lojban-1Chat-Bridge/dev-status.svg)](https://david-dm.org/lagleki/Lojban-1Chat-Bridge#info=devDependencies)

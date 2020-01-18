@@ -58,9 +58,9 @@ function markedParse({
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
     return `<pre><code>${text}</code></pre>\n`;
   };
-  const res = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer });
-  debug(messenger)({ "converting source text": text, result: res });
-  return res;
+  const result = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer });
+  debug(messenger)({ "converting source text": text, result });
+  return result;
 }
 const html2md = require("./formatting-converters/html2md-ts");
 
@@ -820,6 +820,8 @@ async function sendFrom({
     );
   if (!text || text === "") return;
   text = await convertFrom[messenger]({ text, messenger });
+  text = text.replace(/\*/g, "&#x2A;")
+    .replace(/_/g, "&#x5F;");
   text = text.replace(/^(<br\/>)+/, "");
 
   for (const messengerTo of Object.keys(config.channelMapping)) {
@@ -2215,7 +2217,7 @@ convertFrom.mattermost = async ({
 }: {
   text: string;
   messenger: string;
-}) => markedParse({ text, messenger: "mattermost" });
+}) => markedParse({ text: generic.escapeHTML(text), messenger: "mattermost" });
 convertFrom.discord = async ({
   text,
   messenger
@@ -2241,19 +2243,28 @@ convertFrom.irc = async ({
 }: {
   text: string;
   messenger: string;
-}) =>
-  generic
+}) => {
+  const result = generic
     .escapeHTML(text)
-    .replace(/\b\*(\w+)\*\b/g, "<b>$1</b>")
-    .replace(/\b_(\w+)_\b/g, "<i>$1</i>");
+    .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
+    .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
+    ;
+  debug(messenger)({
+    messenger,
+    "converting text": text,
+    result
+  });
+
+  return result;
+}
 
 async function convertToPlainText(text: string) {
   let a = await generic.unescapeHTML({
     text: text
-      .replace(/<strong>(\w)<\/strong>/g, "*$1*")
-      .replace(/<b>(\w)<\/b>/g, "*$1*")
-      .replace(/<em>(\w)<\/em>/g, "_$1_")
-      .replace(/<i>(\w)<\/i>/g, "_$1_")
+      .replace(/<strong>(.+?)<\/strong>/g, "*$1*")
+      .replace(/<b>(.+?)<\/b>/g, "*$1*")
+      .replace(/<em>(.+?)<\/em>/g, "_$1_")
+      .replace(/<i>(.+?)<\/i>/g, "_$1_")
       .replace(/<blockquote>([\s\S]*?[\n\r]?)<\/blockquote>/gm, "> $1\n")
       .replace(/<br\/?>/gi, "\n")
       .replace(/<a.*?href="(.+?)".*?>(.+?)<\/a>/gi, (...arr) => {
@@ -2291,7 +2302,7 @@ convertTo.telegram = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const res = generic
+  const result = generic
     .sanitizeHtml(
       text.replace(
         /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
@@ -2306,9 +2317,9 @@ convertTo.telegram = async ({
       /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
       "<pre>$1</pre>"
     ),
-    result: res
+    result
   });
-  return res;
+  return result;
 };
 convertTo.vkboard = async ({
   text,
@@ -2329,9 +2340,9 @@ convertTo.slack = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const res = slackify(text);
-  debug(messenger)({ messengerTo, "converting text": text, result: res });
-  return res;
+  const result = slackify(text);
+  debug(messenger)({ messengerTo, "converting text": text, result });
+  return result;
 };
 convertTo.mattermost = async ({
   text,
@@ -2342,16 +2353,16 @@ convertTo.mattermost = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const res = await generic.unescapeHTML({
+  const result = await generic.unescapeHTML({
     text: html2md.convert({
       string: text,
       hrefConvert: false,
       dialect: messengerTo
     }),
-    convertHtmlEntities: false
+    convertHtmlEntities: true
   });
-  debug(messenger)({ messengerTo, "converting text": text, result: res });
-  return res;
+  debug(messenger)({ messengerTo, "converting text": text, result });
+  return result;
 };
 convertTo.discord = async ({
   text,
@@ -2362,16 +2373,18 @@ convertTo.discord = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const res = await generic.unescapeHTML({
+  const result = await generic.unescapeHTML({
     text: html2md.convert({
-      string: text,
+      string: text.replace(/&#x2A;/g, "&#x5C;&#x2A;")
+        .replace(/&#x5F;/g, "&#x5C;&#x5F;"),
       hrefConvert: false,
       dialect: messengerTo
     }),
-    convertHtmlEntities: true
+    convertHtmlEntities: true,
+    escapeBackslashes: false
   });
-  debug(messenger)({ messengerTo, "converting text": text, result: res });
-  return res;
+  debug(messenger)({ messengerTo, "converting text": text, result });
+  return result;
 };
 
 convertTo.webwidget = async ({
@@ -2392,7 +2405,11 @@ convertTo.irc = async ({
   text: string;
   messenger: string;
   messengerTo: string;
-}) => await convertToPlainText(text);
+}) => {
+  const result = await convertToPlainText(text);
+  debug(messenger)({ messengerTo, "converting text": text, result });
+  return result;
+}
 
 // generic.telegram
 generic.telegram.serveFile = (fileId: number) =>
@@ -3133,26 +3150,28 @@ const htmlEntities: any = {
 };
 generic.unescapeHTML = ({
   text,
-  convertHtmlEntities
+  convertHtmlEntities,
+  escapeBackslashes = true
 }: {
   text: string;
   convertHtmlEntities?: boolean;
+  escapeBackslashes?: boolean;
 }) => {
-  return text
-    .replace(/\\/g, "\\")
-    .replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
-      let match: any;
+  if (escapeBackslashes) text = text.replace(/\\/g, "\\");
+  text = text.replace(/\&([^;]+);/g, (entity: string, entityCode: string) => {
+    let match: any;
 
-      if (convertHtmlEntities && htmlEntities[entityCode]) {
-        return htmlEntities[entityCode];
-      } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
-        return String.fromCharCode(parseInt(match[1], 16));
-      } else if ((match = entityCode.match(/^#(\d+)$/))) {
-        return String.fromCharCode(~~match[1]);
-      } else {
-        return entity;
-      }
-    });
+    if (convertHtmlEntities && htmlEntities[entityCode]) {
+      return htmlEntities[entityCode];
+    } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
+      return String.fromCharCode(parseInt(match[1], 16));
+    } else if ((match = entityCode.match(/^#(\d+)$/))) {
+      return String.fromCharCode(~~match[1]);
+    } else {
+      return entity;
+    }
+  });
+  return text;
 };
 
 function splitSlice(str: string, len: number) {
@@ -3238,17 +3257,17 @@ GetChunks.fallback = async (text: string, messenger: string) => {
       return acc;
     }, []);
   //discord:
-  let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
-  arrText2 = arrText2.filter((i: string) => i !== "");
-  arrText = arrText2.map((chunk, index) => {
-    let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
-    if (diff !== '') {
-      // add opening tags
-      diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
-      chunk = DOMPurify.sanitize(diff + arrText2[index]);
-    }
-    return chunk;
-  });
+  // let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
+  // arrText2 = arrText2.filter((i: string) => i !== "");
+  // arrText = arrText2.map((chunk, index) => {
+  //   let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
+  //   if (diff !== '') {
+  //     // add opening tags
+  //     diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
+  //     chunk = DOMPurify.sanitize(diff + arrText2[index]);
+  //   }
+  //   return chunk;
+  // });
   ///discord
 
   return arrText;

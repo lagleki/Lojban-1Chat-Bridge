@@ -10,7 +10,7 @@ module.exports = function slackify(html: string) {
   const parser = new htmlparser.Parser(handler);
   parser.parseComplete(html);
   const dom = handler.dom;
-  if (dom) return (walk(dom));
+  if (dom) return entities.decode(walk(dom).replace(/&lt;/g, '&amp;lt;').replace(/&gt;/g, '&amp;gt;'));
   else return "";
 };
 
