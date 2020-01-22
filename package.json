@@ -13,6 +13,7 @@
     "dev": "ts-node src/bridge.ts",
     "start": "nodemon --watch dist --exec \"node ./dist/bridge.js\"",
     "push": "git add . ; git commit -m 'fixes' ; git push",
+    "save": "git add . ; git commit -a ; git push",
     "test": "NODE_ENV=test ./node_modules/mocha/bin/mocha"
   },
   "licenses": [

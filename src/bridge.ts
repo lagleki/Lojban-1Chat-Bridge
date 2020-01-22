@@ -732,6 +732,9 @@ async function prepareChunks({
   if (GetChunks[messengerTo]) fallback = messengerTo;
   arrChunks = await GetChunks[fallback](text, messengerTo);
   for (let i in arrChunks) {
+    debug("generic")(
+      `converting for messenger ${messengerTo} the text "` + arrChunks[i] + `"`
+    );
     if (edited)
       arrChunks[i] = generic.LocalizeString({
         messenger,
@@ -739,6 +742,15 @@ async function prepareChunks({
         localized_string_key: `OverlayMessageWithEditedMark.${messengerTo}`,
         arrElemsToInterpolate: [["message", arrChunks[i]]]
       });
+
+    arrChunks[i] = await convertTo[messengerTo]({
+      text: arrChunks[i],
+      messenger,
+      messengerTo
+    });
+    debug("generic")(
+      `converted for messenger ${messengerTo} to text "` + arrChunks[i] + `"`
+    );
   }
   return arrChunks;
 }
@@ -853,25 +865,15 @@ async function sendFrom({
           text: author,
           targetChannel: ConfigNode[messengerTo]
         });
-      debug("generic")(
-        `converting for messenger ${messengerTo} the text "` + text + `"`
-      );
-      let textTo = await convertTo[messengerTo]({
-        text,
-        messenger,
-        messengerTo
-      });
-      debug("generic")(
-        `converted for messenger ${messengerTo} to text "` + textTo + `"`
-      );
 
       let Chunks = await prepareChunks({
         messenger,
         channelId,
-        text: textTo,
+        text,
         edited,
         messengerTo
       });
+
       for (const i in Chunks) {
         const chunk = Chunks[i];
         Chunks[i] = await FormatMessageChunkForSending({
@@ -3225,51 +3227,68 @@ function splitSlice(str: string, len: number) {
 //   return text;
 // }
 
-GetChunks.irc = async (text: string, messenger: string) => {
-  text = text.replace(/\n/g, "\r");
-  return await GetChunks.fallback(text, messenger);
-};
+// GetChunks.irc = async (text: string, messenger: string) => {
+//   text = text.replace(/\n/g, "\r");
+//   return await GetChunks.fallback(text, messenger);
+// };
 
 GetChunks.webwidget = async (text: string, messenger: string) => {
   return [text];
 };
-const diffTwo = (diffMe: string, diffBy: string) => diffMe.split(diffBy).join('')
+
+const diffTwo = (diffMe: string, diffBy: string) => diffMe.split(diffBy).join('');
+
+function HTMLSplitter(text: string, limit = 400) {
+  const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, 'g');
+  text = sanitizeHtml(text.replace(/[\r\n]/g, ''), {
+    allowedTags: ['b', 'strong', 'i', 'pre', 'code', 'a', 'em'],
+    allowedAttributes: {
+      a: ['href'],
+    },
+  });
+  text = text.replace(/<a href=/g, '<a_href=');
+  let thisChunk;
+  let stop = false;
+  let Chunks = [];
+  while (text !== '') {
+    if (text.length >= limit) {
+      thisChunk = text.substring(0, limit);
+      text = text.substring(limit);
+      let lastSpace = thisChunk.lastIndexOf(' ');
+      if (lastSpace <= limit / 2) {
+        //no spaces found
+        lastSpace = thisChunk.search(r);
+      }
+      text = thisChunk.substring(lastSpace) + text;
+      thisChunk = thisChunk.substring(0, lastSpace);
+    } else {
+      //if text is less than limit symbols then process it and go out of the loop
+      thisChunk = text;
+      stop = true;
+    }
+    const thisChunkUntruncated = DOMPurify.sanitize(thisChunk);
+    Chunks.push(thisChunkUntruncated);
+    if (stop) break;
+    let diff = diffTwo(thisChunkUntruncated, thisChunk);
+    if (diff !== '') {
+      // add opening tags
+      diff = diff
+        .split(/(?=<)/)
+        .reverse()
+        .map(i => i.replace('/', ''))
+        .join('');
+      text = DOMPurify.sanitize(diff + text);
+    }
+  }
+  Chunks = Chunks.map(chunk => chunk.replace(/<a_href=/g, '<a href='));
+
+  return Chunks;
+}
 
 GetChunks.fallback = async (text: string, messenger: string) => {
   // text = await appendPageTitles(text);
   const limit = config[messenger].MessageLength || 400;
-  const r = new RegExp(`(.{${limit - 40},${limit}})(?= )`, "g");
-  let arrText: string[] = text
-    .replace(r, "$1\r")
-    .split(/\r/)
-    .reduce((acc: string[], i: string) => {
-      if (Buffer.byteLength(i, "utf8") > limit) {
-        const arrI: string[] = i.split(/(?=<a href="https?:\/\/)/gu);
-        acc = acc.concat(arrI);
-      } else acc.push(i);
-      return acc;
-    }, [])
-    .reduce((acc: string[], i: string) => {
-      if (Buffer.byteLength(i, "utf8") > limit) {
-        const arrI: string[] = splitSlice(i, limit);
-        acc = acc.concat(arrI);
-      } else acc.push(i);
-      return acc;
-    }, []);
-  //discord:
-  // let arrText2: string[] = arrText.map(chunk => DOMPurify.sanitize(chunk));
-  // arrText2 = arrText2.filter((i: string) => i !== "");
-  // arrText = arrText2.map((chunk, index) => {
-  //   let diff = diffTwo(arrText[index - 1] || '', arrText2[index - 1] || '');
-  //   if (diff !== '') {
-  //     // add opening tags
-  //     diff = diff.split(/(?=<)/).reverse().map((i: string) => i.replace("/", '')).join('');
-  //     chunk = DOMPurify.sanitize(diff + arrText2[index]);
-  //   }
-  //   return chunk;
-  // });
-  ///discord
-
+  let arrText: string[] = HTMLSplitter(text, limit);
   return arrText;
 };
 
