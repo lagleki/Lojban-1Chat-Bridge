@@ -84,7 +84,9 @@ module.exports = {
           return `[${name}](${href})`;
         }
       }
-    );
+    )
+    .replace(/<br>/g,'\n')
+    ;
     return html;
   },
   /**

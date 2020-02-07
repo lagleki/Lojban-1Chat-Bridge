@@ -16,13 +16,13 @@ const { login } = require("libfb");
 
 import * as Telegram from "node-telegram-bot-api";
 const sanitizeHtml = require("sanitize-html");
-const createDOMPurify = require('dompurify');
-const { JSDOM } = require('jsdom');
-const window = (new JSDOM('')).window;
+const createDOMPurify = require("dompurify");
+const { JSDOM } = require("jsdom");
+const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
 
-import { VK } from 'vk-io';
-import { Authorization } from '@vk-io/authorization';
+import { VK } from "vk-io";
+import { Authorization } from "@vk-io/authorization";
 
 const VkBot = require("node-vk-bot-api");
 
@@ -33,10 +33,12 @@ const emoji = require("node-emoji");
 
 const slackify = require("./formatting-converters/slackify-html-ts");
 
+const discordParser = require("discord-markdown");
+
 const marked = require("marked");
 const lexer = new marked.Lexer();
-lexer.rules.list = { exec: () => { } };
-lexer.rules.listitem = { exec: () => { } };
+lexer.rules.list = { exec: () => {} };
+lexer.rules.listitem = { exec: () => {} };
 const markedRenderer = new marked.Renderer();
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 
@@ -58,7 +60,10 @@ function markedParse({
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
     return `<pre><code>${text}</code></pre>\n`;
   };
-  const result = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer });
+  const result = marked.parser(lexer.lex(text), {
+    gfm: true,
+    renderer: markedRenderer
+  });
   debug(messenger)({ "converting source text": text, result });
   return result;
 }
@@ -191,7 +196,7 @@ generic.vkboard.Start = async () => {
     appId: config.vkboard.appId,
     login: config.vkboard.login,
     password: config.vkboard.password,
-    authScope: 'offline,wall,messages,groups'
+    authScope: "offline,wall,messages,groups"
   });
   const authorization = new Authorization(vkio);
   const direct = authorization.implicitFlowUser();
@@ -212,7 +217,7 @@ generic.vkwall.Start = async () => {
     appId: config.vkboard.appId,
     login: config.vkboard.login,
     password: config.vkboard.password,
-    authScope: 'offline,wall,messages,groups'
+    authScope: "offline,wall,messages,groups"
   });
   const authorization = new Authorization(vkio);
   const direct = authorization.implicitFlowUser();
@@ -288,7 +293,7 @@ generic.mattermost.Start = async () => {
             resolve();
           } else {
             resolve({
-              token: response?.headers?.token || '',
+              token: response?.headers?.token || "",
               id: JSON.parse(body).id
             });
           }
@@ -375,7 +380,7 @@ async function FormatMessageChunkForSending({
         ["title", title]
       ]
     });
-  } else if ((author || '') !== "") {
+  } else if ((author || "") !== "") {
     if ((config[messenger].Actions || []).includes(action)) {
       chunk = generic.LocalizeString({
         messenger,
@@ -404,7 +409,10 @@ async function FormatMessageChunkForSending({
       messenger,
       channelId,
       localized_string_key: `sendTo.${messenger}.ChunkOnly`,
-      arrElemsToInterpolate: [["chunk", chunk], ["title", title]]
+      arrElemsToInterpolate: [
+        ["chunk", chunk],
+        ["title", title]
+      ]
     });
   }
   return chunk;
@@ -418,9 +426,7 @@ sendTo.webwidget = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.webwidget?.[channelId]?.settings?.readonly
-  )
+  if (config?.channelMapping?.webwidget?.[channelId]?.settings?.readonly)
     return;
   const data = {
     channelId,
@@ -452,8 +458,7 @@ sendTo.facebook = async ({
   edited
 }: IsendToArgs) => {
   if (
-    config?.channelMapping?.facebook?.[channelId]?.settings.readonly
-    ||
+    config?.channelMapping?.facebook?.[channelId]?.settings.readonly ||
     !generic.facebook.client
   )
     return;
@@ -481,10 +486,7 @@ sendTo.telegram = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.telegram?.[channelId]?.settings?.readonly
-  )
-    return;
+  if (config?.channelMapping?.telegram?.[channelId]?.settings?.readonly) return;
   queueOf.telegram.add(async () => {
     await new Promise((resolve: any) => {
       debug("telegram")({ "sending text": chunk });
@@ -496,12 +498,12 @@ sendTo.telegram = async ({
         .catch((err: any) => {
           generic.LogToAdmin(
             channelId +
-            "\n\n" +
-            err.toString() +
-            "\n\n" +
-            chunk +
-            "\n\n" +
-            JSON.stringify(config.channelMapping, null, 2)
+              "\n\n" +
+              err.toString() +
+              "\n\n" +
+              chunk +
+              "\n\n" +
+              JSON.stringify(config.channelMapping, null, 2)
           );
           resolve();
         });
@@ -519,10 +521,7 @@ sendTo.discord = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.discord?.[channelId]?.settings?.readonly
-  )
-    return;
+  if (config?.channelMapping?.discord?.[channelId]?.settings?.readonly) return;
 
   queueOf.discord.add(async () => {
     await new Promise((resolve: any) => {
@@ -544,9 +543,7 @@ sendTo.mattermost = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.mattermost?.[channelId]?.settings?.readonly
-  )
+  if (config?.channelMapping?.mattermost?.[channelId]?.settings?.readonly)
     return;
   queueOf.mattermost.add(async () => {
     await new Promise((resolve: any) => {
@@ -576,10 +573,7 @@ sendTo.vkwall = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.vkwall?.[channelId]?.settings?.readonly
-  )
-    return;
+  if (config?.channelMapping?.vkwall?.[channelId]?.settings?.readonly) return;
   if (!generic.vkwall.client.app) {
     config.MessengersAvailable.vkwall = false;
     return;
@@ -597,7 +591,7 @@ sendTo.vkwall = async ({
             reply_to_comment: 1,
             message: chunk
           })
-          .then((res: any) => { })
+          .then((res: any) => {})
           .catch(catchError);
         resolve();
       }, 60000);
@@ -635,7 +629,7 @@ sendTo.vkboard = async ({
             message: chunk,
             from_group: 1
           })
-          .then((res: any) => { })
+          .then((res: any) => {})
           .catch(catchError);
         resolve();
       }, 60000);
@@ -668,11 +662,7 @@ sendTo.slack = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.slack?.[channelId]?.settings?.readonly
-
-  )
-    return;
+  if (config?.channelMapping?.slack?.[channelId]?.settings?.readonly) return;
   queueOf.slack.add(async () => {
     await new Promise((resolve: any) => {
       chunk = emoji.unemojify(chunk);
@@ -700,10 +690,7 @@ sendTo.irc = async ({
   file,
   edited
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.irc?.[channelId]?.settings?.readonly
-  )
-    return;
+  if (config?.channelMapping?.irc?.[channelId]?.settings?.readonly) return;
   queueOf.irc.add(async () => {
     await new Promise((resolve: any) => {
       // if (config.irc.Actions.includes(action))
@@ -755,21 +742,22 @@ async function prepareChunks({
   return arrChunks;
 }
 
-prepareToWhom.irc = function ({
+prepareToWhom.irc = function({
   text,
   targetChannel
 }: {
   text: string;
   targetChannel: string | number;
 }) {
-  const ColorificationMode = config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || 'mood'
+  const ColorificationMode =
+    config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || "mood";
   return `${ircolors.MoodifyText({
     text,
     mood: ColorificationMode
   })}: `;
 };
 
-prepareToWhom.fallback = function ({
+prepareToWhom.fallback = function({
   text,
   targetChannel
 }: {
@@ -779,7 +767,7 @@ prepareToWhom.fallback = function ({
   return `${text}: `;
 };
 
-prepareAuthor.irc = function ({
+prepareAuthor.irc = function({
   text,
   targetChannel
 }: {
@@ -787,14 +775,14 @@ prepareAuthor.irc = function ({
   targetChannel: string | number;
 }) {
   const ColorificationMode =
-    config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || 'mood'
+    config?.channelMapping?.irc?.[targetChannel]?.settings?.nickcolor || "mood";
   return `${ircolors.MoodifyText({
     text,
     mood: ColorificationMode
   })}`;
 };
 
-prepareAuthor.fallback = function ({
+prepareAuthor.fallback = function({
   text,
   targetChannel
 }: {
@@ -832,8 +820,7 @@ async function sendFrom({
     );
   if (!text || text === "") return;
   text = await convertFrom[messenger]({ text, messenger });
-  text = text.replace(/\*/g, "&#x2A;")
-    .replace(/_/g, "&#x5F;");
+  text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
   text = text.replace(/^(<br\/>)+/, "");
 
   for (const messengerTo of Object.keys(config.channelMapping)) {
@@ -904,7 +891,7 @@ async function sendFrom({
 
 receivedFrom.discord = async (message: any) => {
   if (
-    !config?.channelMapping?.discord?.[(message?.channel?.id || '').toString()]
+    !config?.channelMapping?.discord?.[(message?.channel?.id || "").toString()]
   )
     return;
   if (message.author.bot || message.channel.type !== "text") return;
@@ -960,9 +947,7 @@ receivedFrom.discord = async (message: any) => {
 
 // receivedFrom
 receivedFrom.facebook = async (message: any) => {
-  if (
-    !(config?.channelMapping?.facebook?.[(message.threadId || '').toString()])
-  )
+  if (!config?.channelMapping?.facebook?.[(message.threadId || "").toString()])
     return;
   let err, res;
   [err, res] = await to(generic.facebook.client.getUserInfo(message.authorId));
@@ -1390,7 +1375,7 @@ receivedFrom.vkwall = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = res?.response?.[0] || '';
+        replyuser = res?.response?.[0] || "";
         replyuser = AdaptName.vkwall(replyuser);
       }
       sendFrom({
@@ -1420,12 +1405,12 @@ receivedFrom.vkwall = async (message: any) => {
               );
             texts.push(sizes[0].url);
             texts.push(a.photo.text);
-          } catch (e) { }
+          } catch (e) {}
           break;
         case "doc":
           try {
             texts.push(a.doc.url);
-          } catch (e) { }
+          } catch (e) {}
           break;
       }
     }
@@ -1512,7 +1497,7 @@ receivedFrom.vkboard = async (message: any) => {
             fields: "nickname,screen_name"
           })
         );
-        replyuser = res?.response?.[0] || '';
+        replyuser = res?.response?.[0] || "";
         replyuser = AdaptName.vkboard(replyuser);
       }
       sendFrom({
@@ -1542,12 +1527,12 @@ receivedFrom.vkboard = async (message: any) => {
               );
             texts.push(sizes[0].url);
             texts.push(a.photo.text);
-          } catch (e) { }
+          } catch (e) {}
           break;
         case "doc":
           try {
             texts.push(a.doc.url);
-          } catch (e) { }
+          } catch (e) {}
           break;
       }
     }
@@ -1660,7 +1645,7 @@ receivedFrom.mattermost = async (message: any) => {
   if (!config.channelMapping.mattermost) return;
   let channelId, msgText, author, file_ids, postParsed;
   if (message.event === "post_edited") {
-    const post = JSON.parse(message.data?.post || '');
+    const post = JSON.parse(message.data?.post || "");
 
     if (!post.id) return;
     message.event = "posted";
@@ -1741,8 +1726,7 @@ receivedFrom.mattermost = async (message: any) => {
     if (err) console.error(err.toString());
   } else {
     message.edited = false;
-    if (message.data?.team_id !== config.mattermost.team_id)
-      return;
+    if (message.data?.team_id !== config.mattermost.team_id) return;
     if (message.event !== "posted") return;
     const post = message.data?.post;
     if (!post) return;
@@ -1752,7 +1736,7 @@ receivedFrom.mattermost = async (message: any) => {
   if (
     config.channelMapping.mattermost[channelId] &&
     !postParsed?.props?.from_webhook &&
-    (postParsed?.type || '') === ""
+    (postParsed?.type || "") === ""
   ) {
     if (!file_ids) file_ids = postParsed?.file_ids || [];
     let files = [];
@@ -1865,10 +1849,16 @@ receivedFrom.irc = async ({
     text = `<${ircolors
       .stripColorsAndStyle(author)
       .replace(/_+$/g, "")}>: ${text}`;
-    if (!config?.channelMapping?.irc?.[channelId]?.settings?.["irc-dontProcessOtherBridges"])
-      text = text.replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
+    if (
+      !config?.channelMapping?.irc?.[channelId]?.settings?.[
+        "irc-dontProcessOtherBridges"
+      ]
+    )
+      text = text
+        .replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
         .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ");
-    text = text.replace(/^<([^<>]+?)>: /, "*$1*: ")
+    text = text
+      .replace(/^<([^<>]+?)>: /, "*$1*: ")
       .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ");
 
     [, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/);
@@ -1932,7 +1922,7 @@ receivedFrom.irc = async ({
 // AdaptName
 AdaptName.discord = (message: any) => {
   return message.member?.nickname || message.author?.username;
-}
+};
 AdaptName.facebook = (user: any) => user.name; // || user.vanity || user.firstName;
 AdaptName.telegram = (name: string) =>
   config.telegram.userMapping[name] || name;
@@ -2226,12 +2216,12 @@ convertFrom.discord = async ({
 }: {
   text: string;
   messenger: string;
-}) =>
-  markedParse({
-    text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
-    messenger: "discord",
-    dontEscapeBackslash: true
-  });
+}) => discordParser.toHTML(text);
+// markedParse({
+//   text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+//   messenger: "discord",
+//   dontEscapeBackslash: true
+// });
 convertFrom.webwidget = async ({
   text,
   messenger
@@ -2249,8 +2239,7 @@ convertFrom.irc = async ({
   const result = generic
     .escapeHTML(text)
     .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
-    .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
-    ;
+    .replace(/_\b(\w+)\b_/g, "<i>$1</i>");
   debug(messenger)({
     messenger,
     "converting text": text,
@@ -2258,7 +2247,7 @@ convertFrom.irc = async ({
   });
 
   return result;
-}
+};
 
 async function convertToPlainText(text: string) {
   let a = await generic.unescapeHTML({
@@ -2377,7 +2366,8 @@ convertTo.discord = async ({
 }) => {
   const result = await generic.unescapeHTML({
     text: html2md.convert({
-      string: text.replace(/&#x2A;/g, "&#x5C;&#x2A;")
+      string: text
+        .replace(/&#x2A;/g, "&#x5C;&#x2A;")
         .replace(/&#x5F;/g, "&#x5C;&#x5F;"),
       hrefConvert: false,
       dialect: messengerTo
@@ -2411,7 +2401,7 @@ convertTo.irc = async ({
   const result = await convertToPlainText(text);
   debug(messenger)({ messengerTo, "converting text": text, result });
   return result;
-}
+};
 
 // generic.telegram
 generic.telegram.serveFile = (fileId: number) =>
@@ -2532,11 +2522,7 @@ function TelegramRemoveNewMemberMessage(message: Telegram.Message) {
 }
 
 async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
-  if (
-    !message?.chat?.id ||
-    !config?.telegram?.myUser?.id
-  )
-    return;
+  if (!message?.chat?.id || !config?.telegram?.myUser?.id) return;
 
   let [err, res] = await to(
     generic.telegram.client.getChatMember(
@@ -2547,7 +2533,15 @@ async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
   if (!res) return true;
   if (!res.can_delete_messages) {
     [err, res] = await to(generic.telegram.client.leaveChat(message.chat.id));
-    generic.LogToAdmin(`leaving chat ${message.chat.id} ${message.chat.title}`);
+
+    const jsonMessage = {
+      id: message?.chat?.id || message?.from?.id,
+      title: message?.chat?.title,
+      first_name: message?.from?.first_name,
+      last_name: message?.from?.last_name,
+      username: message?.from?.username
+    };
+    generic.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`);
     config.cache.telegram[message.chat.title] = undefined;
     await to(
       generic.writeCache({
@@ -2595,8 +2589,8 @@ generic.ConfigBeforeStart = () => {
   } catch (e) {
     throw new Error(
       `ERROR while reading config:\n${e}\n\nPlease make sure ` +
-      'it exists and is valid. Run "node bridge --genconfig" to ' +
-      "generate a default config."
+        'it exists and is valid. Run "node bridge --genconfig" to ' +
+        "generate a default config."
     );
   }
 
@@ -2816,30 +2810,30 @@ generic.MessengersAvailable = () => {
     if (i.irc) config.MessengersAvailable.irc = true;
   });
   if (
-    (config?.facebook?.email || '') === "" ||
-    (config?.facebook?.password || '') === ""
+    (config?.facebook?.email || "") === "" ||
+    (config?.facebook?.password || "") === ""
   )
     config.MessengersAvailable.facebook = false;
   if (
-    (config?.discord?.client || '') === "" ||
-    (config?.discord?.token || '') === "" ||
-    (config?.discord?.guildId || '') === ""
+    (config?.discord?.client || "") === "" ||
+    (config?.discord?.token || "") === "" ||
+    (config?.discord?.guildId || "") === ""
   )
     config.MessengersAvailable.discord = false;
-  if ((config?.telegram?.token || '') === "")
+  if ((config?.telegram?.token || "") === "")
     config.MessengersAvailable.telegram = false;
   if (
-    (config?.vkboard?.token || '') === "" ||
-    (config?.vkboard?.group_id || '') === "" ||
-    (config?.vkboard?.login || '') === "" ||
-    (config?.vkboard?.password || '') === ""
+    (config?.vkboard?.token || "") === "" ||
+    (config?.vkboard?.group_id || "") === "" ||
+    (config?.vkboard?.login || "") === "" ||
+    (config?.vkboard?.password || "") === ""
   )
     config.MessengersAvailable.vkboard = false;
   if (
-    (config?.vkwall?.token || '') === "" ||
-    (config?.vkwall?.group_id || '') === "" ||
-    (config?.vkwall?.login || '') === "" ||
-    (config?.vkwall?.password || '') === ""
+    (config?.vkwall?.token || "") === "" ||
+    (config?.vkwall?.group_id || "") === "" ||
+    (config?.vkwall?.login || "") === "" ||
+    (config?.vkwall?.password || "") === ""
   )
     config.MessengersAvailable.vkwall = false;
 };
@@ -3084,7 +3078,7 @@ generic.sendOnlineUsersTo = ({
   if (network === "telegram") {
     const objChannel: any =
       generic.irc.client.chans[
-      config?.channelMapping?.telegram?.[channel]?.irc
+        config?.channelMapping?.telegram?.[channel]?.irc
       ];
 
     if (!objChannel) return;
@@ -3124,7 +3118,7 @@ generic.LogToAdmin = (msg_text: string) => {
       .sendMessage(config.telegram.admins_userid, msg_text, {
         parse_mode: "Markdown"
       })
-      .catch((e: any) => console.log(e.toString()));
+      .catch((e: any) => console.log(msg_text, e.toString()));
 };
 
 generic.escapeHTML = (arg: string) =>
@@ -3236,25 +3230,21 @@ GetChunks.webwidget = async (text: string, messenger: string) => {
   return [text];
 };
 
-const diffTwo = (diffMe: string, diffBy: string) => diffMe.split(diffBy).join('');
+const diffTwo = (diffMe: string, diffBy: string) =>
+  diffMe.split(diffBy).join("");
 
 function HTMLSplitter(text: string, limit = 400) {
-  const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, 'g');
-  text = sanitizeHtml(text.replace(/[\r\n]/g, ''), {
-    allowedTags: ['b', 'strong', 'i', 'pre', 'code', 'a', 'em'],
-    allowedAttributes: {
-      a: ['href'],
-    },
-  });
-  text = text.replace(/<a href=/g, '<a_href=');
+  const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g");
+  text = generic.sanitizeHtml(text); //.replace(/[\r\n]/g, '\n')
+  text = text.replace(/<a href=/g, "<a_href=");
   let thisChunk;
   let stop = false;
   let Chunks = [];
-  while (text !== '') {
+  while (text !== "") {
     if (text.length >= limit) {
       thisChunk = text.substring(0, limit);
       text = text.substring(limit);
-      let lastSpace = thisChunk.lastIndexOf(' ');
+      let lastSpace = thisChunk.lastIndexOf(" ");
       if (lastSpace <= limit / 2) {
         //no spaces found
         lastSpace = thisChunk.search(r);
@@ -3270,17 +3260,17 @@ function HTMLSplitter(text: string, limit = 400) {
     Chunks.push(thisChunkUntruncated);
     if (stop) break;
     let diff = diffTwo(thisChunkUntruncated, thisChunk);
-    if (diff !== '') {
+    if (diff !== "") {
       // add opening tags
       diff = diff
         .split(/(?=<)/)
         .reverse()
-        .map(i => i.replace('/', ''))
-        .join('');
+        .map(i => i.replace("/", ""))
+        .join("");
       text = DOMPurify.sanitize(diff + text);
     }
   }
-  Chunks = Chunks.map(chunk => chunk.replace(/<a_href=/g, '<a href='));
+  Chunks = Chunks.map(chunk => chunk.replace(/<a_href=/g, "<a href="));
 
   return Chunks;
 }
@@ -3473,7 +3463,19 @@ generic.downloadFile = async ({
 
 generic.sanitizeHtml = (text: string) => {
   return sanitizeHtml(text, {
-    allowedTags: ["b", "strong", "i", "pre", "code", "a", "em"],
+    allowedTags: [
+      "b",
+      "strong",
+      "i",
+      "pre",
+      "code",
+      "a",
+      "em",
+      "u",
+      "ins",
+      "s",
+      "br"
+    ],
     allowedAttributes: {
       a: ["href"]
     }
@@ -3492,7 +3494,9 @@ generic.LocalizeString = ({
   arrElemsToInterpolate: Array<Array<string>>;
 }) => {
   try {
-    const language = config?.channelMapping?.[messenger]?.[channelId]?.settings?.language || "English";
+    const language =
+      config?.channelMapping?.[messenger]?.[channelId]?.settings?.language ||
+      "English";
     let template = localConfig[language][localized_string_key];
     const def_template = localConfig["English"][localized_string_key];
     if (!def_template) {
