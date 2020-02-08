@@ -45,19 +45,31 @@ const markedRenderer = new marked.Renderer();
 function markedParse({
   text,
   messenger,
-  dontEscapeBackslash
+  dontEscapeBackslash,
+  unescapeCodeBlocks
 }: {
   text: string;
   messenger: string;
   dontEscapeBackslash?: boolean;
+  unescapeCodeBlocks?: boolean;
 }) {
   if (!dontEscapeBackslash) text = text.replace(/\\/gim, "\\\\");
   markedRenderer.codespan = (text: string) => {
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
+    if (unescapeCodeBlocks)
+      text = generic.unescapeHTML({
+        text,
+        convertHtmlEntities: true
+      });
     return `<code>${text}</code>`;
   };
   markedRenderer.code = (text: string) => {
     if (!dontEscapeBackslash) text = text.replace(/\\\\/gim, "&#92;");
+    if (unescapeCodeBlocks)
+      text = generic.unescapeHTML({
+        text,
+        convertHtmlEntities: true
+      });
     return `<pre><code>${text}</code></pre>\n`;
   };
   const result = marked.parser(lexer.lex(text), {
@@ -2209,7 +2221,12 @@ convertFrom.mattermost = async ({
 }: {
   text: string;
   messenger: string;
-}) => markedParse({ text: generic.escapeHTML(text), messenger: "mattermost" });
+}) =>
+  markedParse({
+    text: generic.escapeHTML(text),
+    messenger: "mattermost",
+    unescapeCodeBlocks: true
+  });
 convertFrom.discord = async ({
   text,
   messenger
