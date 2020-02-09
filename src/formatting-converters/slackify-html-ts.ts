@@ -24,6 +24,9 @@ function walk(dom: any) {
           case "a":
             out += `<${el.attribs.href}|${walk(el.children)}>`;
             break;
+          case "u":
+            out += `_*${walk(el.children)}*_`;
+            break;
           case "strong":
           case "b":
             out += `*${walk(el.children)}*`;
