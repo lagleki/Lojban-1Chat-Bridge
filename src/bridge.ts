@@ -94,6 +94,7 @@ const winston = require("winston");
 const logger = winston.createLogger({
   transports: [new winston.transports.File({ filename: "log.log" })]
 });
+import { inspect } from "util"; // or directly
 
 const R = require("ramda");
 const { default: PQueue } = require("p-queue");
@@ -1092,6 +1093,17 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
             (member.nickname || member.user?.username) &&
             member.user.id.toLowerCase() === core
         );
+      // logger.log({
+      //   level: "info",
+      //   message: message.channel.guild.members
+      //     .array()
+      //     .map((member: any) => {
+      //       return `${member.nickname || member.user?.username} ${
+      //         member.user?.id
+      //       }`;
+      //     })
+      //     .join("\n")
+      // });
       if (member)
         text = text.replace(
           match,
@@ -1571,6 +1583,11 @@ receivedFrom.vkboard = async (message: any) => {
 
 receivedFrom.slack = async (message: any) => {
   if (!config.channelMapping.slack) return;
+  if (
+    message?.message?.text === message?.previous_message?.text &&
+    (message?.files || []).length === 0
+  )
+    return;
   if (
     (message.subtype &&
       !["me_message", "channel_topic", "message_changed"].includes(
