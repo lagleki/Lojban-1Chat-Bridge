@@ -164,7 +164,7 @@ function replaceDel({
   doc: string;
   dialect?: string;
 }): string {
-  return makeRegex({ regex: delRegex, doc });
+  return makeRegex({ regex: delRegex, doc, before: "~~", after: "~~" });
 }
 
 /**

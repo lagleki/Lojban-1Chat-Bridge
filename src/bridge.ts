@@ -31,7 +31,8 @@ import Discord = require("discord.js");
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
 
-const slackify = require("./formatting-converters/slackify-html-ts");
+const slackify = require("./formatting-converters/html2slack");
+const ircify = require("./formatting-converters/html2irc");
 
 const discordParser = require("discord-markdown");
 
@@ -707,6 +708,7 @@ sendTo.irc = async ({
     await new Promise((resolve: any) => {
       // if (config.irc.Actions.includes(action))
       //   chunk = ircolors.underline(chunk);
+      debug("irc")({ "sending for irc": chunk });
       generic.irc.client.say(channelId, chunk);
       resolve();
     });
@@ -1087,7 +1089,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
         .array()
         .find(
           (member: any) =>
-            (member.nickname || member.user.username) &&
+            (member.nickname || member.user?.username) &&
             member.user.id.toLowerCase() === core
         );
       if (member)
@@ -2233,7 +2235,16 @@ convertFrom.discord = async ({
 }: {
   text: string;
   messenger: string;
-}) => discordParser.toHTML(text);
+}) => {
+  const result = discordParser.toHTML(text);
+  debug(messenger)({
+    messenger,
+    "converting text": text,
+    result
+  });
+  return result;
+};
+
 // markedParse({
 //   text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
 //   messenger: "discord",
@@ -2406,6 +2417,20 @@ convertTo.webwidget = async ({
   messengerTo: string;
 }) => text;
 
+// convertTo.irc = async ({
+//   text,
+//   messenger,
+//   messengerTo
+// }: {
+//   text: string;
+//   messenger: string;
+//   messengerTo: string;
+// }) => {
+//   const result = await convertToPlainText(text);
+//   debug(messenger)({ messengerTo, "converting text": text, result });
+//   return result;
+// };
+
 convertTo.irc = async ({
   text,
   messenger,
@@ -2415,7 +2440,7 @@ convertTo.irc = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const result = await convertToPlainText(text);
+  const result = ircify(text);
   debug(messenger)({ messengerTo, "converting text": text, result });
   return result;
 };
@@ -3135,7 +3160,10 @@ generic.LogToAdmin = (msg_text: string) => {
       .sendMessage(config.telegram.admins_userid, msg_text, {
         parse_mode: "Markdown"
       })
-      .catch((e: any) => console.log(msg_text, e.toString()));
+      .catch((e: any) => {
+        console.log(msg_text, e.toString());
+        generic.LogToAdmin(msg_text + "\n\n" + e.toString());
+      });
 };
 
 generic.escapeHTML = (arg: string) =>
@@ -3491,7 +3519,8 @@ generic.sanitizeHtml = (text: string) => {
       "u",
       "ins",
       "s",
-      "br"
+      "br",
+      "del"
     ],
     allowedAttributes: {
       a: ["href"]
