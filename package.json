@@ -28,6 +28,7 @@
   "bugs": "https://github.com/lagleki/Lojban-1Chat-Bridge/issues",
   "homepage": "https://github.com/lagleki/Lojban-1Chat-Bridge",
   "dependencies": {
+    "@favware/zalgo": "^1.1.4",
     "@slack/client": "^5.0.2",
     "@vk-io/authorization": "0.0.0-alpha.1",
     "await-to-js": "^2.1.1",
