@@ -950,7 +950,6 @@ async function sendFrom({
 
 async function getNSFWString(file: string) {
   if (file.substr(-4) !== ".jpg") return;
-  console.log(file);
   const NUMBER_OF_CHANNELS = 3;
 
   const tf = require("@tensorflow/tfjs-node");
@@ -990,9 +989,7 @@ async function getNSFWString(file: string) {
   const model = await load(); //moved model at root of folder
   const logo = readImage(file);
   const input = imageToInput(logo, NUMBER_OF_CHANNELS);
-  console.time("predict");
   let predictions = await model.classify(input);
-  console.timeEnd("predict");
   console.log(predictions);
   predictions =
     "<br>" +
