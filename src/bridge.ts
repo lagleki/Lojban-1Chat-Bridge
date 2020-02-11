@@ -846,8 +846,41 @@ async function sendFrom({
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
   text = text.replace(/^(<br\/>)+/, "");
   const nsfw = file ? await getNSFWString(file) : null;
-  if (nsfw) text = text + " " + nsfw;
+  if (nsfw) {
+    let Chunks = await prepareChunks({
+      messenger,
+      channelId,
+      text: nsfw,
+      messengerTo: messenger
+    });
+    for (const i in Chunks) {
+      const chunk = Chunks[i];
+      Chunks[i] = await FormatMessageChunkForSending({
+        messenger,
+        channelId,
+        title: config?.vkboard?.group_id,
+        author,
+        chunk,
+        action,
+        quotation
+      });
+    }
 
+    Chunks.map(chunk => {
+      sendTo[messenger]({
+        channelId: ConfigNode[messenger],
+        author,
+        chunk,
+        quotation,
+        action,
+        file,
+        edited,
+        nsfw
+      });
+    });
+
+    text = text + nsfw;
+  }
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (
       config.MessengersAvailable[messengerTo] &&
@@ -961,15 +994,17 @@ async function getNSFWString(file: string) {
   let predictions = await model.classify(input);
   console.timeEnd("predict");
   console.log(predictions);
-  predictions = predictions
-    .filter((className: any) => {
-      if (className.probability > 0.6) return true;
-      return;
-    })
-    .map((i: any) => {
-      return `<p>${i.className} - ${Math.round(i.probability * 100)}</p>`;
-    })
-    .join("");
+  predictions =
+    "<br>" +
+    predictions
+      .filter((className: any) => {
+        if (className.probability > 0.6) return true;
+        return;
+      })
+      .map((i: any) => {
+        return `${i.className} - ${Math.round(i.probability * 100)}%<br>`;
+      })
+      .join("");
   return predictions;
 }
 

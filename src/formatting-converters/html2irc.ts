@@ -51,10 +51,16 @@ module.exports = function ircify(html: string) {
                 out += `${el.attribs.href}`;
               }
               break;
+            case "br":
+              out += `\n`;
+              break;
             case "u":
               out += `${globalStyles.underline}${walk(el.children)}${
                 globalStyles.underline
               }`;
+              break;
+            case "p":
+              out += `\n${walk(el.children)}`;
               break;
             case "strong":
             case "b":
