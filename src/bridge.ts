@@ -184,6 +184,7 @@ interface IsendToArgs {
   quotation: boolean;
   file?: string;
   edited?: boolean;
+  nsfw?: string;
 }
 
 const convertTo: IMessengerFunctions = {};
@@ -438,7 +439,8 @@ sendTo.webwidget = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.webwidget?.[channelId]?.settings?.readonly)
     return;
@@ -469,7 +471,8 @@ sendTo.facebook = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (
     config?.channelMapping?.facebook?.[channelId]?.settings.readonly ||
@@ -498,7 +501,8 @@ sendTo.telegram = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.telegram?.[channelId]?.settings?.readonly) return;
   queueOf.telegram.add(async () => {
@@ -513,11 +517,9 @@ sendTo.telegram = async ({
           generic.LogToAdmin(
             channelId +
               "\n\n" +
-              err.toString() +
+              "error sending chunk" +
               "\n\n" +
-              chunk +
-              "\n\n" +
-              JSON.stringify(config.channelMapping, null, 2)
+              generic.escapeHTML(chunk)
           );
           resolve();
         });
@@ -533,7 +535,8 @@ sendTo.discord = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.discord?.[channelId]?.settings?.readonly) return;
 
@@ -555,7 +558,8 @@ sendTo.mattermost = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.mattermost?.[channelId]?.settings?.readonly)
     return;
@@ -585,7 +589,8 @@ sendTo.vkwall = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.vkwall?.[channelId]?.settings?.readonly) return;
   if (!generic.vkwall.client.app) {
@@ -620,7 +625,8 @@ sendTo.vkboard = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (
     config?.channelMapping?.vkboard?.[channelId]?.settings?.readonly
@@ -674,7 +680,8 @@ sendTo.slack = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.slack?.[channelId]?.settings?.readonly) return;
   queueOf.slack.add(async () => {
@@ -702,7 +709,8 @@ sendTo.irc = async ({
   action,
   quotation,
   file,
-  edited
+  edited,
+  nsfw
 }: IsendToArgs) => {
   if (config?.channelMapping?.irc?.[channelId]?.settings?.readonly) return;
   queueOf.irc.add(async () => {
@@ -837,6 +845,8 @@ async function sendFrom({
   text = await convertFrom[messenger]({ text, messenger });
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
   text = text.replace(/^(<br\/>)+/, "");
+  const nsfw = file ? await getNSFWString(file) : null;
+  if (nsfw) text = text + " " + nsfw;
 
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (
@@ -897,11 +907,70 @@ async function sendFrom({
           quotation,
           action,
           file,
-          edited
+          edited,
+          nsfw
         });
       });
     }
   }
+}
+
+async function getNSFWString(file: string) {
+  if (file.substr(-4) !== ".jpg") return;
+  console.log(file);
+  const NUMBER_OF_CHANNELS = 3;
+
+  const tf = require("@tensorflow/tfjs-node");
+  const load = require("nsfwjs").load;
+
+  const fs = require("fs");
+  const jpeg = require("jpeg-js");
+
+  const readImage = (path: string) => {
+    const buf = fs.readFileSync(path);
+    const pixels = jpeg.decode(buf, true);
+    return pixels;
+  };
+
+  const imageByteArray = (image: any, numChannels: number) => {
+    const pixels = image.data;
+    const numPixels = image.width * image.height;
+    const values = new Int32Array(numPixels * numChannels);
+
+    for (let i = 0; i < numPixels; i++) {
+      for (let channel = 0; channel < numChannels; ++channel) {
+        values[i * numChannels + channel] = pixels[i * 4 + channel];
+      }
+    }
+
+    return values;
+  };
+
+  const imageToInput = (image: any, numChannels: number) => {
+    const values = imageByteArray(image, numChannels);
+    const outShape = [image.height, image.width, numChannels];
+    const input = tf.tensor3d(values, outShape, "int32");
+
+    return input;
+  };
+
+  const model = await load(); //moved model at root of folder
+  const logo = readImage(file);
+  const input = imageToInput(logo, NUMBER_OF_CHANNELS);
+  console.time("predict");
+  let predictions = await model.classify(input);
+  console.timeEnd("predict");
+  console.log(predictions);
+  predictions = predictions
+    .filter((className: any) => {
+      if (className.probability > 0.6) return true;
+      return;
+    })
+    .map((i: any) => {
+      return `<p>${i.className} - ${Math.round(i.probability * 100)}</p>`;
+    })
+    .join("");
+  return predictions;
 }
 
 receivedFrom.discord = async (message: any) => {
@@ -2345,7 +2414,8 @@ convertTo.telegram = async ({
         "<pre>$1</pre>"
       )
     )
-    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
+    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>")
+    .replace(/<br( \/|)>/g, "\n");
   debug(messenger)({
     messengerTo,
     "converting text": text,
@@ -2511,7 +2581,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
           generic.telegram.DeleteMessage({ message, log: true });
       } else {
         generic.LogToAdmin(
-          `error ${err} on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`
+          `error on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`
         );
       }
     } else {
@@ -2522,7 +2592,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
         generic.telegram.DeleteMessage({ message, log: true });
       } else {
         generic.LogToAdmin(
-          `error ${err} on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`
+          `error on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`
         );
       }
     }
@@ -3154,7 +3224,7 @@ generic.sendOnlineUsersTo = ({
       .sendMessage(objChannel.id, strNames)
       .catch((e: any) =>
         debug("telegram")({
-          error: e.toString()
+          error: "error sending to Telegram the list of online users"
         })
       );
   }
@@ -3178,8 +3248,8 @@ generic.LogToAdmin = (msg_text: string) => {
         parse_mode: "Markdown"
       })
       .catch((e: any) => {
-        console.log(msg_text, e.toString());
-        generic.LogToAdmin(msg_text + "\n\n" + e.toString());
+        console.log(msg_text);
+        generic.LogToAdmin(msg_text);
       });
 };
 
