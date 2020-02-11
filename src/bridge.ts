@@ -991,18 +991,17 @@ async function getNSFWString(file: string) {
   const input = imageToInput(logo, NUMBER_OF_CHANNELS);
   let predictions = await model.classify(input);
   console.log(predictions);
-  predictions =
-    "<br>" +
-    predictions
-      .filter((className: any) => {
-        if (className.probability > 0.6) return true;
-        return;
-      })
-      .map((i: any) => {
-        return `${i.className} - ${Math.round(i.probability * 100)}%<br>`;
-      })
-      .join("");
-  return predictions;
+  predictions = predictions
+    .filter((className: any) => {
+      if (className.probability > 0.6) return true;
+      return;
+    })
+    .map((i: any) => {
+      return `${i.className} - ${Math.round(i.probability * 100)}%<br>`;
+    })
+    .join("");
+  if (predictions === "") return;
+  return "<br>" + predictions;
 }
 
 receivedFrom.discord = async (message: any) => {
