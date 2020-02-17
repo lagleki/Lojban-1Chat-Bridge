@@ -2699,7 +2699,8 @@ async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
       title: message?.chat?.title,
       first_name: message?.from?.first_name,
       last_name: message?.from?.last_name,
-      username: message?.from?.username
+      username: message?.from?.username,
+      message: message?.text
     };
     generic.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`);
     config.cache.telegram[message.chat.title] = undefined;
