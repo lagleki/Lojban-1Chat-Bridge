@@ -2434,10 +2434,29 @@ convertTo.telegram = async ({
 }) => {
   const result = generic
     .sanitizeHtml(
-      text.replace(
-        /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
-        "<pre>$1</pre>"
-      )
+      text
+        .replace(
+          /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
+          "<pre>$1</pre>"
+        )
+        .replace(
+          /<blockquote>([\s\S]*?)<\/blockquote>/gim,
+          "<pre>$1</pre>"
+        ),
+      [
+        "b",
+        "strong",
+        "i",
+        "pre",
+        "code",
+        "a",
+        "em",
+        "u",
+        "ins",
+        "s",
+        "br",
+        "del"
+      ]
     )
     .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>")
     .replace(/<br( \/|)>/g, "\n");
@@ -3393,7 +3412,7 @@ const diffTwo = (diffMe: string, diffBy: string) =>
 
 function HTMLSplitter(text: string, limit = 400) {
   const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g");
-  text = generic.sanitizeHtml(text); //.replace(/[\r\n]/g, '\n')
+  text = generic.sanitizeHtml(text.replace(/<blockquote>([\s\S]*?)(<br>)*<\/blockquote>/gim,'<blockquote>$1</blockquote>')); //.replace(/[\r\n]/g, '\n')
   text = text.replace(/<a href=/g, "<a_href=");
   let thisChunk;
   let stop = false;
@@ -3619,22 +3638,26 @@ generic.downloadFile = async ({
   return [rem_fullname, local_fullname];
 };
 
-generic.sanitizeHtml = (text: string) => {
+generic.sanitizeHtml = (
+  text: string,
+  allowedTags: string[] = [
+    "blockquote",
+    "b",
+    "strong",
+    "i",
+    "pre",
+    "code",
+    "a",
+    "em",
+    "u",
+    "ins",
+    "s",
+    "br",
+    "del"
+  ]
+) => {
   return sanitizeHtml(text, {
-    allowedTags: [
-      "b",
-      "strong",
-      "i",
-      "pre",
-      "code",
-      "a",
-      "em",
-      "u",
-      "ins",
-      "s",
-      "br",
-      "del"
-    ],
+    allowedTags,
     allowedAttributes: {
       a: ["href"]
     }

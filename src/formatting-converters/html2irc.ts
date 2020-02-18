@@ -54,6 +54,12 @@ module.exports = function ircify(html: string) {
             case "br":
               out += `\n`;
               break;
+            case "blockquote":
+              out += `\n${walk(el.children)
+                .split(/\n/)
+                .map(string => `> ${string}`)
+                .join("\n")}\n`;
+              break;
             case "u":
               out += `${globalStyles.underline}${walk(el.children)}${
                 globalStyles.underline

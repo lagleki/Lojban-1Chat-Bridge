@@ -28,8 +28,20 @@ function walk(dom: any) {
           case "a":
             out += `<${el.attribs.href}|${walk(el.children)}>`;
             break;
+          case "br":
+            out += `\n`;
+            break;
+          case "blockquote":
+            out += `\n${walk(el.children)
+              .split(/\n/)
+              .map(string => `> ${string}`)
+              .join("\n")}\n`;
+            break;
           case "u":
             out += `_*${walk(el.children)}*_`;
+            break;
+          case "p":
+            out += `\n${walk(el.children)}`;
             break;
           case "strong":
           case "b":
