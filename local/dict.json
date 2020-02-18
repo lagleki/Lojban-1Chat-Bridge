@@ -1,10 +1,10 @@
 {
   "lojban": {
-    "nsfw_kv_drawing": ".i di'u %prob%ce'i va'e le ka se ciska",
-    "nsfw_kv_hentai": ".i di'u %prob%ce'i va'e le ka glexra pixrnanime",
-    "nsfw_kv_neutral": ".i di'u %prob%ce'i va'e le ka cnano pixra",
-    "nsfw_kv_porn": ".i di'u %prob%ce'i va'e le ka glexra",
-    "nsfw_kv_sexy": ".i di'u %prob%ce'i va'e le ka cinxra",
+    "nsfw_kv_drawing": ".i li %prob%ce'i jei di'u se ciska kei be le ve djuno be fo le zmiku",
+    "nsfw_kv_hentai": ".i li %prob%ce'i jei di'u glexra pixrnanime kei be le ve djuno be fo le zmiku",
+    "nsfw_kv_neutral": ".i li %prob%ce'i jei di'u cnano pixra kei be le ve djuno be fo le zmiku",
+    "nsfw_kv_porn": ".i li %prob%ce'i jei di'u glexra kei be le ve djuno be fo le zmiku",
+    "nsfw_kv_sexy": ".i li %prob%ce'i jei di'u cinxra kei be le ve djuno be fo le zmiku",
     "topic": "i casnu la'e di'e %topic%",
     "sendTo.facebook.normal": "%author%: %chunk%",
     "sendTo.facebook.ChunkOnly": "%chunk%",
