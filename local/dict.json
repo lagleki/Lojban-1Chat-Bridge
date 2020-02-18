@@ -1,5 +1,10 @@
 {
   "lojban": {
+    "nsfw_kv_drawing": ".i di'u %prob%ce'i va'e le ka se ciska",
+    "nsfw_kv_hentai": ".i di'u %prob%ce'i va'e le ka glexra pixrnanime",
+    "nsfw_kv_neutral": ".i di'u %prob%ce'i va'e le ka cnano pixra",
+    "nsfw_kv_porn": ".i di'u %prob%ce'i va'e le ka glexra",
+    "nsfw_kv_sexy": ".i di'u %prob%ce'i va'e le ka cinxra",
     "topic": "i casnu la'e di'e %topic%",
     "sendTo.facebook.normal": "%author%: %chunk%",
     "sendTo.facebook.ChunkOnly": "%chunk%",
@@ -40,6 +45,11 @@
     "MessageWith.location.telegram": "(stuzi) %longitude% %latitude%"
   },
   "English": {
+    "nsfw_kv_drawing": "Drawing - %prob%%%",
+    "nsfw_kv_hentai": "Hentai - %prob%%%",
+    "nsfw_kv_neutral": "Neutral - %prob%%%",
+    "nsfw_kv_porn": "Porn - %prob%%%",
+    "nsfw_kv_sexy": "Sexy - %prob%%%",
     "topic": "topic set to %topic%",
     "sendTo.facebook.normal": "%author%: %chunk%",
     "sendTo.facebook.ChunkOnly": "%chunk%",

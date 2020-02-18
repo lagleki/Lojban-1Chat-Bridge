@@ -184,7 +184,6 @@ interface IsendToArgs {
   quotation: boolean;
   file?: string;
   edited?: boolean;
-  nsfw?: string;
 }
 
 const convertTo: IMessengerFunctions = {};
@@ -439,8 +438,7 @@ sendTo.webwidget = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.webwidget?.[channelId]?.settings?.readonly)
     return;
@@ -471,8 +469,7 @@ sendTo.facebook = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (
     config?.channelMapping?.facebook?.[channelId]?.settings.readonly ||
@@ -501,8 +498,7 @@ sendTo.telegram = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.telegram?.[channelId]?.settings?.readonly) return;
   queueOf.telegram.add(async () => {
@@ -535,8 +531,7 @@ sendTo.discord = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.discord?.[channelId]?.settings?.readonly) return;
 
@@ -558,8 +553,7 @@ sendTo.mattermost = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.mattermost?.[channelId]?.settings?.readonly)
     return;
@@ -589,8 +583,7 @@ sendTo.vkwall = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.vkwall?.[channelId]?.settings?.readonly) return;
   if (!generic.vkwall.client.app) {
@@ -625,8 +618,7 @@ sendTo.vkboard = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (
     config?.channelMapping?.vkboard?.[channelId]?.settings?.readonly
@@ -680,8 +672,7 @@ sendTo.slack = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.slack?.[channelId]?.settings?.readonly) return;
   queueOf.slack.add(async () => {
@@ -709,8 +700,7 @@ sendTo.irc = async ({
   action,
   quotation,
   file,
-  edited,
-  nsfw
+  edited
 }: IsendToArgs) => {
   if (config?.channelMapping?.irc?.[channelId]?.settings?.readonly) return;
   queueOf.irc.add(async () => {
@@ -847,39 +837,46 @@ async function sendFrom({
   text = text.replace(/^(<br\/>)+/, "");
   const nsfw = file ? await getNSFWString(file) : null;
   if (nsfw) {
-    let Chunks = await prepareChunks({
-      messenger,
-      channelId,
-      text: nsfw,
-      messengerTo: messenger
-    });
-    for (const i in Chunks) {
-      const chunk = Chunks[i];
-      Chunks[i] = await FormatMessageChunkForSending({
+    for (const nsfw_result of nsfw) {
+      const translated_text = generic.LocalizeString({
         messenger,
         channelId,
-        title: config?.vkboard?.group_id,
-        author,
-        chunk,
-        action,
-        quotation
+        localized_string_key: "nsfw_kv_" + nsfw_result.id.toLowerCase(),
+        arrElemsToInterpolate: [["prob", nsfw_result.prob]]
       });
+      let Chunks = await prepareChunks({
+        messenger,
+        channelId,
+        text: translated_text,
+        messengerTo: messenger
+      });
+      for (const i in Chunks) {
+        const chunk = Chunks[i];
+        Chunks[i] = await FormatMessageChunkForSending({
+          messenger,
+          channelId,
+          title: config?.vkboard?.group_id,
+          author,
+          chunk,
+          action,
+          quotation
+        });
+      }
+
+      Chunks.map(chunk => {
+        sendTo[messenger]({
+          channelId: ConfigNode[messenger],
+          author,
+          chunk,
+          quotation,
+          action,
+          file,
+          edited
+        });
+      });
+
+      text = text + "<br/>" + translated_text;
     }
-
-    Chunks.map(chunk => {
-      sendTo[messenger]({
-        channelId: ConfigNode[messenger],
-        author,
-        chunk,
-        quotation,
-        action,
-        file,
-        edited,
-        nsfw
-      });
-    });
-
-    text = text + nsfw;
   }
   for (const messengerTo of Object.keys(config.channelMapping)) {
     if (
@@ -940,8 +937,7 @@ async function sendFrom({
           quotation,
           action,
           file,
-          edited,
-          nsfw
+          edited
         });
       });
     }
@@ -990,18 +986,16 @@ async function getNSFWString(file: string) {
   const logo = readImage(file);
   const input = imageToInput(logo, NUMBER_OF_CHANNELS);
   let predictions = await model.classify(input);
-  console.log(predictions);
   predictions = predictions
     .filter((className: any) => {
+      if (className.className === "Neutral") return;
       if (className.probability > 0.6) return true;
       return;
     })
     .map((i: any) => {
-      return `${i.className} - ${Math.round(i.probability * 100)}%<br>`;
-    })
-    .join("");
-  if (predictions === "") return;
-  return "<br>" + predictions;
+      return { id: i.className, prob: Math.round(i.probability * 100) };
+    });
+  return predictions;
 }
 
 receivedFrom.discord = async (message: any) => {
@@ -3670,7 +3664,9 @@ generic.LocalizeString = ({
     }
     if (!template) template = def_template;
     for (const value of arrElemsToInterpolate)
-      template = template.replace(new RegExp(`%${value[0]}%`, "gu"), value[1]);
+      template = template
+        .replace(new RegExp(`%${value[0]}%`, "gu"), value[1])
+        .replace(/%%/g, "%");
     return template;
   } catch (err) {
     console.error(err);
