@@ -40,20 +40,20 @@ Object.keys(globalStyles).forEach(key => {
 const globalRichMood = [
   // ["bold", ["yellow","yellow","white","white"]],
 
-  ["bold", ["silver","silver","white","white"]],
-  ["bold", ["navy","navy","white","white"]],
-  ["bold", ["green","yellow","white","white"]],
-  ["bold", ["green","green","white","white"]],
-  ["bold", ["red","red","white","white"]],
-  ["bold", ["brown","brown","white","white"]],
-  ["bold", ["purple","purple","white","white"]],
-  ["bold", ["olive","olive","white","white"]],
-  ["bold", ["lime","lime","white","white"]],
-  ["bold", ["teal","teal","white","white"]],
-  ["bold", ["cyan","cyan","white","white"]],
-  ["bold", ["pink","pink","white","white"]],
-  ["bold", ["yellow","yellow","white","white"]],
-  ["bold", ["violet","violet","white","white"]],
+  ["black", ["silver","silver","white","white"]],
+  ["white", ["navy","navy","green","green"]],
+  ["black", ["lime","yellow","white","white"]],
+  ["red", ["green","green"]],
+  ["black", ["red","red","white","white"]],
+  ["white", ["brown","brown","black","black"]],
+  ["black", ["purple","purple","white","white"]],
+  ["black", ["olive","olive","white","white"]],
+  ["black", ["lime","lime","white","white"]],
+  ["black", ["teal","teal","white","white"]],
+  ["black", ["cyan","cyan","white","white"]],
+  ["black", ["pink","pink","white","white"]],
+  ["black", ["yellow","yellow","white","white"]],
+  ["black", ["violet","violet","white","white"]],
   
   // ["bold", ["red","red","brown","brown"]],
   // ["bold", ["navy","navy","yellow","yellow"]],
@@ -65,19 +65,20 @@ const globalRichMood = [
   // ["bold", ["lime","lime","lime","silver","silver","silver"]],
   // ["bold", ["violet","violet","violet","silver","silver","silver"]],
 
-  ["bold", ["white"]],
-  ["bold", ["navy"]],
-  ["bold", ["green"]],
-  ["bold", ["red"]],
-  ["bold", ["brown"]],
-  ["bold", ["purple"]],
-  ["bold", ["olive"]],
-  ["bold", ["lime"]],
-  ["bold", ["teal"]],
-  ["bold", ["cyan"]],
-  ["bold", ["blue"]],
-  ["bold", ["pink"]],
-  ["bold", ["violet"]]
+  ["black", ["white"]],
+  ["white", ["black"]],
+  ["white", ["navy"]],
+  ["white", ["green"]],
+  ["white", ["red"]],
+  ["white", ["brown"]],
+  ["white", ["purple"]],
+  ["white", ["olive"]],
+  ["black", ["lime"]],
+  ["white", ["teal"]],
+  ["white", ["cyan"]],
+  ["white", ["blue"]],
+  ["black", ["pink"]],
+  ["white", ["violet"]]
 ];
 
 const globalSimpleMood = [
@@ -149,7 +150,7 @@ function MoodifyText({
 }) {
   if (mood === "none") return text;
   if (mood === "mood") {
-    colors = globalRichMood;
+    colors = globalSimpleMood;
   } else {
     colors = colors || globalSimpleMood;
   }
@@ -165,8 +166,8 @@ function MoodifyText({
   }
 
   hash = Math.abs(hash % colors.length);
-  const chosenFg = colors[hash][0];
-  const chosenBg = colors[hash][1];
+  const chosenBg = colors[hash][0];
+  const chosenFg = colors[hash][1];
   let l = chosenBg.length;
   let i = 0;
   return prettyStr
@@ -176,12 +177,12 @@ function MoodifyText({
       const bg_text = ColorifyText({
         side: "fg",
         text: c,
-        color: chosenBg[i++ % l]
+        color: chosenFg[i++ % l]
       });
       const a: string = ColorifyText({
         text: bg_text,
-        side: "fg",
-        color: chosenFg
+        side: "bg",
+        color: chosenBg
       });
       return a;
     })

@@ -1678,6 +1678,7 @@ receivedFrom.vkboard = async (message: any) => {
 receivedFrom.slack = async (message: any) => {
   if (!config.channelMapping.slack) return;
   if (
+    message.subtype === "message_changed" &&
     message?.message?.text === message?.previous_message?.text &&
     (message?.files || []).length === 0
   )
@@ -2439,10 +2440,7 @@ convertTo.telegram = async ({
           /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
           "<pre>$1</pre>"
         )
-        .replace(
-          /<blockquote>([\s\S]*?)<\/blockquote>/gim,
-          "<pre>$1</pre>"
-        ),
+        .replace(/<blockquote>([\s\S]*?)<\/blockquote>/gim, "<pre>$1</pre>"),
       [
         "b",
         "strong",
@@ -2479,7 +2477,11 @@ convertTo.vkboard = async ({
   text: string;
   messenger: string;
   messengerTo: string;
-}) => await convertToPlainText(text);
+}) => {
+  const result = ircify(text);
+  debug(messenger)({ messengerTo, "converting text": text, result });
+  return result;
+};
 convertTo.vkwall = convertTo.vkboard;
 convertTo.slack = async ({
   text,
@@ -3407,12 +3409,20 @@ GetChunks.webwidget = async (text: string, messenger: string) => {
   return [text];
 };
 
-const diffTwo = (diffMe: string, diffBy: string) =>
-  diffMe.split(diffBy).join("");
+const diffTwo = (diffMe: string, diffBy: string) => {
+  diffMe = diffMe.replace(/[\n\r]/g, "").replace(/<br \/>/gim, "<br>").replace(/<a_href=/g, "<a href=");
+  diffBy = diffBy.replace(/[\n\r]/g, "").replace(/<br \/>/gim, "<br>").replace(/<a_href=/g, "<a href=");
+  return diffMe.split(diffBy).join("");
+};
 
 function HTMLSplitter(text: string, limit = 400) {
   const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g");
-  text = generic.sanitizeHtml(text.replace(/<blockquote>([\s\S]*?)(<br>)*<\/blockquote>/gim,'<blockquote>$1</blockquote>')); //.replace(/[\r\n]/g, '\n')
+  text = generic.sanitizeHtml(
+    text.replace(
+      /<blockquote>([\s\S]*?)(<br>)*<\/blockquote>/gim,
+      "<blockquote>$1</blockquote>"
+    )
+  );
   text = text.replace(/<a href=/g, "<a_href=");
   let thisChunk;
   let stop = false;
@@ -3426,14 +3436,18 @@ function HTMLSplitter(text: string, limit = 400) {
         //no spaces found
         lastSpace = thisChunk.search(r);
       }
-      text = thisChunk.substring(lastSpace) + text;
-      thisChunk = thisChunk.substring(0, lastSpace);
+      if (lastSpace === -1) {
+        thisChunk = generic.sanitizeHtml(thisChunk, []);
+      } else {
+        text = thisChunk.substring(lastSpace) + text;
+        thisChunk = thisChunk.substring(0, lastSpace);
+      }
     } else {
       //if text is less than limit symbols then process it and go out of the loop
       thisChunk = text;
       stop = true;
     }
-    const thisChunkUntruncated = DOMPurify.sanitize(thisChunk);
+    const thisChunkUntruncated = DOMPurify.sanitize(thisChunk.replace(/<a_href=/g, "<a href=")).replace(/<a href=/g, "<a_href=");
     Chunks.push(thisChunkUntruncated);
     if (stop) break;
     let diff = diffTwo(thisChunkUntruncated, thisChunk);
@@ -3448,7 +3462,6 @@ function HTMLSplitter(text: string, limit = 400) {
     }
   }
   Chunks = Chunks.map(chunk => chunk.replace(/<a_href=/g, "<a href="));
-
   return Chunks;
 }
 
