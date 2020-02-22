@@ -19,7 +19,7 @@ function replaceExtras(doc: string): string {
 }
 
 const replacements = [
-  [/\\/g, "\\"]
+  [/\\/g, "\\"],
   // [/\*/g, "\*"],
   // [/#/g, "\#"],
   // // [/\//g, "\\/"],
@@ -29,7 +29,7 @@ const replacements = [
   // [/\]/g, "\]"],
   // // [/\</g, "&lt;"],
   // // [/\>/g, "&gt;"],
-  // [/_/g, "\_"]
+  [/_/g, "\\_"]
 ];
 
 module.exports = {
@@ -51,6 +51,7 @@ module.exports = {
   }): string {
     string = string
       .replace(/\\/g, "\\\\")
+      // .replace(/_/g, "\\_")
       .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
     /**
      * replacing unnecessary html tags
