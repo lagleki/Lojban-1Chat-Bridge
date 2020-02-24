@@ -51,7 +51,6 @@ module.exports = {
   }): string {
     string = string
       .replace(/\\/g, "\\\\")
-      // .replace(/_/g, "\\_")
       .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
     /**
      * replacing unnecessary html tags

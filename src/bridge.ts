@@ -2573,7 +2573,10 @@ convertTo.irc = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const result = ircify(text);
+  const result = await generic.unescapeHTML({
+    text: ircify(text),
+    convertHtmlEntities: true
+  });
   debug(messenger)({ messengerTo, "converting text": text, result });
   return result;
 };
