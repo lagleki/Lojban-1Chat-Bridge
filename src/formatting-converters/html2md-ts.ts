@@ -29,7 +29,7 @@ const replacements = [
   // [/\]/g, "\]"],
   // // [/\</g, "&lt;"],
   // // [/\>/g, "&gt;"],
-  [/_/g, "\\_"]
+  // [/_/g, "\\_"]
 ];
 
 module.exports = {
@@ -51,6 +51,7 @@ module.exports = {
   }): string {
     string = string
       .replace(/\\/g, "\\\\")
+      .replace(/_/g, "&#95;")
       .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
     /**
      * replacing unnecessary html tags
@@ -86,6 +87,7 @@ module.exports = {
       }
     )
     .replace(/<br>/g,'\n')
+    .replace(/&#95;/g, "\\_")
     ;
     return html;
   },

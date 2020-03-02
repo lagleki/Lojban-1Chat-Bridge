@@ -2379,7 +2379,12 @@ convertFrom.irc = async ({
   const result = generic
     .escapeHTML(text)
     .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
-    .replace(/_\b(\w+)\b_/g, "<i>$1</i>");
+    .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
+    .replace(/\*/g, "&#42;")
+    .replace(/_/g, "&#95;")
+
+
+    ;
   debug(messenger)({
     messenger,
     "converting text": text,
@@ -2700,7 +2705,12 @@ function TelegramRemoveNewMemberMessage(message: Telegram.Message) {
 }
 
 async function TelegramLeaveChatIfNotAdmin(message: Telegram.Message) {
-  if (!message?.chat?.id || !config?.telegram?.myUser?.id) return;
+  if (
+    !["group", "supergroup"].includes(message?.chat?.type) ||
+    !message?.chat?.id ||
+    !config?.telegram?.myUser?.id
+  )
+    return;
 
   let [err, res] = await to(
     generic.telegram.client.getChatMember(
@@ -3324,7 +3334,9 @@ const htmlEntities: any = {
   gt: ">",
   quot: '"',
   amp: "&",
-  apos: "'"
+  apos: "'",
+  "#42": "*",	
+  "#95": "_"	
 };
 generic.unescapeHTML = ({
   text,
@@ -3413,8 +3425,14 @@ GetChunks.webwidget = async (text: string, messenger: string) => {
 };
 
 const diffTwo = (diffMe: string, diffBy: string) => {
-  diffMe = diffMe.replace(/[\n\r]/g, "").replace(/<br \/>/gim, "<br>").replace(/<a_href=/g, "<a href=");
-  diffBy = diffBy.replace(/[\n\r]/g, "").replace(/<br \/>/gim, "<br>").replace(/<a_href=/g, "<a href=");
+  diffMe = diffMe
+    .replace(/[\n\r]/g, "")
+    .replace(/<br \/>/gim, "<br>")
+    .replace(/<a_href=/g, "<a href=");
+  diffBy = diffBy
+    .replace(/[\n\r]/g, "")
+    .replace(/<br \/>/gim, "<br>")
+    .replace(/<a_href=/g, "<a href=");
   return diffMe.split(diffBy).join("");
 };
 
@@ -3450,7 +3468,9 @@ function HTMLSplitter(text: string, limit = 400) {
       thisChunk = text;
       stop = true;
     }
-    const thisChunkUntruncated = DOMPurify.sanitize(thisChunk.replace(/<a_href=/g, "<a href=")).replace(/<a href=/g, "<a_href=");
+    const thisChunkUntruncated = DOMPurify.sanitize(
+      thisChunk.replace(/<a_href=/g, "<a href=")
+    ).replace(/<a href=/g, "<a_href=");
     Chunks.push(thisChunkUntruncated);
     if (stop) break;
     let diff = diffTwo(thisChunkUntruncated, thisChunk);
