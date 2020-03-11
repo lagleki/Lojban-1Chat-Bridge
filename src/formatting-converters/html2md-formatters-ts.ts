@@ -184,6 +184,7 @@ function replacePre({
   return makeRegex({
     regex: preRegex,
     doc,
+    replaceFn: (match: any) => match[1].replace(/&#95;/g, "_"),
     before: "\n```\n",
     after: "\n```\n"
   });
@@ -203,7 +204,13 @@ function replaceCode({
   doc: string;
   dialect?: string;
 }): string {
-  return makeRegex({ regex: codeRegex, doc, before: "`", after: "`" });
+  return makeRegex({
+    regex: codeRegex,
+    doc,
+    replaceFn: (match: any) => match[1].replace(/&#95;/g, "_"),
+    before: "`",
+    after: "`"
+  });
 }
 
 /**

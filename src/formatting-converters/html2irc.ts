@@ -36,7 +36,7 @@ module.exports = function ircify(html: string) {
     grey: "14",
     silver: "15"
   };
-  function walk(dom: any) {
+  function walk(dom: any, ignoreCode = false) {
     let out = "";
     if (dom)
       dom.forEach((el: any) => {
@@ -80,8 +80,13 @@ module.exports = function ircify(html: string) {
                 .map(char => char + "\u0336")
                 .join("")}`;
               break;
+            case "pre":
+              out += `\n\`\`\`\n${walk(el.children, true)}\n\`\`\`\n`;
+              break;
             case "code":
-              out += `\`\`\`\n${walk(el.children)}\`\`\``;
+              if (!ignoreCode) {
+                out += `\`${walk(el.children)}\``;
+              } else out += walk(el.children);
               break;
             case "i":
             case "em":

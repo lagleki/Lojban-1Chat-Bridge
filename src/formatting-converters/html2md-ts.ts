@@ -19,7 +19,7 @@ function replaceExtras(doc: string): string {
 }
 
 const replacements = [
-  [/\\/g, "\\"],
+  [/\\/g, "\\"]
   // [/\*/g, "\*"],
   // [/#/g, "\#"],
   // // [/\//g, "\\/"],
@@ -51,7 +51,9 @@ module.exports = {
   }): string {
     string = string
       .replace(/\\/g, "\\\\")
-      .replace(/_/g, "&#95;")
+      .replace(/ _/g, "&#95;")
+      .replace(/_ /g, "&#95;")
+      .replace(/`/g, "&#96;")
       .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>");
     /**
      * replacing unnecessary html tags
@@ -74,21 +76,25 @@ module.exports = {
       if (typeof formatter === "function")
         html = formatter({ doc: html, dialect });
     }
-    html = html.replace(
-      /<a.*?href="(.*?)".*?>(.*?)<\/a>/gi,
-      (match: any, href: string, name: string) => {
-        if (hrefConvert === false) {
-          return `${href}`;
-        } else if (/\.(jpg|png|gif)/.test(href)) {
-          return `\n\n![${name}](${href})`;
-        } else {
-          return `[${name}](${href})`;
+    html = html
+      .replace(
+        /<a.*?href="(.*?)".*?>(.*?)<\/a>/gi,
+        (match: any, href: string, name: string) => {
+          name = name.replace(/&#95;/g, "_");
+          href = href.replace(/&#95;/g, "_");
+          if (hrefConvert === false) {
+            return `${href}`;
+          } else if (/\.(jpg|png|gif)/.test(href)) {
+            return `\n\n![${name}](${href})`;
+          } else {
+            return `[${name}](${href})`;
+          }
         }
-      }
-    )
-    .replace(/<br>/g,'\n')
-    .replace(/&#95;/g, "\\_")
-    ;
+      )
+      .replace(/<br>/g, "\n")
+      .replace(/&#95;/g, "\\_")
+      .replace(/&#96;/g, "\\`")
+      ;
     return html;
   },
   /**

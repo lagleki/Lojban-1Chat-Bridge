@@ -18,7 +18,7 @@ module.exports = function slackify(html: string) {
   else return "";
 };
 
-function walk(dom: any) {
+function walk(dom: any, ignoreCode = false) {
   let out = "";
   if (dom)
     dom.forEach((el: any) => {
@@ -50,8 +50,13 @@ function walk(dom: any) {
           case "del":
             out += `~${walk(el.children)}~`;
             break;
+          case "pre":
+            out += `\`\`\`\n${walk(el.children, true)}\`\`\``;
+            break;
           case "code":
-            out += `\`\`\`\n${walk(el.children)}\`\`\``;
+            if (!ignoreCode) {
+              out += `\`${walk(el.children)}\``;
+            } else out += walk(el.children);
             break;
           case "i":
           case "em":

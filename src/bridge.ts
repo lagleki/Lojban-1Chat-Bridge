@@ -31,8 +31,8 @@ import Discord = require("discord.js");
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
 
-const slackify = require("./formatting-converters/html2slack");
-const ircify = require("./formatting-converters/html2irc");
+const html2slack = require("./formatting-converters/html2slack");
+const html2irc = require("./formatting-converters/html2irc");
 
 const discordParser = require("discord-markdown");
 
@@ -2382,9 +2382,7 @@ convertFrom.irc = async ({
     .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
     .replace(/\*/g, "&#42;")
     .replace(/_/g, "&#95;")
-
-
-    ;
+    .replace(/`/g, "&#96;");
   debug(messenger)({
     messenger,
     "converting text": text,
@@ -2483,7 +2481,7 @@ convertTo.vkboard = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const result = ircify(text);
+  const result = html2irc(text);
   debug(messenger)({ messengerTo, "converting text": text, result });
   return result;
 };
@@ -2497,7 +2495,7 @@ convertTo.slack = async ({
   messenger: string;
   messengerTo: string;
 }) => {
-  const result = slackify(text);
+  const result = html2slack(text);
   debug(messenger)({ messengerTo, "converting text": text, result });
   return result;
 };
@@ -2555,20 +2553,6 @@ convertTo.webwidget = async ({
   messengerTo: string;
 }) => text;
 
-// convertTo.irc = async ({
-//   text,
-//   messenger,
-//   messengerTo
-// }: {
-//   text: string;
-//   messenger: string;
-//   messengerTo: string;
-// }) => {
-//   const result = await convertToPlainText(text);
-//   debug(messenger)({ messengerTo, "converting text": text, result });
-//   return result;
-// };
-
 convertTo.irc = async ({
   text,
   messenger,
@@ -2579,7 +2563,7 @@ convertTo.irc = async ({
   messengerTo: string;
 }) => {
   const result = await generic.unescapeHTML({
-    text: ircify(text),
+    text: html2irc(text),
     convertHtmlEntities: true
   });
   debug(messenger)({ messengerTo, "converting text": text, result });
@@ -3319,8 +3303,7 @@ generic.escapeHTML = (arg: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-    .replace(/'/g, "&apos;");
+    .replace(/'/g, "&#039;");
 
 const htmlEntities: any = {
   nbsp: " ",
@@ -3335,8 +3318,9 @@ const htmlEntities: any = {
   quot: '"',
   amp: "&",
   apos: "'",
-  "#42": "*",	
-  "#95": "_"	
+  "#42": "*",
+  "#95": "_",
+  "#96": "`"
 };
 generic.unescapeHTML = ({
   text,
@@ -3437,6 +3421,8 @@ const diffTwo = (diffMe: string, diffBy: string) => {
 };
 
 function HTMLSplitter(text: string, limit = 400) {
+  debug("generic")({ message: "html splitter: pre", text });
+
   const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g");
   text = generic.sanitizeHtml(
     text.replace(
@@ -3485,6 +3471,8 @@ function HTMLSplitter(text: string, limit = 400) {
     }
   }
   Chunks = Chunks.map(chunk => chunk.replace(/<a_href=/g, "<a href="));
+  debug("generic")({ message: "html splitter: after", Chunks });
+
   return Chunks;
 }
 
