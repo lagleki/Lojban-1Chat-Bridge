@@ -14,6 +14,7 @@ const preRegex = /<pre>([\s\S]*?)<\/pre>/gim;
 const codeRegex = /<code>([\s\S]*?)<\/code>/gim;
 const blockQuoteRegex = /<blockquote>([\s\S]*?)<\/blockquote>/gim;
 const boldRegex = /<(?:b|strong)>([\s\S]*?)<\/\w*>/gim;
+const underlineRegex = /<(?:u)>([\s\S]*?)<\/\w*>/gim;
 const italicRegex = /<(?:i|em)>([\s\S]*?)<\/\w*>/gim;
 
 /**
@@ -257,6 +258,27 @@ function replaceBold({
 }): string {
   return makeRegex({ regex: boldRegex, doc, before: "**", after: "**" });
 }
+1;
+/**
+ * @description replaces г section with equalent markdown
+ * syntax
+ * @method replaceUnderline
+ * @param  {String}       doc [description]
+ * @return {String}           [description]
+ */
+function replaceUnderline({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  return makeRegex({
+    regex: underlineRegex,
+    doc,
+    replaceFn: (match: any) => match[1].replace(/(.)/g, "$1\u035f")
+  });
+}
 
 /**
  * @description replaces i|em section with equalent markdown
@@ -319,6 +341,7 @@ module.exports = [
   replaceUl,
   replaceOl,
   replaceBold,
+  replaceUnderline,
   replaceItalic,
   replaceBlockQuote
 ];

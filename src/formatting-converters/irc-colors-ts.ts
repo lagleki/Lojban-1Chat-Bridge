@@ -1,4 +1,4 @@
-const globalColors: Json = {
+const globalColors: any = {
   white: "00",
   black: "01",
   navy: "02",
@@ -21,11 +21,7 @@ const globalColors: Json = {
   silver: "15"
 };
 
-interface Json {
-  [index: string]: string;
-}
-
-const globalStyles: Json = {
+const globalStyles: any = {
   normal: "\x0F",
   underline: "\x1F",
   bold: "\x02",
