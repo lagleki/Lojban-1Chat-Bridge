@@ -835,7 +835,7 @@ async function sendFrom({
   text = await convertFrom[messenger]({ text, messenger });
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
   text = text.replace(/^(<br\/>)+/, "");
-  const nsfw = file ? await getNSFWString(file) : null;
+  const nsfw: any = undefined;//file ? await getNSFWString(file) : null;
   if (nsfw) {
     for (const nsfw_result of nsfw) {
       const translated_text = generic.LocalizeString({

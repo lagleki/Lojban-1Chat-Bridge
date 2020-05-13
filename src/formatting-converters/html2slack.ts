@@ -26,7 +26,8 @@ function walk(dom: any, ignoreCode = false) {
       if ("tag" === el.type)
         switch (el.name) {
           case "a":
-            out += `<${el.attribs.href}|${walk(el.children)}>`;
+            if (el.attribs?.href)
+              out += `<${el.attribs.href}|${walk(el.children)}>`;
             break;
           case "br":
             out += `\n`;
@@ -34,7 +35,7 @@ function walk(dom: any, ignoreCode = false) {
           case "blockquote":
             out += `\n${walk(el.children)
               .split(/\n/)
-              .map(string => `> ${string}`)
+              .map((string) => `> ${string}`)
               .join("\n")}\n`;
             break;
           case "u":

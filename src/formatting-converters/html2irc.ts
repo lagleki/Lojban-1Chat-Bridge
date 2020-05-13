@@ -12,7 +12,7 @@ module.exports = function ircify(html: string) {
   const globalStyles: Json = {
     underline: "\x1F",
     bold: "\x02",
-    italic: "\x1D"
+    italic: "\x1D",
   };
   const globalColors: Json = {
     white: "00",
@@ -34,7 +34,7 @@ module.exports = function ircify(html: string) {
     lightpurple: "13",
     gray: "14",
     grey: "14",
-    silver: "15"
+    silver: "15",
   };
   function walk(dom: any, ignoreCode = false) {
     let out = "";
@@ -44,11 +44,13 @@ module.exports = function ircify(html: string) {
         if ("tag" === el.type)
           switch (el.name) {
             case "a":
-              const children = walk(el.children);
-              if (el.attribs.href !== children) {
-                out += `<${el.attribs.href} ${walk(el.children)}>`;
-              } else {
-                out += `${el.attribs.href}`;
+              if (el.attribs?.href) {
+                const children = walk(el.children);
+                if (el.attribs.href !== children) {
+                  out += `<${el.attribs.href} ${walk(el.children)}>`;
+                } else {
+                  out += `${el.attribs.href}`;
+                }
               }
               break;
             case "br":
@@ -57,7 +59,7 @@ module.exports = function ircify(html: string) {
             case "blockquote":
               out += `\n${walk(el.children)
                 .split(/\n/)
-                .map(string => `> ${string}`)
+                .map((string) => `> ${string}`)
                 .join("\n")}\n`;
               break;
             case "u":
@@ -77,7 +79,7 @@ module.exports = function ircify(html: string) {
             case "del":
               out += `${walk(el.children)
                 .split("")
-                .map(char => char + "\u0336")
+                .map((char) => char + "\u0336")
                 .join("")}`;
               break;
             case "pre":
