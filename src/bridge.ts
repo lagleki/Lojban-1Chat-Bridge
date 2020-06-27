@@ -37,7 +37,7 @@ const html2irc = require("./formatting-converters/html2irc");
 const discordParser = require("discord-markdown");
 
 const marked = require("marked");
-const lexer = new marked.Lexer();
+const lexer = marked.Lexer;
 lexer.rules.list = { exec: () => {} };
 lexer.rules.listitem = { exec: () => {} };
 const markedRenderer = new marked.Renderer();
@@ -1702,7 +1702,7 @@ receivedFrom.slack = async (message: any) => {
   const promUser = generic.slack.client.web.users.info({
     user: message.user
   });
-  const promChannel = generic.slack.client.web.channels.info({
+  const promChannel = generic.slack.client.web.conversations.info({
     channel: message.channel
   });
 
@@ -2836,7 +2836,7 @@ GetChannels.telegram = async () => {
 
 GetChannels.slack = async () => {
   if (!config.MessengersAvailable.slack) return {};
-  let [err, res] = await to(generic.slack.client.web.channels.list());
+  let [err, res] = await to(generic.slack.client.web.conversations.list());
   if (err) {
     console.error(err);
   }
