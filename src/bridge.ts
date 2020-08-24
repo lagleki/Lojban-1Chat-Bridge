@@ -26,7 +26,7 @@ import { Authorization } from "@vk-io/authorization";
 
 const VkBot = require("node-vk-bot-api");
 
-import Discord = require("discord.js");
+const Discord = require('discord.js');
 
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
@@ -280,10 +280,6 @@ generic.discord.Start = async () => {
           )
         ];
     }
-    generic.discord.guilds.getAll = (name: string) =>
-      [].concat(
-        ...generic.discord.guilds.map((guild: any) => guild[name].array())
-      );
     resolve();
   });
 };
