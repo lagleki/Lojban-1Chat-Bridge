@@ -26,22 +26,21 @@ import { Authorization } from "@vk-io/authorization"
 
 const VkBot = require("node-vk-bot-api")
 
-const Discord = require("discord.js")
-
 const { RTMClient, WebClient } = require("@slack/client")
 const emoji = require("node-emoji")
 
 const html2slack = require("./formatting-converters/html2slack")
 const html2irc = require("./formatting-converters/html2irc")
 
+const Discord = require("discord.js")
 const discordParser = require("discord-markdown")
-
 const marked = require("marked")
 const lexer = marked.Lexer
 lexer.rules.list = { exec: () => {} }
 lexer.rules.listitem = { exec: () => {} }
 const markedRenderer = new marked.Renderer()
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+const avatar = require("../src/animalicons/index.js")
 
 function markedParse({
   text,
@@ -94,7 +93,6 @@ const winston = require("winston")
 const logger = winston.createLogger({
   transports: [new winston.transports.File({ filename: "log.log" })],
 })
-import { inspect } from "util" // or directly
 
 const R = require("ramda")
 const { default: PQueue } = require("p-queue")
@@ -113,11 +111,11 @@ let webwidget: any
 const lojban = require("lojban")
 
 // global objects
-const UrlRegExp = new RegExp(
-  "(?:(?:https?|ftp|file)://|www.|ftp.)(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[A-Z0-9+&@#/%=~_|$])",
-  "igm"
-)
-const PageTitleRegExp = /(<\s*title[^>]*>(.+?)<\s*\/\s*title)>/gi
+// const UrlRegExp = new RegExp(
+//   "(?:(?:https?|ftp|file)://|www.|ftp.)(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:([-A-Z0-9+&@#/%=~_|$?!:,.]*)|[A-Z0-9+&@#/%=~_|$])",
+//   "igm"
+// )
+// const PageTitleRegExp = /(<\s*title[^>]*>(.+?)<\s*\/\s*title)>/gi
 
 interface Json {
   [index: string]: string | boolean | RegExp
@@ -260,35 +258,6 @@ generic.slack.Start = async () => {
     }
   })
   return true
-}
-generic.discord.Start = async () => {
-  const avatar =
-    "data:image/jpeg;base64," +
-    fs
-      .readFileSync(path.join(__dirname,"./assets/pictures/velsku.jpg"), { encoding: "base64" })
-      .toString("base64")
-
-  return new Promise((resolve) => {
-    const client = new Discord.Client()
-    generic.discord.avatar = avatar
-    generic.discord.client = client
-    generic.discord.guilds = client.guilds.array()
-    if (config.discord.guildId) {
-      const guild = client.guilds.find(
-        (guild: any) =>
-          guild.name.toLowerCase() === config.discord.guildId.toLowerCase() ||
-          guild.id === config.discord.guildId
-      )
-      if (guild)
-        generic.discord.guilds = [
-          guild,
-          ...generic.discord.guilds.filter(
-            (_guild: any) => _guild.id !== guild.id
-          ),
-        ]
-    }
-    resolve()
-  })
 }
 generic.mattermost.Start = async () => {
   let [err, res] = await to(
@@ -538,23 +507,32 @@ sendTo.discord = async ({
   if (config?.channelMapping?.discord?.[channelId]?.settings?.readonly) return
 
   queueOf.discord.add(async () => {
-    const channel = generic.discord.client.channels.get(channelId)
+    const channel = generic.discord.client.channels.cache.get(channelId)
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
+    let ava = new avatar(author, {}, 200)
+    await ava.draw()
+    ava = await ava.toDataURL()
+
     if (!webhook) {
       webhook = await channel.createWebhook(
         author || "-",
-        generic.discord.avatar
+        ava
       )
+    } else {
+      webhook = await webhook.edit({
+        name: author || "-",
+        avatar: ava,
+      })
     }
 
     await webhook.send(chunk, {
       username: author || "-",
-      // avatarURL: generic.discord.avatar,
+      // avatarURL: generic.discord.avatar.path,
     })
 
     // await new Promise((resolve: any) => {
-    //   generic.discord.client.channels
+    //   generic.discord.client.channels.cache
     //     .get(channelId)
     //     .send(chunk)
     //     .catch(catchError)
@@ -2868,7 +2846,7 @@ GetChannels.mattermost = async () => {
 GetChannels.discord = async () => {
   if (!config.MessengersAvailable.discord) return
   const json: Json = {}
-  for (const value of generic.discord.client.channels.values()) {
+  for (const value of generic.discord.client.channels.cache.values()) {
     if (value.guild.id === config.discord.guildId) {
       json[value.name] = value.id
     }
@@ -3130,26 +3108,34 @@ StartService.mattermost = async () => {
 }
 
 StartService.discord = async () => {
-  //discord
-  await generic.discord.Start()
   if (!config.MessengersAvailable.discord) return
 
+  const client = new Discord.Client()
+  generic.discord.client = client
+
   queueOf.discord = new PQueue({ concurrency: 1 })
-  await new Promise((resolve) => {
-    if (config.MessengersAvailable.discord) {
-      generic.discord.client.on("ready", () => {
-        resolve()
-      })
-      generic.discord.client.on("error", (error: any) => {
-        debug("discord")(error)
-        resolve()
-        // StartService.discord();
-      })
-      generic.discord.client.login(config.discord.token)
-    } else {
-      resolve()
+  generic.discord.client.once("ready", () => {
+    generic.discord.guilds = client.guilds.cache.array()
+    if (config.discord.guildId) {
+      const guild = client.guilds.cache.find(
+        (guild: any) =>
+          guild.name.toLowerCase() === config.discord.guildId.toLowerCase() ||
+          guild.id === config.discord.guildId
+      )
+      if (guild)
+        generic.discord.guilds = [
+          guild,
+          ...generic.discord.guilds.filter(
+            (_guild: any) => _guild.id !== guild.id
+          ),
+        ]
     }
   })
+  generic.discord.client.on("error", (error: any) => {
+    debug("discord")(error)
+    // StartService.discord();
+  })
+
   generic.discord.client.on("message", (message: any) => {
     receivedFrom.discord(message)
   })
@@ -3162,6 +3148,7 @@ StartService.discord = async () => {
       }
     }
   )
+  generic.discord.client.login(config.discord.token)
 }
 
 StartService.irc = async () => {
