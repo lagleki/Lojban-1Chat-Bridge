@@ -510,7 +510,7 @@ sendTo.discord = async ({
     const channel = generic.discord.client.channels.cache.get(channelId)
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
-    let ava = new avatar(author, {}, 200)
+    let ava = new avatar(author, 512)
     await ava.draw()
     ava = await ava.toDataURL()
 

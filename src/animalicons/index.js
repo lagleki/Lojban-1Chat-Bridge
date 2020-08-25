@@ -16,14 +16,13 @@ fs.readdirSync(path.join(__dirname, folder)).forEach(file => {
 });
 
 class Avatar {
-	constructor(seed, theme, size = 96) {
+	constructor(seed, size = 128) {
 		this.size = size;
 		this.seed = seed;
 		this.theme = {
 			layouts: [...Array(10).keys()],
 			minimumColorVariance: 0,
-			...defaultTheme,
-			...(theme || {}),
+			...defaultTheme
 		};
 
 		this.canvas = createCanvas(size, size)
