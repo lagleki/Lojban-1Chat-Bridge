@@ -1,8 +1,8 @@
 {
   "type": "module",
   "name": "lojban-1chat-bridge",
-  "description": "Telegram <-> Slack <-> IRC <-> Mattermost gateway",
-  "version": "0.0.1",
+  "description": "Telegram <-> Discord <-> Slack <-> IRC <-> Mattermost <-> VK.com gateway",
+  "version": "1.0.1",
   "preferGlobal": true,
   "bin": {
     "Lojban-1Chat-Bridge": "bridge.js"
