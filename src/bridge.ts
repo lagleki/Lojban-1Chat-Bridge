@@ -1175,7 +1175,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
   if (matches && matches[0])
     for (let match of matches) {
       const core = match.replace(/[@<>\!&]/g, "")
-      const member = message.channel.guild.members
+      const member = message.channel.guild.members.cache
         .array()
         .find(
           (member: any) =>
@@ -1184,7 +1184,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
         )
       // logger.log({
       //   level: "info",
-      //   message: message.channel.guild.members
+      //   message: message.channel.guild.members.cache
       //     .array()
       //     .map((member: any) => {
       //       return `${member.nickname || member.user?.username} ${
