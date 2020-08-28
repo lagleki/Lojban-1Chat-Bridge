@@ -2,11 +2,16 @@ const config = {};
 module.exports = config;
 
 config.discord = {
-  //create a Discord bot, add it to your server (group of channels) and fill in these:
-  //onlyon server is supported
+  /*
+  create a Discord bot,
+  add it to your server (group of channels)
+  only one server is supported
+  Add a new role "webhooks" and add switch the ability to manage webhooks to this role. Add the role "webhooks" to the bot you just created. 
+  Open your bot credentials and fill them in:
+  */
   client: "",
   token: "",
-  /* this is the id of the server.
+  /* this is the id of the server:
   E.g. if your groups look like https://discordapp.com/channels/123498134853750762/1230785752112867346
   then your guildId = 123498134853750762 (the first of the two numbers)
   */

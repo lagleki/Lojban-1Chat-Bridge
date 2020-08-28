@@ -515,10 +515,7 @@ sendTo.discord = async ({
     ava = await ava.toDataURL()
 
     if (!webhook) {
-      webhook = await channel.createWebhook(
-        author || "-",
-        ava
-      )
+      webhook = await channel.createWebhook(author || "-", ava)
     } else {
       webhook = await webhook.edit({
         name: author || "-",
@@ -1171,7 +1168,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
       text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``)
     })
   }
-  let matches = text.match(/<[\!&]?@[^# ]{2,32}>/g)
+  let matches = text.replace(/#0000/, "").match(/<[\!&]?@[^# ]{2,32}>/g)
   if (matches && matches[0])
     for (let match of matches) {
       const core = match.replace(/[@<>\!&]/g, "")
@@ -1182,19 +1179,8 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
             (member.nickname || member.user?.username) &&
             member.user.id.toLowerCase() === core
         )
-      // logger.log({
-      //   level: "info",
-      //   message: message.channel.guild.members.cache
-      //     .array()
-      //     .map((member: any) => {
-      //       return `${member.nickname || member.user?.username} ${
-      //         member.user?.id
-      //       }`;
-      //     })
-      //     .join("\n")
-      // });
       if (member)
-        text = text.replace(
+        text = text.replace(/#0000/, "").replace(
           match,
           "@" + (member.nickname || member.user.username)
         )
