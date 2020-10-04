@@ -1,7 +1,6 @@
 var path = require('path');
 var webpack = require('webpack');
 
-
 module.exports = {
   entry: {
     index: "./bridge.ts"
@@ -14,8 +13,8 @@ module.exports = {
     ]
   },
   plugins: [
-    new webpack.DefinePlugin({'process.env.NODE_ENV': '"production"'})
-    ],
+    new webpack.DefinePlugin({ 'process.env.NODE_ENV': '"production"' })
+  ],
   resolve: {
     extensions: ['.ts', '.js', '.json']
   },

@@ -1,1 +1,0 @@
-names - List users on IRC

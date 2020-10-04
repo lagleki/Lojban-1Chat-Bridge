@@ -21,6 +21,8 @@ const { JSDOM } = require("jsdom")
 const window = new JSDOM("").window
 const DOMPurify = createDOMPurify(window)
 
+const util = require('util')
+
 import { VK } from "vk-io"
 import { Authorization } from "@vk-io/authorization"
 
@@ -481,12 +483,17 @@ sendTo.telegram = async ({
         })
         .then(() => resolve())
         .catch((err: any) => {
+          err=util.inspect(err, {showHidden: false, depth: 4})
           generic.LogToAdmin(
-            channelId +
-              "\n\n" +
-              "error sending chunk" +
-              "\n\n" +
-              generic.escapeHTML(chunk)
+            `
+Error sending a chunk:
+
+Channel: ${channelId}.
+
+Chunk: ${generic.escapeHTML(chunk)}
+
+Error message: ${err}
+            `               
           )
           resolve()
         })
@@ -3262,6 +3269,10 @@ generic.LogMessageToAdmin = async (message: Telegram.Message) => {
 }
 
 generic.LogToAdmin = (msg_text: string) => {
+      logger.log({
+      level: "info",
+      message: JSON.stringify(msg_text)
+    });
   if (config.telegram.admins_userid)
     generic.telegram.client
       .sendMessage(config.telegram.admins_userid, msg_text, {
