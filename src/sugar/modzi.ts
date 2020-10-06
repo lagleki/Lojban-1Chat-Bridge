@@ -5,8 +5,11 @@ module.exports = {
     let parsed = lojban.romoi_lahi_cmaxes(name)
     if (parsed.tcini !== "snada") return { output: name, snada: false }
     parsed = parsed["te spuda"]
-      .filter((i) => i[0] !== "drata" && !["la", "la'i", "lahi"].includes(i[1]))
-      .map((i) => {
+      .filter(
+        (i: string[]) =>
+          i[0] !== "drata" && !["la", "la'i", "lahi"].includes(i[1])
+      )
+      .map((i: any) => {
         if (i[0] == "cmevla") {
           i[1] = i[1] + "yco'e"
           console.log(i[1])

@@ -1,6 +1,8 @@
 const { getHash, getMinimumColorVariance } = require("./utils");
 const getMCV = getMinimumColorVariance
-const { createCanvas, Image } = require('canvas')
+const { createCanvas, Image, registerFont } = require('canvas')
+
+registerFont('src/animalicons/fonts/NotoSans-Regular.ttf', { family: 'Noto' });
 
 const colors = require("./colors.json");
 const defaultTheme = {
@@ -166,7 +168,6 @@ class Avatar {
 	async drawEmoji(ctx, hash) {
 		const { size } = this;
 		const { emojis } = this.theme;
-		const emoji = emojis[parseInt(hash.substring(2, 5), 16) % emojis.length];
 
 		ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
 		ctx.shadowBlur = size / 8;
@@ -174,19 +175,28 @@ class Avatar {
 		ctx.shadowOffsetY = 0;
 
 		return new Promise(resolve => {
-			const img = new Image()
-			img.onload = () => {
-				ctx.drawImage(
-					img,
-					(size * 3) / 16,
-					(size * 3) / 16,
-					(size * 5) / 8,
-					(size * 5) / 8
-				)
+			if (this.modzi) {
+				// ctx.fillStyle = 'white';
+				ctx.textAlign = 'center';
+				ctx.font = '64px Noto'
+				ctx.fillText(this.modzi, size / 2 - 32, size / 2 - 32)
 				resolve()
+			} else {
+				const emoji = emojis[parseInt(hash.substring(2, 5), 16) % emojis.length];
+				const img = new Image()
+				img.onload = () => {
+					ctx.drawImage(
+						img,
+						(size * 3) / 16,
+						(size * 3) / 16,
+						(size * 5) / 8,
+						(size * 5) / 8
+					)
+					resolve()
+				}
+				img.onerror = err => { console.log`${err}` }
+				img.src = emoji
 			}
-			img.onerror = err => { console.log`${err}` }
-			img.src = emoji
 		})
 	}
 

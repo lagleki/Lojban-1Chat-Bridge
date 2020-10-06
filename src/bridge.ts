@@ -3480,7 +3480,7 @@ generic.downloadFile = async ({
   type,
   fileId,
   remote_path,
-  extension,
+  extension = "",
 }: {
   type: string
   fileId?: number
@@ -3552,11 +3552,8 @@ generic.downloadFile = async ({
     )
     if (res) [rem_fullname, local_fullname] = res
   } else if (type === "simple") {
-    if (extension) {
-      extension = `.${extension}`
-    } else {
-      extension = ""
-    }
+    if (extension) extension = `.${extension}`
+
     const basename = path.basename(remote_path).split(/[\?#]/)[0] + extension
     local_fullname = `${local_path}/${basename}`
     await new Promise((resolve: any, reject: any) => {
@@ -3598,14 +3595,7 @@ generic.downloadFile = async ({
     ;[err, local_fullname] = await to(
       generic.telegram.client.downloadFile(fileId, local_path)
     )
-    const basename = path.basename(local_fullname)
-    const name = {
-      name: path.parse(basename).name,
-      ext: path.parse(basename).ext,
-    }
-    name.ext = name.ext.replace(/^oga$/, "ogg")
-
-    if (!err) rem_fullname = `${rem_path}/${name.name}.${name.ext}`
+    if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`
   }
   if (err) {
     console.error({ remote_path, error: err, type: "generic" })
@@ -3613,47 +3603,66 @@ generic.downloadFile = async ({
   }
   ;[err, res] = await to(
     new Promise((resolve: any) => {
-      const newname = `${local_path}/${randomStringName}${path.extname(
+      const new_name = `${local_path}/${randomStringName}${path.extname(
         local_fullname
       )}`
-      fs.rename(local_fullname, newname, (err: any) => {
+
+      fs.rename(local_fullname, new_name, (err: any) => {
         if (err) {
           console.error({ remote_path, error: err, type: "renaming" })
           resolve()
         } else {
-          rem_fullname = `${rem_path}/${path.basename(newname)}`
-          resolve([rem_fullname, newname])
+          rem_fullname = `${rem_path}/${path.basename(new_name)}`
+          resolve([rem_fullname, new_name])
         }
       })
     })
   )
   if (!err) [rem_fullname, local_fullname] = res
-  if (![".webp", ".tiff"].includes(path.extname(local_fullname))) {
+
+  //check if it's audio:
+  if (
+    [".ogg", ".oga", ".opus", ".wav"].includes(path.extname(local_fullname))
+  ) {
+    const local_mp3_file = local_fullname + ".mp3"
+    const cp = require("child_process")
+
+    cp.spawnSync("ffmpeg", ["-i", local_fullname, local_mp3_file], {
+      encoding: "utf8",
+    })
+    if (fs.existsSync(local_mp3_file)) return [rem_fullname + ".mp3", local_mp3_file]
     return [rem_fullname, local_fullname]
   }
-  const sharp = require("sharp")
-  const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`
-  ;[err, res] = await to(
-    new Promise((resolve) => {
-      sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
-        if (err) {
-          console.error({
-            type: "conversion",
-            remote_path,
-            error: err.toString(),
-          })
-          resolve([rem_fullname, local_fullname])
-        } else {
-          fs.unlink(local_fullname)
-          resolve([
-            `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
-            jpgname,
-          ])
-        }
+
+  //check if it's webp/tiff:
+  if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
+    const sharp = require("sharp")
+    const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`
+    ;[err, res] = await to(
+      new Promise((resolve) => {
+        sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
+          if (err) {
+            console.error({
+              type: "conversion",
+              remote_path,
+              error: err.toString(),
+            })
+            resolve([rem_fullname, local_fullname])
+          } else {
+            fs.unlink(local_fullname)
+            resolve([
+              `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
+              jpgname,
+            ])
+          }
+        })
       })
-    })
-  )
-  if (!err) [rem_fullname, local_fullname] = res
+    )
+
+    if (!err) [rem_fullname, local_fullname] = res
+  }
+
+  //it's some other file format:
   return [rem_fullname, local_fullname]
 }
 

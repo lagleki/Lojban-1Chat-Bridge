@@ -23,6 +23,14 @@ Currently there are only short docs. You need to study yourself how to make user
 * `npm run genconfig` to generate a default config
 * Read and edit `vim config/defaults.js`, which has in-place instructions
 * `npm run start` to start the process.
+* install FFmpeg and make sure it's in your PATH, e.g. on Ubuntu/Debian:
+```
+sudo apt update
+
+sudo apt install ffmpeg
+
+ffmpeg -version
+```
 
 ## Debug
 
