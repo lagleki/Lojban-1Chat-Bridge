@@ -39,7 +39,9 @@
     "animal-identicon": "0.0.1",
     "await-to-js": "^2.1.1",
     "canvas": "^2.6.1",
+    "color-space": "1.16.0",
     "debug": "^4.1.1",
+    "delta-e": "0.0.8",
     "discord-markdown": "^2.3.1",
     "discord.js": "12.3.1",
     "dompurify": "^2.0.12",
@@ -52,7 +54,7 @@
     "jpeg-js": "^0.4.2",
     "jsdom": "^16.4.0",
     "libfb": "^2.3.5",
-    "lojban": "^1.1.10",
+    "lojban": "^1.1.21",
     "marked": "^1.1.1",
     "middleware-io": "2.5.0",
     "mkdirp-sync": "0.0.3",
@@ -74,9 +76,7 @@
     "socket.io": "^2.3.0",
     "vk-io": "4.0.0-rc.30",
     "winston": "^3.3.3",
-    "ws": "^7.3.1",
-    "color-space": "1.16.0",
-    "delta-e": "0.0.8"
+    "ws": "^7.3.1"
   },
   "devDependencies": {
     "@types/debug": "^4.1.5",

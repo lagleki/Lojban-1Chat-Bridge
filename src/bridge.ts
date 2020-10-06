@@ -21,7 +21,7 @@ const { JSDOM } = require("jsdom")
 const window = new JSDOM("").window
 const DOMPurify = createDOMPurify(window)
 
-const util = require('util')
+const util = require("util")
 
 import { VK } from "vk-io"
 import { Authorization } from "@vk-io/authorization"
@@ -102,6 +102,7 @@ const queue = new PQueue({ concurrency: 1 })
 
 const { to } = require("await-to-js")
 const blalalavla = require("./sugar/blalalavla")
+const modzi = require("./sugar/modzi")
 // file system and network libs
 const fs = require("fs-extra")
 const path = require("path")
@@ -483,7 +484,7 @@ sendTo.telegram = async ({
         })
         .then(() => resolve())
         .catch((err: any) => {
-          err=util.inspect(err, {showHidden: false, depth: 4})
+          err = util.inspect(err, { showHidden: false, depth: 4 })
           generic.LogToAdmin(
             `
 Error sending a chunk:
@@ -493,7 +494,7 @@ Channel: ${channelId}.
 Chunk: ${generic.escapeHTML(chunk)}
 
 Error message: ${err}
-            `               
+            `
           )
           resolve()
         })
@@ -517,7 +518,13 @@ sendTo.discord = async ({
     const channel = generic.discord.client.channels.cache.get(channelId)
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
-    let ava = new avatar(author, 512)
+    author = author.replace(/[0-9_\.-]+$/, "")
+    const parsedName = modzi.modzi(author)
+    let ava = new avatar(
+      author,
+      512,
+      parsedName.snada ? parsedName.output : undefined
+    )
     await ava.draw()
     ava = await ava.toDataURL()
 
@@ -1187,10 +1194,9 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
             member.user.id.toLowerCase() === core
         )
       if (member)
-        text = text.replace(/#0000/, "").replace(
-          match,
-          "@" + (member.nickname || member.user.username)
-        )
+        text = text
+          .replace(/#0000/, "")
+          .replace(match, "@" + (member.nickname || member.user.username))
     }
   matches = text.match(/<#[^# ]{2,32}>/g)
   if (matches && matches[0])
@@ -3269,10 +3275,10 @@ generic.LogMessageToAdmin = async (message: Telegram.Message) => {
 }
 
 generic.LogToAdmin = (msg_text: string) => {
-      logger.log({
-      level: "info",
-      message: JSON.stringify(msg_text)
-    });
+  logger.log({
+    level: "info",
+    message: JSON.stringify(msg_text),
+  })
   if (config.telegram.admins_userid)
     generic.telegram.client
       .sendMessage(config.telegram.admins_userid, msg_text, {
@@ -3492,6 +3498,7 @@ generic.downloadFile = async ({
   let err: any, res: any
   let rem_fullname: string = ""
   let local_fullname: string = ""
+
   if (type === "slack") {
     local_fullname = `${local_path}/${path.basename(remote_path)}`
     ;[err, res] = await to(
@@ -3591,7 +3598,14 @@ generic.downloadFile = async ({
     ;[err, local_fullname] = await to(
       generic.telegram.client.downloadFile(fileId, local_path)
     )
-    if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`
+    const basename = path.basename(local_fullname)
+    const name = {
+      name: path.parse(basename).name,
+      ext: path.parse(basename).ext,
+    }
+    name.ext = name.ext.replace(/^oga$/, "ogg")
+
+    if (!err) rem_fullname = `${rem_path}/${name.name}.${name.ext}`
   }
   if (err) {
     console.error({ remote_path, error: err, type: "generic" })

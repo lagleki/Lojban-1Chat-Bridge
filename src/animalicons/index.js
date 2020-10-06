@@ -16,7 +16,7 @@ fs.readdirSync(path.join(__dirname, folder)).forEach(file => {
 });
 
 class Avatar {
-	constructor(seed, size = 128) {
+	constructor(seed, size = 128, modzi) {
 		this.size = size;
 		this.seed = seed;
 		this.theme = {
@@ -24,6 +24,7 @@ class Avatar {
 			minimumColorVariance: 0,
 			...defaultTheme
 		};
+		this.modzi = modzi
 
 		this.canvas = createCanvas(size, size)
 	}
