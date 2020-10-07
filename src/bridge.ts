@@ -523,7 +523,7 @@ sendTo.discord = async ({
     let ava = new avatar(
       author,
       512,
-      parsedName.snada ? parsedName.output : undefined
+      // parsedName.snada ? parsedName.output : undefined
     )
     await ava.draw()
     ava = await ava.toDataURL()
@@ -537,8 +537,18 @@ sendTo.discord = async ({
       })
     }
 
+    let files = undefined
+    if (file) {
+      files = [
+        {
+          attachment: file,
+        },
+      ]
+    }
+
     await webhook.send(chunk, {
       username: author || "-",
+      files,
       // avatarURL: generic.discord.avatar.path,
     })
 
@@ -3630,7 +3640,8 @@ generic.downloadFile = async ({
     cp.spawnSync("ffmpeg", ["-i", local_fullname, local_mp3_file], {
       encoding: "utf8",
     })
-    if (fs.existsSync(local_mp3_file)) return [rem_fullname + ".mp3", local_mp3_file]
+    if (fs.existsSync(local_mp3_file))
+      return [rem_fullname + ".mp3", local_mp3_file]
     return [rem_fullname, local_fullname]
   }
 
