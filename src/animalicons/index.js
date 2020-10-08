@@ -3,6 +3,7 @@ const path = require('path');
 const { getHash, getMinimumColorVariance } = require("./utils");
 const getMCV = getMinimumColorVariance
 const { createCanvas, Image, registerFont } = require('canvas')
+const { fillTextWithTwemoji } = require('node-canvas-with-twemoji');
 
 registerFont(path.resolve(__dirname, 'fonts/NotoSans-Regular.ttf'), { family: 'Noto' });
 registerFont(path.resolve(__dirname, 'fonts/NotoColorEmoji.ttf'), { family: 'Emoji' });
@@ -172,20 +173,11 @@ class Avatar {
 
 		return new Promise(resolve => {
 			if (this.modzi) {
-				ctx.textAlign = 'center';
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
 				ctx.font = (size / 2) + 'px "Emoji"'
-				ctx.shadowColor = "black";
-				ctx.shadowBlur = size / 8;
-				ctx.lineWidth = size / 8;
-				ctx.strokeText(this.modzi, size / 2, size / 2);
-				ctx.shadowBlur = 0;
-				ctx.fillStyle="white";
-
-				// ctx.strokeStyle = 'black';
-				// ctx.lineJoin = "round";
-				// ctx.miterLimit = 2;
-				ctx.fillText(this.modzi, size / 2, size / 2)
-				resolve()
+				ctx.fillStyle = "black";
+				fillTextWithTwemoji(ctx, this.modzi, size / 2, size / 2).then(() => { resolve() })
 			} else {
 				ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
 				ctx.shadowBlur = size / 8;
@@ -212,16 +204,16 @@ class Avatar {
 
 	async draw() {
 		try {
-		const hash = await getHash(this.seed);
-		const ctx = this.canvas.getContext("2d");
-		const { colors, emojis } = this.theme;
-		if (colors.length) {
-			await this.drawBackground(ctx, hash);
-		}
-		if (emojis.length) {
-			await this.drawEmoji(ctx, hash);
-		}
-	}catch(err){console.log(err)}
+			const hash = await getHash(this.seed);
+			const ctx = this.canvas.getContext("2d");
+			const { colors, emojis } = this.theme;
+			if (colors.length) {
+				await this.drawBackground(ctx, hash);
+			}
+			if (emojis.length) {
+				await this.drawEmoji(ctx, hash);
+			}
+		} catch (err) { console.log(err) }
 	}
 
 	async toDataURL(type, encoderOptions) {

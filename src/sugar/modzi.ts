@@ -13,14 +13,17 @@ module.exports = {
       .map((i: any) => {
         if (i[0] == "cmevla") {
           i[1] = i[1] + "yco'e"
-          console.log(i[1])
           i[1] = lojban
             .zeizei(i[1])
             .replace(/ zei co'e$/, "")
             .split(" zei ")
             .join(" ")
         } else if (i[0] == "lujvo") {
-          i[1] = lojban.zeizei(i[1]).split(" zei ").join(" ")
+          i[1] = i[1].split("-").map((u: any) => {
+            if (!/[aeiouy]/.test(u.slice(-1))) u = u + "y"
+            return u
+          }).join("")
+          i[1] = lojban.zeizei(i[1].replace(/-/g, '')).split(" zei ").join(" ")
         }
         return i[1]
       })

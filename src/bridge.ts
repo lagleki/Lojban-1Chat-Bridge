@@ -520,6 +520,7 @@ sendTo.discord = async ({
     let webhook = webhooks.first()
     author = author.replace(/[0-9_\.-]+$/, "").replace(/\[.*/, "")
     const parsedName = modzi.modzi(author)
+    console.log(parsedName)
     let ava = new avatar(
       author,
       512,
