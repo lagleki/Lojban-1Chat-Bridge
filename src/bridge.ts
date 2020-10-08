@@ -518,12 +518,12 @@ sendTo.discord = async ({
     const channel = generic.discord.client.channels.cache.get(channelId)
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
-    author = author.replace(/[0-9_\.-]+$/, "")
+    author = author.replace(/[0-9_\.-]+$/, "").replace(/\[.*/, "")
     const parsedName = modzi.modzi(author)
     let ava = new avatar(
       author,
       512,
-      // parsedName.snada ? parsedName.output : undefined
+      parsedName.snada ? parsedName.output : undefined
     )
     await ava.draw()
     ava = await ava.toDataURL()
@@ -3283,6 +3283,11 @@ generic.LogMessageToAdmin = async (message: Telegram.Message) => {
       )
     )
 }
+function catchError(err: any) {
+  const error = JSON.stringify(err)
+  console.log(error)
+  generic.LogToAdmin(err)
+}
 
 generic.LogToAdmin = (msg_text: string) => {
   logger.log({
@@ -3291,9 +3296,13 @@ generic.LogToAdmin = (msg_text: string) => {
   })
   if (config.telegram.admins_userid)
     generic.telegram.client
-      .sendMessage(config.telegram.admins_userid, msg_text, {
-        parse_mode: "Markdown",
-      })
+      .sendMessage(
+        config.telegram.admins_userid,
+        `\`\`\`\n${msg_text}\n\`\`\``,
+        {
+          parse_mode: "Markdown",
+        }
+      )
       .catch((e: any) => {
         console.log(msg_text)
         generic.LogToAdmin(msg_text)
@@ -3733,10 +3742,6 @@ generic.LocalizeString = ({
   } catch (err) {
     console.error(err)
   }
-}
-
-function catchError(err: any) {
-  console.log(JSON.stringify(err))
 }
 
 //START

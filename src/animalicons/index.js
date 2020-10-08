@@ -1,8 +1,11 @@
+const fs = require('fs');
+const path = require('path');
 const { getHash, getMinimumColorVariance } = require("./utils");
 const getMCV = getMinimumColorVariance
 const { createCanvas, Image, registerFont } = require('canvas')
 
-registerFont('src/animalicons/fonts/NotoSans-Regular.ttf', { family: 'Noto' });
+registerFont(path.resolve(__dirname, 'fonts/NotoSans-Regular.ttf'), { family: 'Noto' });
+registerFont(path.resolve(__dirname, 'fonts/NotoColorEmoji.ttf'), { family: 'Emoji' });
 
 const colors = require("./colors.json");
 const defaultTheme = {
@@ -10,9 +13,7 @@ const defaultTheme = {
 	emojis: [],
 };
 
-const fs = require('fs');
-const path = require('path');
-const folder = './svg/';
+const folder = './\svg/';
 fs.readdirSync(path.join(__dirname, folder)).forEach(file => {
 	defaultTheme.emojis.push(path.join(__dirname, folder, file));
 });
@@ -169,19 +170,28 @@ class Avatar {
 		const { size } = this;
 		const { emojis } = this.theme;
 
-		ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
-		ctx.shadowBlur = size / 8;
-		ctx.shadowOffsetX = 0;
-		ctx.shadowOffsetY = 0;
-
 		return new Promise(resolve => {
 			if (this.modzi) {
-				// ctx.fillStyle = 'white';
 				ctx.textAlign = 'center';
-				ctx.font = '64px Noto'
-				ctx.fillText(this.modzi, size / 2 - 32, size / 2 - 32)
+				ctx.font = (size / 2) + 'px "Emoji"'
+				ctx.shadowColor = "black";
+				ctx.shadowBlur = size / 8;
+				ctx.lineWidth = size / 8;
+				ctx.strokeText(this.modzi, size / 2, size / 2);
+				ctx.shadowBlur = 0;
+				ctx.fillStyle="white";
+
+				// ctx.strokeStyle = 'black';
+				// ctx.lineJoin = "round";
+				// ctx.miterLimit = 2;
+				ctx.fillText(this.modzi, size / 2, size / 2)
 				resolve()
 			} else {
+				ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
+				ctx.shadowBlur = size / 8;
+				ctx.shadowOffsetX = 0;
+				ctx.shadowOffsetY = 0;
+
 				const emoji = emojis[parseInt(hash.substring(2, 5), 16) % emojis.length];
 				const img = new Image()
 				img.onload = () => {
@@ -201,6 +211,7 @@ class Avatar {
 	}
 
 	async draw() {
+		try {
 		const hash = await getHash(this.seed);
 		const ctx = this.canvas.getContext("2d");
 		const { colors, emojis } = this.theme;
@@ -210,6 +221,7 @@ class Avatar {
 		if (emojis.length) {
 			await this.drawEmoji(ctx, hash);
 		}
+	}catch(err){console.log(err)}
 	}
 
 	async toDataURL(type, encoderOptions) {

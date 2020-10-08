@@ -1,4 +1,5 @@
 const lojban = require("lojban")
+const split = require('emoji-aware').split;
 
 module.exports = {
   modzi: function (name: string) {
@@ -26,6 +27,6 @@ module.exports = {
       .join(" ")
     parsed = lojban.modzi(parsed).replace(/[a-zA-Z0-9-\.,]/g, "")
     if (parsed.length === 0) return { output: name, snada: false }
-    return { output: parsed[0], snada: true }
+    return { output: split(parsed)[0], snada: true }
   },
 }

@@ -26,9 +26,9 @@
     "sendTo.slack.action": "_%chunk%_",
     "OverlayMessageWithQuotedMark.facebook": "> %author%: %chunk%",
     "OverlayMessageWithQuotedMark.telegram": "> %author%: %chunk%",
-    "OverlayMessageWithQuotedMark.slack": "> %author%: %chunk%",
+    "OverlayMessageWithQuotedMark.slack": "> **%author%**: %chunk%",
     "OverlayMessageWithQuotedMark.mattermost": "> %author%: %chunk%",
-    "OverlayMessageWithQuotedMark.discord": "> %author%: %chunk%",
+    "OverlayMessageWithQuotedMark.discord": "> **%author%**: %chunk%",
     "OverlayMessageWithQuotedMark.vkboard": "> [club%title%|%author%]: %chunk%",
     "OverlayMessageWithQuotedMark.vkwall": "> [club%title%|%author%]: %chunk%",
     "OverlayMessageWithQuotedMark.irc": "> %author%: %chunk%",
@@ -104,7 +104,7 @@
     "sendTo.discord.normal": "%chunk%",
     "sendTo.discord.ChunkOnly": "%chunk%",
     "sendTo.discord.action": "_%chunk%_",
-    "OverlayMessageWithQuotedMark.discord": "> %author%: %chunk%",
+    "OverlayMessageWithQuotedMark.discord": "> **%author%**: %chunk%",
     "OverlayMessageWithEditedMark.discord": ":pencil2: %message%",
     "OverlayMessageWithEditedMark": "✎ %message%"
   }
