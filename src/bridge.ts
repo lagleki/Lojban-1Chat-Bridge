@@ -518,10 +518,10 @@ sendTo.discord = async ({
     const channel = generic.discord.client.channels.cache.get(channelId)
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
-    author = author.replace(/[0-9_\.-]+$/, "").replace(/\[.*/, "")
+    const authorTemp = author.replace(/[0-9_\.-]+$/, "").replace(/\[.*/, "").replace(/[^0-9A-Za-z].*$/,'')
     const parsedName = modzi.modzi(author)
     let ava = new avatar(
-      author,
+      authorTemp,
       512,
       parsedName.snada ? parsedName.output : undefined
     )
@@ -3641,7 +3641,7 @@ generic.downloadFile = async ({
 
   //check if it's audio:
   if (
-    [".ogg", ".oga", ".opus", ".wav"].includes(path.extname(local_fullname))
+    [".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(path.extname(local_fullname))
   ) {
     const local_mp3_file = local_fullname + ".mp3"
     const cp = require("child_process")
