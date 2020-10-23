@@ -623,7 +623,7 @@ sendTo.vkwall = async ({
             message: chunk,
           })
           .then((res: any) => {})
-          .catch(catchError)
+          .catch(() => {})
         resolve()
       }, 60000)
     })
@@ -661,7 +661,7 @@ sendTo.vkboard = async ({
             from_group: 1,
           })
           .then((res: any) => {})
-          .catch(catchError)
+          .catch(() => {})
         resolve()
       }, 60000)
     })
@@ -1974,14 +1974,15 @@ receivedFrom.irc = async ({
     text = `<${ircolors
       .stripColorsAndStyle(author)
       .replace(/_+$/g, "")}>: ${text}`
+
     if (
-      !config?.channelMapping?.irc?.[channelId]?.settings?.[
-        "irc-dontProcessOtherBridges"
-      ]
-    )
+      !config?.channelMapping?.irc?.[channelId]?.settings
+        ?.dontProcessOtherBridges
+    ) {
       text = text
         .replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
         .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ")
+    }
     text = text
       .replace(/^<([^<>]+?)>: /, "*$1*: ")
       .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ")
@@ -2923,6 +2924,7 @@ async function PopulateChannelMappingCore({
     const mapping: any = {
       settings: {
         readonly: i[`${messenger}-readonly`],
+        dontProcessOtherBridges: i[`${messenger}-dontProcessOtherBridges`],
         language: i["language"],
         nickcolor: i[`${messenger}-nickcolor`],
         name: i[messenger],
@@ -3361,14 +3363,6 @@ generic.unescapeHTML = ({
     }
   })
   return text
-}
-
-function splitSlice(str: string, len: number) {
-  const arrStr: string[] = [...str]
-  let ret: string[] = []
-  for (let offset = 0, strLen = arrStr.length; offset < strLen; offset += len)
-    ret.push(arrStr.slice(offset, len + offset).join(""))
-  return ret
 }
 
 // async function appendPageTitles(
