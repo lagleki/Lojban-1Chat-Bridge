@@ -370,6 +370,7 @@ async function FormatMessageChunkForSending({
       ],
     })
   } else if ((author || "") !== "") {
+    // console.log(config[messenger], action,chunk)
     if ((config[messenger].Actions || []).includes(action)) {
       chunk = generic.LocalizeString({
         messenger,
@@ -2477,7 +2478,10 @@ convertTo.vkboard = async ({
   messenger: string
   messengerTo: string
 }) => {
-  const result = html2irc(text)
+  const result = await generic.unescapeHTML({
+    text: html2irc(text),
+    convertHtmlEntities: false,
+  })
   debug(messenger)({ messengerTo, "converting text": text, result })
   return result
 }

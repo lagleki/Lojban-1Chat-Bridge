@@ -2,6 +2,7 @@ const config = {};
 module.exports = config;
 
 config.discord = {
+  Actions: ['action'],
   /*
   create a Discord bot,
   add it to your server (group of channels)
@@ -23,6 +24,7 @@ config.webwidget = {
   historyLength: 200 ///how many of them to store
 };
 config.facebook = {
+  Actions: ['action'],
   //unstable bridge pier. Create and verifiy a user on Facebok. The user will be used as a bridge. Enter their email and password: 
   email: "",
   password: ""
@@ -30,6 +32,7 @@ config.facebook = {
 };
 
 config.fbbot = {
+  Actions: ['action'],
   //doesn't work yet. Chat using official Facebook API 
   accessToken:
     "",
@@ -59,7 +62,8 @@ config.telegram = {
   // - %username% (optional Telegram username of sender)
   nameFormat: "%username%",
   // fallback format string for %username% if sender lacks username
-  usernameFallbackFormat: "%firstName% %lastName%"
+  usernameFallbackFormat: "%firstName% %lastName%",
+  Actions: ['action']
 };
 
 config.telegram.userMapping = {
@@ -71,7 +75,8 @@ config.slack = {
   //Slack bot token
   // Create a Slack bot via https://api.slack.com/apps . There in "OAuth & Permissions" section add the following  permission scopes: channels:read, incoming-webhook, mpim:read, files:read, bot. Add your bot to necessary channels of your Slack project.
   // Invite your bot to all the Slack channels you've configured it for
-  token: "xoxb-12......"
+  token: "xoxb-12......",
+  Actions: ['action']
 };
 
 //Mattermost
@@ -84,7 +89,8 @@ config.mattermost = {
   APIUrl: "wss://framateam.org/api/v4/websocket",
   team: "test",
   login: "a@example.com", //email
-  password: "my_password" //password
+  password: "my_password", //password,
+  Actions: ['action']
 };
 
 //VK discussion board
@@ -94,7 +100,8 @@ config.vkboard = {
   group_id: "123456",
   appId: "123456",
   login: "1@example.com",
-  password: "my_password"
+  password: "my_password",
+  Actions: ['action']
 };
 //VK discussion wall
 config.vkwall = {
@@ -103,7 +110,8 @@ config.vkwall = {
   group_id: "123456",
   appId: "123456",
   login: "1@example.com",
-  password: "my_password"
+  password: "my_password",
+  Actions: ['action']
 };
 
 config.irc = {
@@ -139,7 +147,8 @@ config.irc = {
     stripColors: false,
     channelPrefixes: "&#!",
     messageSplit: 512
-  }
+  },
+  Actions: ['action']
 };
 
 config.generic = {
