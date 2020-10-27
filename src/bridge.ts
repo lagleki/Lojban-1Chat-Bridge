@@ -1178,11 +1178,13 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   )
     return
 
+  const author = GetName.telegram(message.from)
   await sendFromTelegram({
     message: message.reply_to_message,
     quotation: true,
+    author,
   })
-  sendFromTelegram({ message })
+  sendFromTelegram({ message, author })
 }
 
 generic.discord.reconstructPlainText = (message: any, text: string) => {
@@ -1297,9 +1299,11 @@ function IsSpam(message: any): boolean {
 async function sendFromTelegram({
   message,
   quotation,
+  author,
 }: {
   message: any
   quotation?: boolean
+  author?: string
 }) {
   if (!message) return
   let action
@@ -1380,16 +1384,14 @@ async function sendFromTelegram({
     (a, b) => jsonMessage[a].index - jsonMessage[b].index
   )
 
-  const reply_to_bot =
-    quotation && message.from.id === config.telegram.myUser.id ? true : false
-  let author = ""
-  if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
-    const arrTxtMsg = jsonMessage["text"].text.split(": ")
-    author = arrTxtMsg[0]
-    jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ")
-  } else if (!reply_to_bot) {
-    author = GetName.telegram(message.from)
-  }
+  // const reply_to_bot =
+  //   quotation && message.from.id === config.telegram.myUser.id
+  // if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
+  //   const arrTxtMsg = jsonMessage["text"].text.split(": ")
+  //   author = author ?? arrTxtMsg[0]
+  //   jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ")
+  // } else if (!reply_to_bot) {
+  // }
   // now send from Telegram
   for (let i: number = 0; i < arrMessage.length; i++) {
     const el = arrMessage[i]
