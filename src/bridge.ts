@@ -550,11 +550,23 @@ sendTo.discord = async ({
       ]
     }
 
-    await webhook.send(chunk, {
-      username: author || "-",
-      files,
-      // avatarURL: generic.discord.avatar.path,
-    })
+    const [err] = await to(
+      webhook.send(chunk, {
+        username: author || "-",
+        files,
+        // avatarURL: generic.discord.avatar.path,
+      })
+    )
+
+    if (err) {
+      //try to send without the attachment. useful when the file is too large for Discord to handle
+      await to(
+        webhook.send(chunk, {
+          username: author || "-",
+          // avatarURL: generic.discord.avatar.path,
+        })
+      )
+    }
 
     // await new Promise((resolve: any) => {
     //   generic.discord.client.channels.cache
