@@ -4,12 +4,25 @@ declare var process: {
     NTBA_FIX_319: number
     HOME: string
     log?: string
+    DOCKER_CACHE_FOLDER_PATH?: string
   }
   argv: string[]
 }
 process.env.NTBA_FIX_319 = 1
+
+// file system and network libs
+const fs = require("fs-extra")
+const path = require("path")
+const mkdir = require("mkdirp-sync")
+import * as request from "request"
+let webwidget: any
+
 // process.on('warning', (e: any) => console.warn(e.stack));
-const package_json = require("../package")
+
+const package_json = require(path.join(__dirname,"../package"))
+let cache_folder = `${process.env.HOME}/.${package_json.name}`;
+if (process.env.DOCKER_CACHE_FOLDER_PATH) cache_folder = process.env.DOCKER_CACHE_FOLDER_PATH
+const defaults = path.join(__dirname,`./config/defaults.js`)
 
 // messengers' libs
 const { login } = require("libfb")
@@ -103,12 +116,6 @@ const queue = new PQueue({ concurrency: 1 })
 const { to } = require("await-to-js")
 const blalalavla = require("./sugar/blalalavla")
 const modzi = require("./sugar/modzi")
-// file system and network libs
-const fs = require("fs-extra")
-const path = require("path")
-const mkdir = require("mkdirp-sync")
-import * as request from "request"
-let webwidget: any
 
 // NLP & spam libs
 const lojban = require("lojban")
@@ -2602,7 +2609,7 @@ generic.writeCache = async ({
 }) => {
   await new Promise((resolve) => {
     fs.writeFile(
-      `${process.env.HOME}/.${package_json.name}/cache.json`,
+      `${cache_folder}/cache.json`,
       JSON.stringify(config.cache),
       (err: any) => {
         if (err) action = "error " + err.toString()
@@ -2758,11 +2765,11 @@ generic.telegram.DeleteMessage = async ({
 // generic
 generic.ConfigBeforeStart = () => {
   if (process.argv[2] === "--genconfig") {
-    mkdir(`${process.env.HOME}/.${package_json.name}`)
+    mkdir(cache_folder)
 
     // read default config using readFile to include comments
-    const config = fs.readFileSync(`${__dirname}/../config/defaults.js`)
-    const configPath = `${process.env.HOME}/.${package_json.name}/config.js`
+    const config = fs.readFileSync(defaults)
+    const configPath = `${cache_folder}/config.js`
     fs.writeFileSync(configPath, config)
     throw new Error(
       `Wrote default configuration to ${configPath}, please edit it before re-running`
@@ -2772,7 +2779,7 @@ generic.ConfigBeforeStart = () => {
   let config
 
   try {
-    config = require(`${process.env.HOME}/.${package_json.name}/config.js`)
+    config = require(`${cache_folder}/config.js`)
   } catch (e) {
     throw new Error(
       `ERROR while reading config:\n${e}\n\nPlease make sure ` +
@@ -2781,7 +2788,7 @@ generic.ConfigBeforeStart = () => {
     )
   }
 
-  const defaultConfig = require("../config/defaults")
+  const defaultConfig = require(defaults)
   config = R.mergeDeepLeft(config, defaultConfig)
 
   // irc
@@ -2837,7 +2844,7 @@ GetChannels.telegram = async () => {
       resolve(
         JSON.parse(
           fs.readFileSync(
-            `${process.env.HOME}/.${package_json.name}/cache.json`
+            `${cache_folder}/cache.json`
           )
         ).telegram
       )
@@ -3526,9 +3533,9 @@ generic.downloadFile = async ({
   const randomStringName = blalalavla.cupra(
     (remote_path || fileId.toString()) + "1"
   )
-  mkdir(`${process.env.HOME}/.${package_json.name}/files/${randomString}`)
+  mkdir(`${cache_folder}/files/${randomString}`)
   const rem_path = `${config.generic.httpLocation}/${randomString}`
-  const local_path = `${process.env.HOME}/.${package_json.name}/files/${randomString}`
+  const local_path = `${cache_folder}/files/${randomString}`
 
   let err: any, res: any
   let rem_fullname: string = ""
@@ -3771,8 +3778,8 @@ StartServices()
 
 // start HTTP server for media files if configured to do so
 if (config.generic.showMedia) {
-  mkdir(`${process.env.HOME}/.${package_json.name}/files`)
-  const serve = serveStatic(`${process.env.HOME}/.${package_json.name}/files`, {
+  mkdir(`${cache_folder}/files`)
+  const serve = serveStatic(`${cache_folder}/files`, {
     lastModified: false,
     index: false,
     maxAge: 86400000,

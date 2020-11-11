@@ -1,0 +1,1 @@
+podman build -t 1chat .

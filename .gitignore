@@ -1,6 +1,7 @@
 
-# Created by https://www.gitignore.io/api/node
-
+custom-config/
+config/config.js
+config/config.json
 dev/
 
 ### Node ###

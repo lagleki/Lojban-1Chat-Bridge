@@ -1,17 +1,26 @@
-FROM node:argon
+FROM ubuntu:20.10
 
-USER root
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y libicu-dev
 
-RUN npm install -g MessengerBridge
+FROM node:14
 
-RUN useradd -ms /bin/bash MessengerBridge
-USER MessengerBridge
+RUN mkdir /1chat
+# Create app directory
+WORKDIR /1chat
 
-RUN mkdir -p /home/MessengerBridge/.MessengerBridge
-VOLUME ["/home/MessengerBridge/.MessengerBridge"]
+# Install app dependencies
+# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# where available (npm@5+)
+COPY package*.json ./
 
-EXPOSE 9090
+RUN apt-get update && apt-get install -y ffmpeg wget
+RUN npm install && npm run tsc
 
-CMD ["MessengerBridge"]
+# Bundle app source
+COPY ./src ./src
+COPY ./lib ./lib
+COPY ./local ./local
+COPY ./config ./config
+COPY ./tsconfig.json ./tsconfig.json
+
+EXPOSE 9091
+CMD [ "npm", "run", "start" ]
