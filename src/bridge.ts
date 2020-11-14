@@ -22,7 +22,7 @@ let webwidget: any
 const package_json = require(path.join(__dirname,"../package"))
 let cache_folder = `${process.env.HOME}/.${package_json.name}`;
 if (process.env.DOCKER_CACHE_FOLDER_PATH) cache_folder = process.env.DOCKER_CACHE_FOLDER_PATH
-const defaults = path.join(__dirname,`./config/defaults.js`)
+const defaults = path.join(__dirname,`../config/defaults.js`)
 
 // messengers' libs
 const { login } = require("libfb")

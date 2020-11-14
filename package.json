@@ -4,7 +4,7 @@
   "version": "1.0.1",
   "preferGlobal": true,
   "bin": {
-    "Lojban-1Chat-Bridge": "bridge.js"
+    "Lojban-1Chat-Bridge": "./dist/bridge.js"
   },
   "scripts": {
     "ncu": "ncu -u",
@@ -53,7 +53,7 @@
     "jpeg-js": "^0.4.2",
     "jsdom": "^16.4.0",
     "libfb": "^2.3.5",
-    "lojban": "^1.1.32",
+    "lojban": "^1.1.33",
     "marked": "^1.2.3",
     "middleware-io": "2.5.0",
     "mkdirp-sync": "0.0.3",
