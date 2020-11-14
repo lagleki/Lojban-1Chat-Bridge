@@ -13,8 +13,6 @@ WORKDIR /1chat
 COPY package*.json ./
 
 RUN apt-get update && apt-get install -y ffmpeg wget
-RUN npm install 
-# && npm run tsc
 
 # Bundle app source
 COPY ./src ./src
@@ -23,5 +21,7 @@ COPY ./local ./local
 COPY ./config ./config
 COPY ./tsconfig.json ./tsconfig.json
 
+RUN npm install && npm run tsc
+
 EXPOSE 9091
-# CMD [ "npm", "run", "start" ]
+CMD [ "npm", "run", "start" ]
