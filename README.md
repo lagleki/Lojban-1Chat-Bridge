@@ -14,6 +14,17 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 * IRC messages can be configured to relay to Slack and Telegram but not from Telegram/Slack into them (thus making them readonly)
 * Supports Telegram/Slack/Mattermost/Discord media files, URL to file is sent to the other messengers. Local hosting of images
 
+# Quick start via Podman
+
+* install podman
+* edit expose port in Dokerfile to your free port
+* `mkdir custom-config ; cp config/defaults.js custom-config/config.js`
+* edit `custom-config/config.js`. httpPort should be the same as the exposed one in Dockerfile. Fill in all the necessary fields according to the infile instructions 
+* `./docker_build.sh`
+* `./docker_start.sh` (should add 1chat process to podman's autostart)
+* see logs via `podman logs 1chat`
+* if necessary stop the process via `podman stop 1chat`
+
 # Quick start
 
 Currently there are only short docs. You need to study yourself how to make users or bots for each messenger and get their credentials.
