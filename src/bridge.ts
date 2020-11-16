@@ -4,7 +4,7 @@ declare var process: {
     NTBA_FIX_319: number
     HOME: string
     log?: string
-    DOCKER_CACHE_FOLDER_PATH?: string
+    PWD?: string
   }
   argv: string[]
 }
@@ -19,10 +19,8 @@ let webwidget: any
 
 // process.on('warning', (e: any) => console.warn(e.stack));
 
-const package_json = require(path.join(__dirname,"../package"))
-let cache_folder = `${process.env.HOME}/.${package_json.name}`;
-if (process.env.DOCKER_CACHE_FOLDER_PATH) cache_folder = process.env.DOCKER_CACHE_FOLDER_PATH
-const defaults = path.join(__dirname,`../config/defaults.js`)
+const cache_folder = path.join(__dirname, "../custom-config")
+const defaults = path.join(__dirname, `../config/defaults.js`)
 
 // messengers' libs
 const { login } = require("libfb")
@@ -2842,11 +2840,7 @@ GetChannels.telegram = async () => {
   let [err, res] = await to(
     new Promise((resolve) => {
       resolve(
-        JSON.parse(
-          fs.readFileSync(
-            `${cache_folder}/cache.json`
-          )
-        ).telegram
+        JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`)).telegram
       )
     })
   )

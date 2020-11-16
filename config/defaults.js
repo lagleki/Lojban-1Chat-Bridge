@@ -159,7 +159,7 @@ config.generic = {
   // Use 0 to disable
   mediaRandomLength: "lojbo",
   // HTTP server port
-  httpPort: 9091, // change if this port is taken
+  httpPort: 9091, // change if this port is taken. in case of using Docker you must leave it as it is
   // HTTP server location, URLs are generated from this
   httpLocation: "https://image.jbotcan.org" // change to your server
 };

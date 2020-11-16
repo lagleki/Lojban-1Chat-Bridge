@@ -1,5 +1,4 @@
-FROM ubuntu:20.10
-
+FROM ubuntu:rolling
 
 FROM node:14
 
@@ -19,6 +18,7 @@ COPY ./src ./src
 COPY ./lib ./lib
 COPY ./local ./local
 COPY ./config ./config
+COPY ./custom-config ./custom-config
 COPY ./tsconfig.json ./tsconfig.json
 
 RUN npm install && npm run tsc
