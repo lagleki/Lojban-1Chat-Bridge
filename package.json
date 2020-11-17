@@ -7,7 +7,7 @@
     "Lojban-1Chat-Bridge": "./dist/bridge.js"
   },
   "scripts": {
-    "ncu": "ncu -u",
+    "ncu": "ncu",
     "tsc": "tsc",
     "genconfig": "node ./dist/bridge.js --genconfig",
     "build": "npm install ; npm run tsc ; npm run start",

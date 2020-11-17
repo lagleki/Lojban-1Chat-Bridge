@@ -21,7 +21,7 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 * `mkdir custom-config ; cp config/defaults.js custom-config/config.js`
 * edit `custom-config/config.js`. Fill in all the necessary fields according to the infile instructions 
 * `./docker_build.sh`
-* edit `./docker_start.sh` and change 9091:9091 to "YOUR_FREE_PORT:9091" where YOUR_FREE_PORT is the free port in your host OS that would serve media files from the website speicified in httpLocation param in `custom-config/config.js`. You may use an external Apache or Nginx to proxy requests from httpLocation to YOUR_FREE_PORT
+* edit `./docker_start.sh` and change 9091:3000 to "YOUR_FREE_PORT:3000" where YOUR_FREE_PORT is the free port in your host OS that would serve media files from the website speicified in httpLocation param in `custom-config/config.js`. You may use an external Apache or Nginx to proxy requests from httpLocation to YOUR_FREE_PORT
 * run `./docker_start.sh` (should add 1chat process to podman's autostart)
 * see logs via `podman logs 1chat`
 * if necessary stop the process via `podman stop 1chat`

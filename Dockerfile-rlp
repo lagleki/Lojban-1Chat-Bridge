@@ -1,0 +1,16 @@
+FROM node:14
+
+RUN mkdir /1chat
+# Create app directory
+WORKDIR /1chat
+
+# Install app dependencies
+# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# where available (npm@5+)
+COPY package*.json ./
+
+RUN apt-get update && apt-get install -y ffmpeg wget
+
+RUN npm install && npm run tsc
+
+RUN mkdir src/

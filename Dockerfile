@@ -1,27 +1,22 @@
 FROM ubuntu:rolling
 
-FROM node:14
+RUN apt-get update
 
-RUN mkdir /1chat
-# Create app directory
-WORKDIR /1chat
+RUN apt-get install -y build-essential software-properties-common curl
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY package*.json ./
+RUN apt-get install -y python3 python3-dev python3-pip nodejs npm
 
-RUN apt-get update && apt-get install -y ffmpeg wget
+RUN apt-get install -y ffmpeg wget
 
-# Bundle app source
-COPY ./src ./src
-COPY ./lib ./lib
-COPY ./local ./local
-COPY ./config ./config
-COPY ./custom-config ./custom-config
-COPY ./tsconfig.json ./tsconfig.json
+COPY ./src/animalicons/fonts/ /usr/share/fonts/truetype/
+RUN fc-cache -fv
 
-RUN npm install && npm run tsc
+RUN useradd -ms /bin/bash app
+USER app
+COPY --chown=app:app package*.json /home/app/1chat/
+COPY --chown=app:app ./tsconfig.json /home/app/1chat/tsconfig.json
+WORKDIR /home/app/1chat
+RUN mkdir /home/app/1chat/dist
+RUN npm i
 
-EXPOSE 9091
-CMD [ "npm", "run", "start" ]
+CMD npm run tsc ; npm run start
