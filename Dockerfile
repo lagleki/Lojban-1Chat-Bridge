@@ -11,10 +11,9 @@ RUN apt-get install -y ffmpeg wget
 COPY ./src/animalicons/fonts/ /usr/share/fonts/truetype/
 RUN fc-cache -fv
 
-RUN useradd -ms /bin/bash app
-USER app
-COPY --chown=app:app package*.json /home/app/1chat/
-COPY --chown=app:app ./tsconfig.json /home/app/1chat/tsconfig.json
+RUN mkdir /home/app && mkdir /home/app/1chat
+COPY package*.json /home/app/1chat/
+COPY ./tsconfig.json /home/app/1chat/tsconfig.json
 WORKDIR /home/app/1chat
 RUN mkdir /home/app/1chat/dist
 RUN npm i
