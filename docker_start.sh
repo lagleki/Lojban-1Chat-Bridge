@@ -1,5 +1,9 @@
-podman run -d \
-  --restart unless-stopped \
+#!/bin/bash
+
+podman kill 1chat
+podman rm 1chat
+
+podman run \
   -it \
   --name 1chat \
   -p 9091:3000 \
@@ -8,4 +12,3 @@ podman run -d \
   -v $(pwd)/config:/home/app/1chat/config/:rw \
   -v $(pwd)/custom-config:/home/app/1chat/custom-config/:rw \
   1chat
-
