@@ -1080,6 +1080,22 @@ receivedFrom.discord = async (message: any) => {
     })
   }
 
+  if (message?.reference?.messageID) {
+    const message_ = await message.channel.messages.fetch(
+      message.reference.messageID
+    )
+    const text = generic.discord.reconstructPlainText(message_, message_.content)
+    debug("discord")(`sending reconstructed text: ${text}`)
+    sendFrom({
+      messenger: "discord",
+      channelId: message_.channel.id,
+      author: AdaptName.discord(message_),
+      text,
+      quotation: true,
+      edited,
+    })
+  }
+
   const text = generic.discord.reconstructPlainText(message, message.content)
   debug("discord")("sending reconstructed text: " + text)
   sendFrom({
