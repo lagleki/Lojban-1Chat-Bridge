@@ -16,6 +16,6 @@ COPY package*.json /home/app/1chat/
 COPY ./tsconfig.json /home/app/1chat/tsconfig.json
 WORKDIR /home/app/1chat
 RUN mkdir /home/app/1chat/dist
-RUN npm i
+RUN npm i && npm i -g npm-check-updates
 
-CMD npm run tsc ; npm run start
+CMD npm run tsc && npm run start

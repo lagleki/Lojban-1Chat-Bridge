@@ -19,8 +19,8 @@ let webwidget: any
 
 // process.on('warning', (e: any) => console.warn(e.stack));
 
-const cache_folder = path.join(__dirname, "../custom-config")
-const defaults = path.join(__dirname, `../config/defaults.js`)
+const cache_folder = path.join(__dirname, "../data")
+const defaults = path.join(__dirname, `../default-config/defaults.js`)
 
 // messengers' libs
 const { login } = require("libfb")
@@ -53,6 +53,9 @@ lexer.rules.list = { exec: () => {} }
 lexer.rules.listitem = { exec: () => {} }
 const markedRenderer = new marked.Renderer()
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
+//fillMarkdownEntitiesMarkup(message.text, message.entities)
+
 const avatar = require("../src/animalicons/index.js")
 
 function markedParse({
@@ -89,7 +92,7 @@ function markedParse({
     gfm: true,
     renderer: markedRenderer,
   })
-  debug(messenger)({ "converting source text": text, result })
+  log(messenger)({ "converting source text": text, result })
   return result
 }
 const html2md = require("./formatting-converters/html2md-ts")
@@ -101,11 +104,18 @@ const finalhandler = require("finalhandler")
 import * as http from "http"
 const serveStatic = require("serve-static")
 
-import debug from "debug"
 const winston = require("winston")
 const logger = winston.createLogger({
-  transports: [new winston.transports.File({ filename: "log.log" })],
+  transports: [
+    new winston.transports.File({
+      filename: path.join(cache_folder, "log.log"),
+      maxsize: 10 * (1024 ^ 2),
+      maxFiles: 2,
+    }),
+  ],
 })
+const log = (messenger: String) => (message: any) =>
+  logger.log({ level: "info", message: { message, messenger } })
 
 const R = require("ramda")
 const { default: PQueue } = require("p-queue")
@@ -260,7 +270,7 @@ generic.slack.Start = async () => {
   generic.slack.client.rtm.start().catch((e: any) => {
     if (!e?.data?.ok) {
       config.MessengersAvailable.slack = false
-      debug("slack")({
+      log("slack")({
         error: "Couldn't start Slack",
       })
     }
@@ -438,7 +448,7 @@ sendTo.webwidget = async ({
   webwidget.emit("sentFrom", {
     data,
   })
-  debug("webwidget")({ "sending message": data })
+  log("webwidget")({ "sending message": data })
   return true
 }
 
@@ -483,7 +493,7 @@ sendTo.telegram = async ({
   if (config?.channelMapping?.telegram?.[channelId]?.settings?.readonly) return
   queueOf.telegram.add(async () => {
     await new Promise((resolve: any) => {
-      debug("telegram")({ "sending text": chunk })
+      log("telegram")({ "sending text": chunk })
       generic.telegram.client
         .sendMessage(channelId, chunk, {
           parse_mode: "HTML",
@@ -525,9 +535,10 @@ sendTo.discord = async ({
     const webhooks = await channel.fetchWebhooks()
     let webhook = webhooks.first()
     const authorTemp = author
-      .replace(/[0-9_\.-]+$/, "")
+      .replace(/[0-9_\.-]+$/, " ")
       .replace(/\[.*/, "")
       .replace(/[^0-9A-Za-z].*$/, "")
+      .trim()
     const parsedName = modzi.modzi(author)
     let ava = new avatar(
       authorTemp,
@@ -536,7 +547,6 @@ sendTo.discord = async ({
     )
     await ava.draw()
     ava = await ava.toDataURL()
-
     if (!webhook) {
       webhook = await channel.createWebhook(author || "-", ava)
     } else {
@@ -554,7 +564,6 @@ sendTo.discord = async ({
         },
       ]
     }
-
     const [err] = await to(
       webhook.send(chunk, {
         username: author || "-",
@@ -744,7 +753,7 @@ sendTo.irc = async ({
     await new Promise((resolve: any) => {
       // if (config.irc.Actions.includes(action))
       //   chunk = ircolors.underline(chunk);
-      debug("irc")({ "sending for irc": chunk })
+      log("irc")({ "sending for irc": chunk })
       generic.irc.client.say(channelId, chunk)
       resolve()
     })
@@ -769,7 +778,7 @@ async function prepareChunks({
   if (GetChunks[messengerTo]) fallback = messengerTo
   arrChunks = await GetChunks[fallback](text, messengerTo)
   for (let i in arrChunks) {
-    debug("generic")(
+    log("generic")(
       `converting for messenger ${messengerTo} the text "` + arrChunks[i] + `"`
     )
     if (edited)
@@ -785,7 +794,7 @@ async function prepareChunks({
       messenger,
       messengerTo,
     })
-    debug("generic")(
+    log("generic")(
       `converted for messenger ${messengerTo} to text "` + arrChunks[i] + `"`
     )
   }
@@ -872,7 +881,7 @@ async function sendFrom({
   text = await convertFrom[messenger]({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
-  const nsfw: any = undefined //file ? await getNSFWString(file) : null;
+  const nsfw: any = file ? await getNSFWString(file) : null;
   if (nsfw) {
     for (const nsfw_result of nsfw) {
       const translated_text = generic.LocalizeString({
@@ -1059,7 +1068,7 @@ receivedFrom.discord = async (message: any) => {
       file = value.url
       localfile = value.url
     }
-    debug("discord")("sending attachment text: " + file)
+    log("discord")("sending attachment text: " + file)
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -1070,7 +1079,7 @@ receivedFrom.discord = async (message: any) => {
     })
     //text of attachment
     const text = generic.discord.reconstructPlainText(message, value.content)
-    debug("discord")("sending text of attachment: " + text)
+    log("discord")("sending text of attachment: " + text)
     sendFrom({
       messenger: "discord",
       channelId: message.channel.id,
@@ -1084,8 +1093,12 @@ receivedFrom.discord = async (message: any) => {
     const message_ = await message.channel.messages.fetch(
       message.reference.messageID
     )
-    const text = generic.discord.reconstructPlainText(message_, message_.content)
-    debug("discord")(`sending reconstructed text: ${text}`)
+    const text = generic.discord.reconstructPlainText(
+      message_,
+      message_.content
+    )
+    log("discord")(`sending reconstructed text: ${text}`)
+    console.log(message_, AdaptName.discord(message_))
     sendFrom({
       messenger: "discord",
       channelId: message_.channel.id,
@@ -1097,7 +1110,7 @@ receivedFrom.discord = async (message: any) => {
   }
 
   const text = generic.discord.reconstructPlainText(message, message.content)
-  debug("discord")("sending reconstructed text: " + text)
+  log("discord")("sending reconstructed text: " + text)
   sendFrom({
     messenger: "discord",
     channelId: message.channel.id,
@@ -1263,6 +1276,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
 // reconstructs the original raw markdown message
 generic.telegram.reconstructMarkdown = (msg: Telegram.Message) => {
   if (!msg.entities) return msg
+  return {...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities)}
   const incrementOffsets = (from: number, by: number) => {
     msg.entities.forEach((entity: any) => {
       if (entity.offset > from) entity.offset += by
@@ -1798,7 +1812,7 @@ receivedFrom.slack = async (message: any) => {
 }
 
 receivedFrom.mattermost = async (message: any) => {
-  // debug("mattermost")(message);
+  // log("mattermost")(message);
   // if (process.env.log)
   //   logger.log({
   //     level: "info",
@@ -2250,7 +2264,7 @@ convertFrom.slack = async ({
       if (!err) {
         jsonChannels[channelId] = channel.name
       } else {
-        debug("slack")({
+        log("slack")({
           error: err,
         })
       }
@@ -2260,7 +2274,7 @@ convertFrom.slack = async ({
         generic.slack.client.web.users.info({ user: userId })
       )
       if (err) {
-        debug("slack")({
+        log("slack")({
           error: err,
         })
       }
@@ -2322,7 +2336,7 @@ convertFrom.slack = async ({
   }
   // text = generic.escapeHTML(text);
   const [error, result] = await to(publicParse(text))
-  debug("slack")({
+  log("slack")({
     "converting source text": source,
     result: result || text,
     error,
@@ -2381,7 +2395,7 @@ convertFrom.discord = async ({
   messenger: string
 }) => {
   const result = discordParser.toHTML(text)
-  debug(messenger)({
+  log(messenger)({
     messenger,
     "converting text": text,
     result,
@@ -2415,7 +2429,7 @@ convertFrom.irc = async ({
     .replace(/\*/g, "&#42;")
     .replace(/_/g, "&#95;")
     .replace(/`/g, "&#96;")
-  debug(messenger)({
+  log(messenger)({
     messenger,
     "converting text": text,
     result,
@@ -2493,13 +2507,9 @@ convertTo.telegram = async ({
     )
     .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>")
     .replace(/<br( \/|)>/g, "\n")
-  debug(messenger)({
+  log(messenger)({
     messengerTo,
     "converting text": text,
-    intermediate: text.replace(
-      /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
-      "<pre>$1</pre>"
-    ),
     result,
   })
   return result
@@ -2517,7 +2527,7 @@ convertTo.vkboard = async ({
     text: html2irc(text),
     convertHtmlEntities: false,
   })
-  debug(messenger)({ messengerTo, "converting text": text, result })
+  log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
 convertTo.vkwall = convertTo.vkboard
@@ -2531,7 +2541,7 @@ convertTo.slack = async ({
   messengerTo: string
 }) => {
   const result = html2slack(text)
-  debug(messenger)({ messengerTo, "converting text": text, result })
+  log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
 convertTo.mattermost = async ({
@@ -2551,7 +2561,7 @@ convertTo.mattermost = async ({
     }),
     convertHtmlEntities: true,
   })
-  debug(messenger)({ messengerTo, "converting text": text, result })
+  log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
 convertTo.discord = async ({
@@ -2574,7 +2584,7 @@ convertTo.discord = async ({
     convertHtmlEntities: true,
     escapeBackslashes: false,
   })
-  debug(messenger)({ messengerTo, "converting text": text, result })
+  log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
 
@@ -2601,7 +2611,7 @@ convertTo.irc = async ({
     text: html2irc(text),
     convertHtmlEntities: false,
   })
-  debug(messenger)({ messengerTo, "converting text": text, result })
+  log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
 
@@ -2688,7 +2698,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
           }
         )
         .catch((e: any) =>
-          debug("telegram")({
+          log("telegram")({
             error: e.toString(),
           })
         )
@@ -2818,7 +2828,7 @@ generic.ConfigBeforeStart = () => {
   }
   config.irc.ircOptions.channels = result
   config.irc.ircOptions.encoding = "utf-8"
-  const localConfig = require("../local/dict.json")
+  const localConfig = require("../src/local/dict.json")
 
   return [config, localConfig]
 }
@@ -3181,7 +3191,7 @@ StartService.discord = async () => {
     }
   })
   generic.discord.client.on("error", (error: any) => {
-    debug("discord")(error)
+    log("discord")(error)
     // StartService.discord();
   })
 
@@ -3306,7 +3316,7 @@ generic.sendOnlineUsersTo = ({
     generic.telegram.client
       .sendMessage(objChannel.id, strNames)
       .catch((e: any) =>
-        debug("telegram")({
+        log("telegram")({
           error: "error sending to Telegram the list of online users",
         })
       )
@@ -3466,7 +3476,7 @@ const diffTwo = (diffMe: string, diffBy: string) => {
 }
 
 function HTMLSplitter(text: string, limit = 400) {
-  debug("generic")({ message: "html splitter: pre", text })
+  log("generic")({ message: "html splitter: pre", text })
 
   const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g")
   text = generic.sanitizeHtml(
@@ -3516,7 +3526,7 @@ function HTMLSplitter(text: string, limit = 400) {
     }
   }
   Chunks = Chunks.map((chunk) => chunk.replace(/<a_href=/g, "<a href="))
-  debug("generic")({ message: "html splitter: after", Chunks })
+  log("generic")({ message: "html splitter: after", Chunks })
 
   return Chunks
 }
