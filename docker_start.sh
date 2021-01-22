@@ -4,7 +4,6 @@ docker kill 1chat
 docker rm 1chat
 
 docker run \
--d \
   -it \
   --name 1chat \
   --memory 1g \

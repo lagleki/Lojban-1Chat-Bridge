@@ -860,6 +860,7 @@ async function sendFrom({
   quotation,
   action,
   file,
+  remote_file,
   edited,
 }: {
   messenger: string
@@ -870,6 +871,7 @@ async function sendFrom({
   quotation?: boolean
   action?: string
   file?: string
+  remote_file?: string
   edited?: boolean
 }) {
   const ConfigNode = config?.channelMapping?.[messenger]?.[channelId]
@@ -881,7 +883,7 @@ async function sendFrom({
   text = await convertFrom[messenger]({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
-  const nsfw: any = file ? await getNSFWString(file) : null;
+  const nsfw: any = file ? (await to(getNSFWString(remote_file)))[1] : null
   if (nsfw) {
     for (const nsfw_result of nsfw) {
       const translated_text = generic.LocalizeString({
@@ -991,47 +993,19 @@ async function sendFrom({
 }
 
 async function getNSFWString(file: string) {
-  if (file.substr(-4) !== ".jpg") return
-  const NUMBER_OF_CHANNELS = 3
+  // if (file.substr(-4) !== ".jpg") return
 
+  const axios = require("axios") //you can use any http client
   const tf = require("@tensorflow/tfjs-node")
-  const load = require("nsfwjs").load
-
-  const fs = require("fs")
-  const jpeg = require("jpeg-js")
-
-  const readImage = (path: string) => {
-    const buf = fs.readFileSync(path)
-    const pixels = jpeg.decode(buf, true)
-    return pixels
-  }
-
-  const imageByteArray = (image: any, numChannels: number) => {
-    const pixels = image.data
-    const numPixels = image.width * image.height
-    const values = new Int32Array(numPixels * numChannels)
-
-    for (let i = 0; i < numPixels; i++) {
-      for (let channel = 0; channel < numChannels; ++channel) {
-        values[i * numChannels + channel] = pixels[i * 4 + channel]
-      }
-    }
-
-    return values
-  }
-
-  const imageToInput = (image: any, numChannels: number) => {
-    const values = imageByteArray(image, numChannels)
-    const outShape = [image.height, image.width, numChannels]
-    const input = tf.tensor3d(values, outShape, "int32")
-
-    return input
-  }
-
-  const model = await load() //moved model at root of folder
-  const logo = readImage(file)
-  const input = imageToInput(logo, NUMBER_OF_CHANNELS)
-  let predictions = await model.classify(input)
+  const nsfw = require("nsfwjs")
+  const pic = await axios.get(file, {
+    responseType: "arraybuffer",
+  })
+  const model = await nsfw.load() // To load a local model, nsfw.load('file://./path/to/model/')
+  // Image must be in tf.tensor3d format
+  // you can convert image to tf.tensor3d with tf.node.decodeImage(Uint8Array,channels)
+  const image = await tf.node.decodeImage(pic.data, 3)
+  let predictions = await model.classify(image)
   predictions = predictions
     .filter((className: any) => {
       if (className.className === "Neutral") return
@@ -1041,7 +1015,9 @@ async function getNSFWString(file: string) {
     .map((i: any) => {
       return { id: i.className, prob: Math.round(i.probability * 100) }
     })
-  return predictions
+  image.dispose() // Tensor memory must be managed explicitly (it is not sufficient to let a tf.Tensor go out of scope for its memory to be released).
+
+  return predictions.length > 0 ? predictions : null
 }
 
 receivedFrom.discord = async (message: any) => {
@@ -1075,6 +1051,7 @@ receivedFrom.discord = async (message: any) => {
       author: AdaptName.discord(message),
       text: file,
       file: localfile,
+      remote_file: file,
       edited,
     })
     //text of attachment
@@ -1098,7 +1075,7 @@ receivedFrom.discord = async (message: any) => {
       message_.content
     )
     log("discord")(`sending reconstructed text: ${text}`)
-    console.log(message_, AdaptName.discord(message_))
+    // console.log(message_, AdaptName.discord(message_))
     sendFrom({
       messenger: "discord",
       channelId: message_.channel.id,
@@ -1156,6 +1133,7 @@ receivedFrom.facebook = async (message: any) => {
           channelId: message.threadId,
           author,
           text: file,
+          remote_file: file,
           file: localfile,
         })
       })
@@ -1205,7 +1183,7 @@ receivedFrom.telegram = async (message: Telegram.Message) => {
   }
 
   // send message
-  if (message.text && !message.text.indexOf("/names")) {
+  if (message.text && message.text.indexOf("/names") === 0) {
     generic.sendOnlineUsersTo("telegram", message.chat.id)
     return
   }
@@ -1276,7 +1254,7 @@ generic.discord.reconstructPlainText = (message: any, text: string) => {
 // reconstructs the original raw markdown message
 generic.telegram.reconstructMarkdown = (msg: Telegram.Message) => {
   if (!msg.entities) return msg
-  return {...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities)}
+  return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) }
   const incrementOffsets = (from: number, by: number) => {
     msg.entities.forEach((entity: any) => {
       if (entity.offset > from) entity.offset += by
@@ -1480,6 +1458,7 @@ async function sendFromTelegram({
       action,
       quotation,
       file: jsonMessage[el].local_file,
+      remote_file: jsonMessage[el].url,
       edited,
     })
   }
@@ -1795,6 +1774,7 @@ receivedFrom.slack = async (message: any) => {
         channelId,
         author,
         text: file,
+        remote_file: file,
         file: localfile,
         edited,
       })
@@ -1845,7 +1825,7 @@ receivedFrom.mattermost = async (message: any) => {
               msgText = JSON.parse(body).message
               file_ids = JSON.parse(body).file_ids
             }
-            resolve()
+            resolve(null)
           }
         )
       })
@@ -1870,7 +1850,7 @@ receivedFrom.mattermost = async (message: any) => {
               body = JSON.parse(body)
               author = body.username || body.nickname || body.first_name || ""
             }
-            resolve()
+            resolve(null)
           }
         )
       })
@@ -1894,7 +1874,7 @@ receivedFrom.mattermost = async (message: any) => {
             } else {
               channelId = JSON.parse(body).name
             }
-            resolve()
+            resolve(null)
           }
         )
       })
@@ -1932,7 +1912,7 @@ receivedFrom.mattermost = async (message: any) => {
               const json: Json = {}
               if (error) {
                 console.error(error.toString())
-                resolve()
+                resolve(null)
               } else {
                 resolve(JSON.parse(body).link)
               }
@@ -1956,7 +1936,7 @@ receivedFrom.mattermost = async (message: any) => {
               const json: Json = {}
               if (error) {
                 console.error(error.toString())
-                resolve()
+                resolve(null)
               } else {
                 resolve(JSON.parse(body).extension)
               }
@@ -1984,6 +1964,7 @@ receivedFrom.mattermost = async (message: any) => {
           author,
           text: file_,
           file: localfile,
+          remote_file: file_,
           edited: message.edited,
         })
       }
@@ -2422,8 +2403,7 @@ convertFrom.irc = async ({
   text: string
   messenger: string
 }) => {
-  const result = generic
-    .escapeHTML(text)
+  const result = generic.escapeHTML(text)
     .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
     .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
     .replace(/\*/g, "&#42;")
@@ -2609,7 +2589,7 @@ convertTo.irc = async ({
 }) => {
   const result = await generic.unescapeHTML({
     text: html2irc(text),
-    convertHtmlEntities: false,
+    convertHtmlEntities: true,
   })
   log(messenger)({ messengerTo, "converting text": text, result })
   return result
