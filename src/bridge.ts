@@ -3341,7 +3341,7 @@ generic.LogToAdmin = (msg_text: string) => {
 
 generic.escapeHTML = (arg: string) =>
   arg
-    .replace(/&(?![a-zA-Z0-9#]{1,7};)/g, "&amp;")
+    .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
