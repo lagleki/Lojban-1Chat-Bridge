@@ -109,8 +109,8 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.File({
       filename: path.join(cache_folder, "log.log"),
-      maxsize: 10 * (1024 ^ 2),
-      maxFiles: 2,
+      maxsize: 10 * (1024 ^ 3),
+      maxFiles: 1,
     }),
   ],
 })
@@ -2340,7 +2340,7 @@ convertFrom.telegram = async ({
   messenger: string
 }) => {
   const res = markedParse({
-    text: text.replace(
+    text: generic.escapeHTML(text).replace(
       /<p><code>([\s\S]*?)<\/code><\/p>/gim,
       "<p><pre>$1</pre></p>"
     ),
