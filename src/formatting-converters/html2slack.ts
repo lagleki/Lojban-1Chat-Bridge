@@ -1,8 +1,8 @@
-module.exports = function slackify(html: string) {
-  const htmlparser = require("htmlparser"),
-    Entities = require("html-entities").AllHtmlEntities;
+import { decode } from 'html-entities';
 
-  const entities = new Entities();
+module.exports = function slackify(html: string) {
+  const htmlparser = require("htmlparser")
+
   const handler = new htmlparser.DefaultHandler((error: any, dom: any) => {
     // error ignored
   });
@@ -10,7 +10,7 @@ module.exports = function slackify(html: string) {
   parser.parseComplete(html);
   const dom = handler.dom;
   if (dom)
-    return entities.decode(
+    return decode(
       walk(dom)
         .replace(/&lt;/g, "&amp;lt;")
         .replace(/&gt;/g, "&amp;gt;")

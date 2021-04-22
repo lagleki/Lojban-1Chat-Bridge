@@ -49,8 +49,8 @@ const Discord = require("discord.js")
 const discordParser = require("discord-markdown")
 const marked = require("marked")
 const lexer = marked.Lexer
-lexer.rules.list = { exec: () => {} }
-lexer.rules.listitem = { exec: () => {} }
+lexer.rules.list = { exec: () => { } }
+lexer.rules.listitem = { exec: () => { } }
 const markedRenderer = new marked.Renderer()
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
@@ -105,12 +105,17 @@ import * as http from "http"
 const serveStatic = require("serve-static")
 
 const winston = require("winston")
+
+import DailyRotateFile = require("winston-daily-rotate-file");
+
 const logger = winston.createLogger({
   transports: [
-    new winston.transports.File({
-      filename: path.join(cache_folder, "log.log"),
-      maxsize: 10 * (1024 ^ 3),
-      maxFiles: 1,
+    new DailyRotateFile({
+      filename: path.join(cache_folder, "info-%DATE%.log"),
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: true,
+      maxSize: '20m',
+      maxFiles: '14d'
     }),
   ],
 })
@@ -294,7 +299,7 @@ generic.mattermost.Start = async () => {
         (err: any, response: any, body: any) => {
           if (err) {
             console.error(err)
-            resolve()
+            resolve(null)
           } else {
             resolve({
               token: response?.headers?.token || "",
@@ -328,7 +333,7 @@ generic.mattermost.Start = async () => {
         (error: any, response: any, body: any) => {
           if (err) {
             console.error(err)
-            resolve()
+            resolve(null)
           } else {
             const team = JSON.parse(body).find((i: any) => {
               return (
@@ -474,7 +479,7 @@ sendTo.facebook = async ({
         }
         if (file) jsonMessage.attachment = fs.createReadStream(file)
         generic.facebook.client.sendMessage(channelId, chunk).catch(catchError)
-        resolve()
+        resolve(null)
       }, 500)
     })
   })
@@ -498,7 +503,7 @@ sendTo.telegram = async ({
         .sendMessage(channelId, chunk, {
           parse_mode: "HTML",
         })
-        .then(() => resolve())
+        .then(() => resolve(null))
         .catch((err: any) => {
           err = util.inspect(err, { showHidden: false, depth: 4 })
           generic.LogToAdmin(
@@ -512,7 +517,7 @@ Chunk: ${generic.escapeHTML(chunk)}
 Error message: ${err}
             `
           )
-          resolve()
+          resolve(null)
         })
     })
   })
@@ -587,7 +592,7 @@ sendTo.discord = async ({
     //     .get(channelId)
     //     .send(chunk)
     //     .catch(catchError)
-    //   resolve()
+    //   resolve(null)
     // })
   })
 }
@@ -616,7 +621,7 @@ sendTo.mattermost = async ({
       const req = request.post(
         option,
         (error: any, response: any, body: any) => {
-          resolve()
+          resolve(null)
         }
       )
     })
@@ -649,9 +654,9 @@ sendTo.vkwall = async ({
             reply_to_comment: 1,
             message: chunk,
           })
-          .then((res: any) => {})
-          .catch(() => {})
-        resolve()
+          .then((res: any) => { })
+          .catch(() => { })
+        resolve(null)
       }, 60000)
     })
   })
@@ -687,9 +692,9 @@ sendTo.vkboard = async ({
             message: chunk,
             from_group: 1,
           })
-          .then((res: any) => {})
-          .catch(() => {})
-        resolve()
+          .then((res: any) => { })
+          .catch(() => { })
+        resolve(null)
       }, 60000)
     })
   })
@@ -730,10 +735,10 @@ sendTo.slack = async ({
           username: (author || "").replace(/(^.{21}).*$/, "$1"),
           text: chunk,
         })
-        .then(() => resolve())
+        .then(() => resolve(null))
         .catch((err: any) => {
           console.error(err)
-          resolve()
+          resolve(null)
         })
     })
   })
@@ -755,7 +760,7 @@ sendTo.irc = async ({
       //   chunk = ircolors.underline(chunk);
       log("irc")({ "sending for irc": chunk })
       generic.irc.client.say(channelId, chunk)
-      resolve()
+      resolve(null)
     })
   })
 }
@@ -851,6 +856,90 @@ prepareAuthor.fallback = function ({
   return `${text}`
 }
 
+async function checkHelpers({
+  messenger,
+  channelId,
+  author,
+  text,
+  ToWhom,
+  quotation,
+  action,
+  edited,
+}: {
+  messenger: string
+  channelId: string | number
+  author: string
+  text: string
+  ToWhom?: string
+  quotation?: boolean
+  action?: string
+  edited?: boolean
+}) {
+  const tags = ["#zlm", "#modzi"]
+  text = text.replace(/<[^>]*>/g, '')
+  const selected_tags = tags.filter(i => text.indexOf(i) >= 0)
+  if (selected_tags.length === 0) return
+  tags.forEach(tag => {
+    text = text.replace(tag, '')
+  })
+  text = text.trim()
+  if (xovahelojbo({ text }) < 0.5) return
+
+  const puppeteer = require('puppeteer-extra')
+  let browser, href
+  try {
+    browser = await puppeteer.launch({
+      args: ["--no-sandbox"],
+      headless: true
+    });
+    let page = await browser.newPage()
+    await page.goto(`https://la-lojban.github.io/melbi-zei-lojban/?ceha=${selected_tags[0]}&text=${text}`)
+
+    await page.waitForFunction(
+      "document.querySelector('#myImage') && document.querySelector('#myImage').getAttribute('data:fonts-loaded')=='true'"
+    )
+    href = (await page.evaluate(
+      () => Array.from(
+        document.querySelectorAll('#myImage'),
+        a => a.getAttribute('src')
+      )
+    ))[0];
+  } catch (error) {
+    logger.log({
+      level: "error",
+      function: "checkHelpers",
+      message: error.toString(),
+    })
+  }
+  try {
+    await browser.close()
+  } catch (error) {
+    logger.log({
+      level: "error",
+      function: "checkHelpers",
+      message: error.toString(),
+    })
+  }
+  console.log(href)
+  if (!href) return
+  const [file, localfile]: [string, string] = await generic.downloadFile(
+    {
+      type: "data",
+      remote_path: href
+    }
+  )
+  console.log(file, localfile)
+  sendTo[messenger]({
+    channelId,
+    author,
+    chunk: file,
+    file: localfile,
+    quotation,
+    action,
+    edited,
+  })
+}
+
 async function sendFrom({
   messenger,
   channelId,
@@ -883,6 +972,17 @@ async function sendFrom({
   text = await convertFrom[messenger]({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
+
+  //zbalermorna etc.
+  await checkHelpers({
+    messenger,
+    channelId: ConfigNode[messenger],
+    author,
+    text,
+    quotation,
+    action,
+    edited,
+  })
   const nsfw: any = file ? (await to(getNSFWString(remote_file)))[1] : null
   if (nsfw) {
     for (const nsfw_result of nsfw) {
@@ -1102,7 +1202,7 @@ receivedFrom.facebook = async (message: any) => {
   if (!config?.channelMapping?.facebook?.[(message.threadId || "").toString()])
     return
   let err, res
-  ;[err, res] = await to(generic.facebook.client.getUserInfo(message.authorId))
+    ;[err, res] = await to(generic.facebook.client.getUserInfo(message.authorId))
   if (err) return
   let author: string
   author = AdaptName.facebook(res)
@@ -1508,9 +1608,9 @@ receivedFrom.vkwall = async (message: any) => {
         count: 1,
         v: "5.84",
       }
-      ;[err, res] = await to(
-        generic.vkwall.client.bot.api("board.getComments", opts)
-      )
+        ;[err, res] = await to(
+          generic.vkwall.client.bot.api("board.getComments", opts)
+        )
       let text: string = res?.response?.items?.[0]?.text
       if (!text) continue
       let replyuser: string
@@ -1521,13 +1621,13 @@ receivedFrom.vkwall = async (message: any) => {
         ;[, replyuser, text] = text.match(rg)
       } else {
         let authorId = res?.response?.items?.[0]?.from_id
-        ;[err, res] = await to(
-          generic.vkwall.client.bot.api("users.get", {
-            user_ids: authorId,
-            access_token: config.vkwall.token,
-            fields: "nickname,screen_name",
-          })
-        )
+          ;[err, res] = await to(
+            generic.vkwall.client.bot.api("users.get", {
+              user_ids: authorId,
+              access_token: config.vkwall.token,
+              fields: "nickname,screen_name",
+            })
+          )
         replyuser = res?.response?.[0] || ""
         replyuser = AdaptName.vkwall(replyuser)
       }
@@ -1556,12 +1656,12 @@ receivedFrom.vkwall = async (message: any) => {
               .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
             texts.push(sizes[0].url)
             texts.push(a.photo.text)
-          } catch (e) {}
+          } catch (e) { }
           break
         case "doc":
           try {
             texts.push(a.doc.url)
-          } catch (e) {}
+          } catch (e) { }
           break
       }
     }
@@ -1628,9 +1728,9 @@ receivedFrom.vkboard = async (message: any) => {
         count: 1,
         v: "5.84",
       }
-      ;[err, res] = await to(
-        generic.vkboard.client.bot.api("board.getComments", opts)
-      )
+        ;[err, res] = await to(
+          generic.vkboard.client.bot.api("board.getComments", opts)
+        )
       let text: string = res?.response?.items?.[0]?.text
       if (!text) continue
       let replyuser: string
@@ -1641,13 +1741,13 @@ receivedFrom.vkboard = async (message: any) => {
         ;[, replyuser, text] = text.match(rg)
       } else {
         let authorId = res?.response?.items?.[0]?.from_id
-        ;[err, res] = await to(
-          generic.vkboard.client.bot.api("users.get", {
-            user_ids: authorId,
-            access_token: config.vkboard.token,
-            fields: "nickname,screen_name",
-          })
-        )
+          ;[err, res] = await to(
+            generic.vkboard.client.bot.api("users.get", {
+              user_ids: authorId,
+              access_token: config.vkboard.token,
+              fields: "nickname,screen_name",
+            })
+          )
         replyuser = res?.response?.[0] || ""
         replyuser = AdaptName.vkboard(replyuser)
       }
@@ -1676,12 +1776,12 @@ receivedFrom.vkboard = async (message: any) => {
               .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
             texts.push(sizes[0].url)
             texts.push(a.photo.text)
-          } catch (e) {}
+          } catch (e) { }
           break
         case "doc":
           try {
             texts.push(a.doc.url)
-          } catch (e) {}
+          } catch (e) { }
           break
       }
     }
@@ -1743,11 +1843,11 @@ receivedFrom.slack = async (message: any) => {
   )
 
   let err: any, user: any, chan: any, files: any[]
-  ;[err, user] = await to(promUser)
+    ;[err, user] = await to(promUser)
   if (err) user = message.user
-  ;[err, chan] = await to(promChannel)
+    ;[err, chan] = await to(promChannel)
   if (err) chan = message.channel
-  ;[err, files] = await to(Promise.all(promFiles))
+    ;[err, files] = await to(Promise.all(promFiles))
   if (err) files = []
   const author = AdaptName.slack(user)
   const channelId = chan.channel.name || message.channel
@@ -1807,78 +1907,78 @@ receivedFrom.mattermost = async (message: any) => {
     message.event = "posted"
     message.edited = true
     let err: any
-    ;[err] = await to(
-      new Promise((resolve) => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post.id}`
-        request(
-          {
-            method: "GET",
-            url,
-            headers: {
-              Authorization: `Bearer ${config.mattermost.token}`,
+      ;[err] = await to(
+        new Promise((resolve) => {
+          const url = `${config.mattermost.ProviderUrl}/api/v4/posts/${post.id}`
+          request(
+            {
+              method: "GET",
+              url,
+              headers: {
+                Authorization: `Bearer ${config.mattermost.token}`,
+              },
             },
-          },
-          (error: any, response: any, body: any) => {
-            if (error) {
-              console.error(error.toString())
-            } else {
-              msgText = JSON.parse(body).message
-              file_ids = JSON.parse(body).file_ids
+            (error: any, response: any, body: any) => {
+              if (error) {
+                console.error(error.toString())
+              } else {
+                msgText = JSON.parse(body).message
+                file_ids = JSON.parse(body).file_ids
+              }
+              resolve(null)
             }
-            resolve(null)
-          }
-        )
-      })
-    )
+          )
+        })
+      )
     if (err) console.error(err.toString())
-    ;[err] = await to(
-      new Promise((resolve) => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/users/${post.user_id}`
-        request(
-          {
-            method: "GET",
-            url,
-            headers: {
-              Authorization: `Bearer ${config.mattermost.token}`,
+      ;[err] = await to(
+        new Promise((resolve) => {
+          const url = `${config.mattermost.ProviderUrl}/api/v4/users/${post.user_id}`
+          request(
+            {
+              method: "GET",
+              url,
+              headers: {
+                Authorization: `Bearer ${config.mattermost.token}`,
+              },
             },
-          },
-          (error: any, response: any, body: any) => {
-            const json: Json = {}
-            if (error) {
-              console.error(error.toString())
-            } else {
-              body = JSON.parse(body)
-              author = body.username || body.nickname || body.first_name || ""
+            (error: any, response: any, body: any) => {
+              const json: Json = {}
+              if (error) {
+                console.error(error.toString())
+              } else {
+                body = JSON.parse(body)
+                author = body.username || body.nickname || body.first_name || ""
+              }
+              resolve(null)
             }
-            resolve(null)
-          }
-        )
-      })
-    )
+          )
+        })
+      )
     if (err) console.error(err.toString())
-    ;[err] = await to(
-      new Promise((resolve) => {
-        const url = `${config.mattermost.ProviderUrl}/api/v4/channels/${post.channel_id}`
-        request(
-          {
-            method: "GET",
-            url,
-            headers: {
-              Authorization: `Bearer ${config.mattermost.token}`,
+      ;[err] = await to(
+        new Promise((resolve) => {
+          const url = `${config.mattermost.ProviderUrl}/api/v4/channels/${post.channel_id}`
+          request(
+            {
+              method: "GET",
+              url,
+              headers: {
+                Authorization: `Bearer ${config.mattermost.token}`,
+              },
             },
-          },
-          (error: any, response: any, body: any) => {
-            const json: Json = {}
-            if (error) {
-              console.error(error.toString())
-            } else {
-              channelId = JSON.parse(body).name
+            (error: any, response: any, body: any) => {
+              const json: Json = {}
+              if (error) {
+                console.error(error.toString())
+              } else {
+                channelId = JSON.parse(body).name
+              }
+              resolve(null)
             }
-            resolve(null)
-          }
-        )
-      })
-    )
+          )
+        })
+      )
     if (err) console.error(err.toString())
   } else {
     message.edited = false
@@ -2017,7 +2117,7 @@ receivedFrom.irc = async ({
     text = text
       .replace(/^<([^<>]+?)>: /, "*$1*: ")
       .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ")
-    ;[, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/)
+      ;[, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/)
     if (text && text !== "") {
       sendFrom({
         messenger: "irc",
@@ -2624,12 +2724,20 @@ generic.writeCache = async ({
           channel Id: ${channelId}
           `
         )
-        resolve()
+        resolve(null)
       }
     )
   })
 }
 
+function xovahelojbo({ text }: { text: string }) {
+  const arrText = text.split(" ")
+  const xovahe =
+    arrText.filter(
+      (i: any) => lojban.ilmentufa_off("lo'u " + i + " le'u").tcini === "snada"
+    ).length / arrText.length
+  return xovahe
+}
 async function TelegramRemoveSpam(message: Telegram.Message) {
   const cloned_message = JSON.parse(JSON.stringify(message))
   if (IsSpam(cloned_message)) {
@@ -2662,11 +2770,7 @@ async function TelegramRemoveSpam(message: Telegram.Message) {
     return true
   } else if (message.chat.title === "jbosnu" && message.text) {
     // dealing with non-lojban spam
-    const arrText = message.text.split(" ")
-    const xovahe =
-      arrText.filter(
-        (i) => lojban.ilmentufa_off("lo'u " + i + " le'u").tcini === "snada"
-      ).length / arrText.length
+    const xovahe = xovahelojbo({ text: message.text })
     if (xovahe < 0.5) {
       generic.telegram.client
         .sendMessage(
@@ -2787,8 +2891,8 @@ generic.ConfigBeforeStart = () => {
   } catch (e) {
     throw new Error(
       `ERROR while reading config:\n${e}\n\nPlease make sure ` +
-        'it exists and is valid. Run "node bridge --genconfig" to ' +
-        "generate a default config."
+      'it exists and is valid. Run "node bridge --genconfig" to ' +
+      "generate a default config."
     )
   }
 
@@ -2915,7 +3019,7 @@ async function GetChannelsMattermostCore(json: Json, url: string) {
               })
             }
           }
-          resolve()
+          resolve(null)
         }
       )
     })
@@ -3518,6 +3622,36 @@ GetChunks.fallback = async (text: string, messenger: string) => {
   return arrText
 }
 
+function saveDataToFile({ data, local_fullname }: { data: string, local_fullname: string }) {
+  function decodeBase64Image(dataString: string) {
+    const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const response: any = {};
+
+    if (matches.length !== 3) {
+      return new Error('Invalid input string');
+    }
+
+    response.type = matches[1];
+    response.data = Buffer.from(matches[2], 'base64');
+
+    return response;
+  }
+
+  // Regular expression for image type:
+  // This regular image extracts the "jpeg" from "image/jpeg"
+  const imageTypeRegularExpression = /\/(.*?)$/;
+
+  const imageBuffer = decodeBase64Image(data);
+
+  // This variable is actually an array which has 5 values,
+  // The [1] value is the real image extension
+  const type = imageBuffer
+    .type
+    .match(imageTypeRegularExpression);
+  return { type: type[1], data: imageBuffer.data }
+}
+
+
 generic.downloadFile = async ({
   type,
   fileId,
@@ -3543,60 +3677,76 @@ generic.downloadFile = async ({
 
   if (type === "slack") {
     local_fullname = `${local_path}/${path.basename(remote_path)}`
-    ;[err, res] = await to(
-      new Promise((resolve: any) => {
-        try {
-          let file = fs.createWriteStream(local_fullname)
-          file
-            .on("open", () => {
-              const stream = request(
-                {
-                  method: "GET",
-                  url: remote_path,
-                  headers: {
-                    Authorization: `Bearer ${config.slack.token}`,
+      ;[err, res] = await to(
+        new Promise((resolve: any) => {
+          try {
+            let file = fs.createWriteStream(local_fullname)
+            file
+              .on("open", () => {
+                request(
+                  {
+                    method: "GET",
+                    url: remote_path,
+                    headers: {
+                      Authorization: `Bearer ${config.slack.token}`,
+                    },
+                    timeout: 3000,
                   },
-                  timeout: 3000,
-                },
-                (err) => {
-                  if (err) {
-                    console.log(remote_path, err.toString())
-                    resolve()
+                  (err) => {
+                    if (err) {
+                      console.log(remote_path, err.toString())
+                      resolve(null)
+                    }
                   }
-                }
-              )
-                .pipe(file)
-                .on("finish", () => {
-                  const rem_fullname = `${rem_path}/${path.basename(
-                    remote_path
-                  )}`
-                  resolve([rem_fullname, local_fullname])
-                })
-                .on("error", (error: any) => {
-                  console.error({
-                    type: "streaming error",
-                    path: remote_path,
-                    error,
+                )
+                  .pipe(file)
+                  .on("finish", () => {
+                    const rem_fullname = `${rem_path}/${path.basename(
+                      remote_path
+                    )}`
+                    resolve([rem_fullname, local_fullname])
                   })
-                  resolve()
-                })
-            })
-            .on("error", (error: any) => {
-              console.error({
-                type: "slack opening error",
-                error,
+                  .on("error", (error: any) => {
+                    console.error({
+                      type: "streaming error",
+                      path: remote_path,
+                      error,
+                    })
+                    resolve(null)
+                  })
               })
-            })
-        } catch (error) {
-          console.log({ type: "creation error", error })
-        }
-      })
-    )
+              .on("error", (error: any) => {
+                console.error({
+                  type: "slack opening error",
+                  error,
+                })
+              })
+          } catch (error) {
+            console.log({ type: "creation error", error })
+          }
+        })
+      )
     if (res) [rem_fullname, local_fullname] = res
+  } else if (type === "data") {
+    try {
+      const { type, data } = saveDataToFile({ data: remote_path, local_fullname })
+      const basename = randomStringName + "." + (type ?? extension)
+      local_fullname = `${local_path}/${basename}`
+      fs.writeFileSync(local_fullname, data)
+
+      rem_fullname = `${rem_path}/${basename}`
+    } catch (error) {
+      local_fullname = ''
+      logger.log({
+        level: "error",
+        function: "downloadFile",
+        type: "data",
+        message: error.toString(),
+      })
+    }
   } else if (type === "simple") {
     if (extension) extension = `.${extension}`
-
-    const basename = path.basename(remote_path).split(/[\?#]/)[0] + extension
+    const basename = path.basename(remote_path).split(/[\?#]/)[0] + (extension || '')
     local_fullname = `${local_path}/${basename}`
     await new Promise((resolve: any, reject: any) => {
       try {
@@ -3611,22 +3761,27 @@ generic.downloadFile = async ({
               .pipe(file)
               .on("finish", () => {
                 rem_fullname = `${rem_path}/${basename}`
-                resolve()
+                resolve(null)
               })
               .on("error", (error: any) => {
-                console.error({
-                  type: "streaming error",
+                logger.log({
+                  level: "error",
+                  function: "downloadFile",
+                  type: "simple",
                   path: remote_path,
-                  error,
+                  message: error.toString(),
                 })
-                resolve()
+                resolve(null)
               })
           })
           .on("error", (error: any) => {
-            console.error({
-              type: "simple opening error",
-              error,
+            logger.log({
+              level: "error",
+              function: "downloadFile",
+              type: "simple",
+              error: "opening error",
               local_fullname,
+              message: error.toString(),
             })
           })
       } catch (error) {
@@ -3652,7 +3807,7 @@ generic.downloadFile = async ({
       fs.rename(local_fullname, new_name, (err: any) => {
         if (err) {
           console.error({ remote_path, error: err, type: "renaming" })
-          resolve()
+          resolve(null)
         } else {
           rem_fullname = `${rem_path}/${path.basename(new_name)}`
           resolve([rem_fullname, new_name])
@@ -3683,26 +3838,26 @@ generic.downloadFile = async ({
   if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
     const sharp = require("sharp")
     const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`
-    ;[err, res] = await to(
-      new Promise((resolve) => {
-        sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
-          if (err) {
-            console.error({
-              type: "conversion",
-              remote_path,
-              error: err.toString(),
-            })
-            resolve([rem_fullname, local_fullname])
-          } else {
-            fs.unlink(local_fullname)
-            resolve([
-              `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
-              jpgname,
-            ])
-          }
+      ;[err, res] = await to(
+        new Promise((resolve) => {
+          sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
+            if (err) {
+              console.error({
+                type: "conversion",
+                remote_path,
+                error: err.toString(),
+              })
+              resolve([rem_fullname, local_fullname])
+            } else {
+              fs.unlink(local_fullname)
+              resolve([
+                `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
+                jpgname,
+              ])
+            }
+          })
         })
-      })
-    )
+      )
 
     if (!err) [rem_fullname, local_fullname] = res
   }

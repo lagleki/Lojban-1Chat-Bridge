@@ -1,11 +1,10 @@
+import {decode} from 'html-entities';
 interface Json {
   [index: string]: string;
 }
 
 module.exports = function ircify(html: string) {
-  const htmlparser = require("htmlparser"),
-    Entities = require("html-entities").AllHtmlEntities;
-  const entities = new Entities();
+  const htmlparser = require("htmlparser")
 
   const globalC = "\x03";
 
@@ -112,7 +111,7 @@ module.exports = function ircify(html: string) {
   parser.parseComplete(html);
   const dom = handler.dom;
   if (dom)
-    return entities.decode(
+    return decode(
       walk(dom)
         .replace(/&lt;/g, "&amp;lt;")
         .replace(/&gt;/g, "&amp;gt;")
