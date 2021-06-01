@@ -1,155 +1,156 @@
 const config = {};
 module.exports = config;
 
-config.discord = {
-  Actions: ['action'],
-  /*
-  create a Discord bot,
-  add it to your server (group of channels)
-  only one server is supported
-  Add a new role "webhooks" and add switch the ability to manage webhooks to this role. Add the role "webhooks" to the bot you just created. 
-  Open your bot credentials and fill them in:
-  */
-  client: "",
-  token: "",
-  /* this is the id of the server:
-  E.g. if your groups look like https://discordapp.com/channels/123498134853750762/1230785752112867346
-  then your guildId = 123498134853750762 (the first of the two numbers)
-  */
-  guildId: ""
-};
-
-config.webwidget = {
-  //websocket dtream of messages into external services
-  historyLength: 200 ///how many of them to store
-};
-config.facebook = {
-  Actions: ['action'],
-  //unstable bridge pier. Create and verifiy a user on Facebok. The user will be used as a bridge. Enter their email and password: 
-  email: "",
-  password: ""
-  //then add you user to all your facebook chats
-};
-
-config.fbbot = {
-  Actions: ['action'],
-  //doesn't work yet. Chat using official Facebook API 
-  accessToken:
-    "",
-  appSecret: "",
-  verifyToken: ""
-};
-
-config.telegram = {
-  /*
-    1. create a bot using https://t.me/botfather
-    2. Use the `/setprivacy` command with `BotFather` to allow your bot to see all messages in your group (NOTE on usage: bot name is preceded by symbol `@`)
-    3. add your bot to all your Telegram groups 
-    4. make your bot an admin there so that it can remove spam
-    5. after starting the bridge send any message in each of the Telegram groups so that the bridge can both accept and send messages
-    6. You can change your Telegram Bot's profile picture with the `/setuserpic` BotFather command  
-  */
-  admins_userid: 0, //telegram user id to get bot actions updates
-  token: "128026086",  // paste the bot API token you got from t.me/BotFather here:
-  // Age in seconds after which a Telegram message is not relayed, this prevents
-  // spamming the IRC channel if your bot was offline for a long time
-  maxMsgAge: 24 * 60 * 60,
-  // formatting of Telegram usernames on IRC.
-  // the following placeholders are available:
-  //
-  // - %firstName% (first name of sender)
-  // - %lastName% (last name of sender)
-  // - %username% (optional Telegram username of sender)
-  nameFormat: "%username%",
-  // fallback format string for %username% if sender lacks username
-  usernameFallbackFormat: "%firstName% %lastName%",
-  Actions: ['action']
-};
-
-config.telegram.userMapping = {
-  one: "one_alias"
-};
-
-//Slack
-config.slack = {
-  //Slack bot token
-  // Create a Slack bot via https://api.slack.com/apps . There in "OAuth & Permissions" section add the following  permission scopes: channels:read, incoming-webhook, mpim:read, files:read, bot. Add your bot to necessary channels of your Slack project.
-  // Invite your bot to all the Slack channels you've configured it for
-  token: "xoxb-12......",
-  Actions: ['action']
-};
-
-//Mattermost
-config.mattermost = {
-  // 1. Add a webhook
-  // 2. Add your bot to each channel (otherwise your message won't go from Mattermost anywhere)
-  // 3. check if the bot is only in the channels you need (so that the performance of your script would be optimal)
-  ProviderUrl: "https://framateam.org",
-  HookUrl: "https://framateam.org/hooks/w7hkkookokok", //find in Mattermost admin GUI
-  APIUrl: "wss://framateam.org/api/v4/websocket",
-  team: "test",
-  login: "a@example.com", //email
-  password: "my_password", //password,
-  Actions: ['action']
-};
-
-//VK discussion board
-config.vkboard = {
-  token:
-    "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
-  group_id: "123456",
-  appId: "123456",
-  login: "1@example.com",
-  password: "my_password",
-  Actions: ['action']
-};
-//VK discussion wall
-config.vkwall = {
-  token:
-    "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
-  group_id: "123456",
-  appId: "123456",
-  login: "1@example.com",
-  password: "my_password",
-  Actions: ['action']
-};
-
-config.irc = {
-  // send IRC topic changes to other messengers
-  sendTopic: true,
-  // Colorizes nicks
-  nickcolor: true,
-  ircServer: "irc.freenode.net",
-  ircPerformCmds: [
-    "NICKSERV identify bridge_ my_password", //register a new user on IRC with a password and change everywhere here "bridge_" to the name of your user. Change password in two places
-    "NICKSERV regain bridge_",
-    "NICKSERV set enforce on"
-  ],
-  // see https://node-irc.readthedocs.org/en/latest/API.html#client for
-  // documentation
-  ircOptions: {
-    userName: "bridge_",
-    realName: "1Chat Bridge Bot",
-    nick: "bridge_",
-    password: "my_password",
-    port: 6667,
-    localAddress: null,
-    debug: false,
-    showErrors: false,
-    autoRejoin: true,
-    autoConnect: true,
-    secure: false,
-    selfSigned: false,
-    certExpired: false,
-    floodProtection: true,
-    floodProtectionDelay: 1000,
-    sasl: false,
-    stripColors: false,
-    channelPrefixes: "&#!",
-    messageSplit: 512
+config.piers = {
+  //Discord messenger:
+  discord_1: {
+    Actions: ['action'],
+    /*
+    create a Discord bot,
+    add it to your server (group of channels)
+    only one server is supported
+    Add a new role "webhooks" and add switch the ability to manage webhooks to this role. Add the role "webhooks" to the bot you just created. 
+    Open your bot credentials and fill them in:
+    */
+    client: "",
+    token: "",
+    /* this is the id of the server:
+    E.g. if your groups look like https://discordapp.com/channels/123498134853750762/1230785752112867346
+    then your guildId = 123498134853750762 (the first of the two numbers)
+    */
+    guildId: ""
   },
-  Actions: ['action']
-};
+  //reading messages from an HTTP endpoint:
+  webwidget: {
+    //websocket dtream of messages into external services
+    historyLength: 200 ///how many of them to store
+  },
+  //Facebook messenger (doesn't work!):
+  facebook: {
+    Actions: ['action'],
+    //unstable bridge pier. Create and verifiy a user on Facebok. The user will be used as a bridge. Enter their email and password: 
+    email: "",
+    password: ""
+    //then add you user to all your facebook chats
+  },
+  //Facebook bot (not usable!):
+  fbbot: {
+    Actions: ['action'],
+    //doesn't work yet. Chat using official Facebook API 
+    accessToken:
+      "",
+    appSecret: "",
+    verifyToken: ""
+  },
+  //Telegram messenger:
+  telegram: {
+    /*
+      1. create a bot using https://t.me/botfather
+      2. Use the `/setprivacy` command with `BotFather` to allow your bot to see all messages in your group (NOTE on usage: bot name is preceded by symbol `@`)
+      3. add your bot to all your Telegram groups 
+      4. make your bot an admin there so that it can remove spam
+      5. after starting the bridge send any message in each of the Telegram groups so that the bridge can both accept and send messages
+      6. You can change your Telegram Bot's profile picture with the `/setuserpic` BotFather command  
+    */
+    admins_userid: 0, //telegram user id to get bot actions updates
+    token: "128026086",  // paste the bot API token you got from t.me/BotFather here:
+    // Age in seconds after which a Telegram message is not relayed, this prevents
+    // spamming the IRC channel if your bot was offline for a long time
+    maxMsgAge: 24 * 60 * 60,
+    // formatting of Telegram usernames on IRC.
+    // the following placeholders are available:
+    //
+    // - %firstName% (first name of sender)
+    // - %lastName% (last name of sender)
+    // - %username% (optional Telegram username of sender)
+    nameFormat: "%username%",
+    // fallback format string for %username% if sender lacks username
+    usernameFallbackFormat: "%firstName% %lastName%",
+    Actions: ['action'],
+    userMapping: {
+      one: "one_alias"
+    }
+  },
+  //Slack messenger:
+  slack: {
+    //Slack bot token
+    // Create a Slack bot via https://api.slack.com/apps . There in "OAuth & Permissions" section add the following  permission scopes: channels:read, incoming-webhook, mpim:read, files:read, bot. Add your bot to necessary channels of your Slack project.
+    // Invite your bot to all the Slack channels you've configured it for
+    token: "xoxb-12......",
+    Actions: ['action']
+  },
+  //Mattermost messenger:
+  mattermost: {
+    // 1. Add a webhook
+    // 2. Add your bot to each channel (otherwise your message won't go from Mattermost anywhere)
+    // 3. check if the bot is only in the channels you need (so that the performance of your script would be optimal)
+    ProviderUrl: "https://framateam.org",
+    HookUrl: "https://framateam.org/hooks/w7hkkookokok", //find in Mattermost admin GUI
+    APIUrl: "wss://framateam.org/api/v4/websocket",
+    team: "test",
+    login: "a@example.com", //email
+    password: "my_password", //password,
+    Actions: ['action']
+  },
+
+  //VK discussion board:
+  vkboard: {
+    token:
+      "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
+    group_id: "123456",
+    appId: "123456",
+    login: "1@example.com",
+    password: "my_password",
+    Actions: ['action']
+  },
+  //VK discussion wall:
+  vkwall: {
+    token:
+      "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
+    group_id: "123456",
+    appId: "123456",
+    login: "1@example.com",
+    password: "my_password",
+    Actions: ['action']
+  },
+  // IRC messaging:
+  irc: {
+    // send IRC topic changes to other messengers
+    sendTopic: true,
+    // Colorizes nicks
+    nickcolor: true,
+    ircServer: "irc.freenode.net",
+    ircPerformCmds: [
+      "NICKSERV identify bridge_ my_password", //register a new user on IRC with a password and change everywhere here "bridge_" to the name of your user. Change password in two places
+      "NICKSERV regain bridge_",
+      "NICKSERV set enforce on"
+    ],
+    // see https://node-irc.readthedocs.org/en/latest/API.html#client for
+    // documentation
+    ircOptions: {
+      userName: "bridge_",
+      realName: "1Chat Bridge Bot",
+      nick: "bridge_",
+      password: "my_password",
+      port: 6667,
+      localAddress: null,
+      debug: false,
+      showErrors: false,
+      autoRejoin: true,
+      autoConnect: true,
+      secure: false,
+      selfSigned: false,
+      certExpired: false,
+      floodProtection: true,
+      floodProtectionDelay: 1000,
+      sasl: false,
+      stripColors: false,
+      channelPrefixes: "&#!",
+      messageSplit: 512
+    },
+    Actions: ['action']
+  }
+}
 
 config.generic = {
   // enable HTTP server which hosts sent media files, links to files are forwarded to IRC
@@ -184,7 +185,7 @@ config.channels = [
   },
   {
     // another relay entity
-    facebook: "...", 
+    facebook: "...",
     telegram: "..."
   }
 ];

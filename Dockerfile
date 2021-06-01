@@ -1,4 +1,6 @@
 FROM ubuntu:rolling
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
 RUN apt-get update
 
@@ -36,4 +38,4 @@ WORKDIR /home/app/1chat
 RUN mkdir /home/app/1chat/dist
 RUN npm i && npm i -g npm-check-updates
 
-CMD npm run tsc && npm run start
+# CMD npm run tsc && npm run start

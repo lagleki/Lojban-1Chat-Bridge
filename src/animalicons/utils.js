@@ -1,10 +1,8 @@
-const rgb = require("color-space/rgb");
-const lab = require("color-space/lab");
-const xyz = require("color-space/xyz");
+const { TextEncoder } = require('util')
+const space = require('color-space');
+
 const deltaE = require("delta-e");
 const crypto = require('crypto')
-const util= require('util');
-
 /**
  * Returns a SHA-1 hash of the given message.
  * @param message  The string to be hashed.
@@ -58,8 +56,8 @@ function hex2RGB(hex) {
  * @returns {number}  The Delta E value.
  */
 function getDeltaE(hex1, hex2) {
-	const lab1 = xyz.lab(rgb.xyz(hex2RGB(hex1)));
-	const lab2 = xyz.lab(rgb.xyz(hex2RGB(hex2)));
+	const lab1 = space.xyz.lab(space.rgb.xyz(hex2RGB(hex1)));
+	const lab2 = space.xyz.lab(space.rgb.xyz(hex2RGB(hex2)));
 	return deltaE.getDeltaE00(
 		{ L: lab1[0], A: lab1[1], B: lab1[2] },
 		{ L: lab2[0], A: lab2[1], B: lab2[2] }
