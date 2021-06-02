@@ -100,41 +100,52 @@ const prepareToWhom = {};
 const prepareAuthor = {};
 const GetChunks = {};
 const queueOf = {};
-const receivedFrom = {};
-const sendTo = {};
-const StartService = {};
-const convertTo = {};
-const convertFrom = {};
+const pierObj = {
+    facebook: {},
+    discord: {},
+    mattermost: {},
+    telegram: {},
+    irc: {},
+    slack: {},
+    vkboard: {},
+    vkwall: {},
+    webwidget: {}
+};
+Object.keys(pierObj).forEach((key) => {
+    pierObj[key].common = {};
+});
 const GetName = {};
 const GetChannels = {};
-const GotProblem = {};
-const AdaptName = {};
-const BootService = {};
 const NewChannelAppeared = {};
 //declare messengers
-common.telegram = {
+pierObj.telegram.common = {
     Start: async function ({ messenger }) {
         return new Telegram(config.piers[messenger].token, {
             polling: true,
         });
     }
 };
-common.webwidget = {
+pierObj.webwidget.common = {
     Start: async function () {
         return;
     }
 };
-common.vkboard = {
+pierObj.vkboard.common = {
     Start: async function ({ messenger }) {
-        const vkio = new vk_io_1.VK({
-            appId: config.piers[messenger].appId,
+        const callbackService = new vk_io_1.CallbackService();
+        const direct = new authorization_1.DirectAuthorization({
+            callbackService,
+            // manually provide app credentials
+            // clientId: process.env.CLIENT_ID,
+            // clientSecret: process.env.CLIENT_SECRET,
+            clientId: config.piers[messenger].appId,
+            clientSecret: config.piers[messenger].appSecret,
             login: config.piers[messenger].login,
             password: config.piers[messenger].password,
-            authScope: "offline,wall,messages,groups",
+            scope: "offline,wall,messages,groups",
+            apiVersion: config.piers[messenger].apiVersion
         });
-        const authorization = new authorization_1.Authorization(vkio);
-        const direct = authorization.implicitFlowUser();
-        const [err, app] = await to(direct.run());
+        const [err, vkapp] = await to(direct.run());
         if (err) {
             console.error("vkboard", err.toString());
         }
@@ -142,20 +153,25 @@ common.vkboard = {
             token: config.piers[messenger].token,
             group_id: config.piers[messenger].group_id,
         });
-        return { bot: vkbot, app };
+        return { bot: vkbot, vkapp };
     }
 };
-common.vkwall = {
+pierObj.vkwall.common = {
     Start: async function ({ messenger }) {
-        const vkio = new vk_io_1.VK({
-            appId: config.piers[messenger].appId,
+        const callbackService = new vk_io_1.CallbackService();
+        const direct = new authorization_1.DirectAuthorization({
+            callbackService,
+            // manually provide app credentials
+            // clientId: process.env.CLIENT_ID,
+            // clientSecret: process.env.CLIENT_SECRET,
+            clientId: config.piers[messenger].appId,
+            clientSecret: config.piers[messenger].appSecret,
             login: config.piers[messenger].login,
             password: config.piers[messenger].password,
-            authScope: "offline,wall,messages,groups",
+            scope: "offline,wall,messages,groups",
+            apiVersion: config.piers[messenger].apiVersion
         });
-        const authorization = new authorization_1.Authorization(vkio);
-        const direct = authorization.implicitFlowUser();
-        const [err, app] = await to(direct.run());
+        const [err, vkapp] = await to(direct.run());
         if (err) {
             console.error("vkwall", err.toString());
         }
@@ -163,10 +179,10 @@ common.vkwall = {
             token: config.piers[messenger].token,
             group_id: config.piers[messenger].group_id,
         });
-        return { bot: vkbot, app };
+        return { bot: vkbot, vkapp };
     }
 };
-common.slack = {
+pierObj.slack.common = {
     Start: async function ({ messenger }) {
         generic[messenger].client = {
             rtm: new RTMClient(config.piers[messenger].token),
@@ -184,7 +200,7 @@ common.slack = {
         return true;
     }
 };
-common.mattermost = {
+pierObj.mattermost.common = {
     Start: async function ({ messenger }) {
         let [err, res] = await to(new Promise((resolve) => {
             const credentials = {
@@ -310,62 +326,50 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
     }
     return chunk;
 }
-sendTo.webwidget = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    const data = {
-        channelId,
-        author,
-        chunk,
-        action,
-        quotation,
-        file,
-        edited,
-    };
-    generic[messenger].Lojban1ChatHistory.push(data);
-    generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice((config.piers[messenger].historyLength || 201) * -1);
-    generic[messenger].client.emit("sentFrom", {
-        data,
-    });
-    log("webwidget")({ "sending message": data });
-    return true;
-};
-sendTo.facebook = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if (((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly) ||
-        !generic[messenger].client)
-        return;
-    queueOf[messenger].add(async () => {
-        await new Promise((resolve) => {
-            setTimeout(() => {
-                const jsonMessage = {
-                    body: chunk,
-                };
-                if (file)
-                    jsonMessage.attachment = fs.createReadStream(file);
-                generic[messenger].client.sendMessage(channelId, chunk).catch(catchError);
-                resolve(null);
-            }, 500);
+pierObj.webwidget.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        const data = {
+            channelId,
+            author,
+            chunk,
+            action,
+            quotation,
+            file,
+            edited,
+        };
+        generic[messenger].Lojban1ChatHistory.push(data);
+        generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice((config.piers[messenger].historyLength || 201) * -1);
+        generic[messenger].client.emit("sentFrom", {
+            data,
         });
+        log("webwidget")({ "sending message": data });
+        resolve(null);
     });
-    return true;
 };
-sendTo.telegram = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    queueOf[messenger].add(async () => {
-        await new Promise((resolve) => {
-            log("telegram")({ "sending text": chunk });
-            generic[messenger].client
-                .sendMessage(channelId, chunk, {
-                parse_mode: "HTML",
-            })
-                .then(() => resolve(null))
-                .catch((err) => {
-                err = util.inspect(err, { showHidden: false, depth: 4 });
-                common.LogToAdmin(`
+pierObj.facebook.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        setTimeout(() => {
+            const jsonMessage = {
+                body: chunk,
+            };
+            if (file)
+                jsonMessage.attachment = fs.createReadStream(file);
+            generic[messenger].client.sendMessage(channelId, chunk).catch(catchError);
+            resolve(null);
+        }, 500);
+    });
+};
+pierObj.telegram.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        log("telegram")({ "sending text": chunk });
+        generic[messenger].client
+            .sendMessage(channelId, chunk, {
+            parse_mode: "HTML",
+        })
+            .then(() => resolve(null))
+            .catch((err) => {
+            err = util.inspect(err, { showHidden: false, depth: 4 });
+            common.LogToAdmin(`
 Error sending a chunk:
 
 Channel: ${channelId}.
@@ -374,148 +378,125 @@ Chunk: ${common.escapeHTML(chunk)}
 
 Error message: ${err}
             `);
-                resolve(null);
-            });
+            resolve(null);
         });
     });
-    return true;
 };
-sendTo.discord = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    queueOf[messenger].add(async () => {
-        const channel = generic[messenger].client.channels.cache.get(channelId);
-        const webhooks = await channel.fetchWebhooks();
-        let webhook = webhooks.first();
-        const authorTemp = author
-            .replace(/[0-9_\.-]+$/, " ")
-            .replace(/\[.*/, "")
-            .replace(/[^0-9A-Za-z].*$/, "")
-            .trim();
-        const parsedName = modzi.modzi(author);
-        let ava = new avatar(authorTemp, 512, parsedName.snada ? parsedName.output : undefined);
-        await ava.draw();
-        ava = await ava.toDataURL();
-        if (!webhook) {
-            webhook = await channel.createWebhook(author || "-", ava);
-        }
-        else {
-            webhook = await webhook.edit({
-                name: author || "-",
-                avatar: ava,
-            });
-        }
-        let files = undefined;
-        if (file) {
-            files = [
-                {
-                    attachment: file,
-                },
-            ];
-        }
-        const [error] = await to(webhook.send(chunk, {
+pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    const channel = generic[messenger].client.channels.cache.get(channelId);
+    const webhooks = await channel.fetchWebhooks();
+    let webhook = webhooks.first();
+    const authorTemp = author
+        .replace(/[0-9_\.-]+$/, " ")
+        .replace(/\[.*/, "")
+        .replace(/[^0-9A-Za-z].*$/, "")
+        .trim();
+    const parsedName = modzi.modzi(author);
+    let ava = new avatar(authorTemp, 512, parsedName.snada ? parsedName.output : undefined);
+    await ava.draw();
+    ava = await ava.toDataURL();
+    if (!webhook) {
+        webhook = await channel.createWebhook(author || "-", ava);
+    }
+    else {
+        webhook = await webhook.edit({
+            name: author || "-",
+            avatar: ava,
+        });
+    }
+    let files = undefined;
+    if (file) {
+        files = [
+            {
+                attachment: file,
+            },
+        ];
+    }
+    const [error] = await to(webhook.send(chunk, {
+        username: author || "-",
+        files,
+        // avatarURL: generic.discord.avatar.path,
+    }));
+    if (error) {
+        logger.log({
+            level: "error",
+            function: "discord.sendTo",
+            message: error.toString(),
+            chunk, author
+        });
+        //try to send without the attachment. useful when the file is too large for Discord to handle
+        await to(webhook.send(chunk, {
             username: author || "-",
-            files,
             // avatarURL: generic.discord.avatar.path,
         }));
-        if (error) {
-            logger.log({
-                level: "error",
-                function: "sendTo.discord",
-                message: error.toString(),
-                chunk, author
-            });
-            //try to send without the attachment. useful when the file is too large for Discord to handle
-            await to(webhook.send(chunk, {
-                username: author || "-",
-                // avatarURL: generic.discord.avatar.path,
-            }));
-        }
-        // await new Promise((resolve: any) => {
-        //   generic.discord.client.channels.cache
-        //     .get(channelId)
-        //     .send(chunk)
-        //     .catch(catchError)
-        //   resolve(null)
-        // })
-    });
+    }
+    // await new Promise((resolve: any) => {
+    //   generic.discord.client.channels.cache
+    //     .get(channelId)
+    //     .send(chunk)
+    //     .catch(catchError)
+    //   resolve(null)
+    // })
 };
-sendTo.mattermost = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    queueOf[messenger].add(async () => {
-        await new Promise((resolve) => {
-            const option = {
-                url: config.piers[messenger].HookUrl,
-                json: {
-                    text: chunk,
-                    // username: author,
-                    channel: channelId,
-                },
-            };
-            request.post(option, (error, response, body) => {
-                resolve(null);
-            });
+pierObj.mattermost.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        const option = {
+            url: config.piers[messenger].HookUrl,
+            json: {
+                text: chunk,
+                // username: author,
+                channel: channelId,
+            },
+        };
+        request.post(option, (error, response, body) => {
+            resolve(null);
         });
     });
 };
-sendTo.vkwall = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    if (!generic[messenger].client.app) {
+pierObj.vkwall.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    if (!generic[messenger].client.vkapp) {
         config.MessengersAvailable[messenger] = false;
         return;
     }
-    const token = generic[messenger].client.app.token;
-    queueOf.vk.add(async () => {
-        await new Promise((resolve) => {
-            setTimeout(() => {
-                generic[messenger].client.bot
-                    .api("wall.createComment", {
-                    access_token: token,
-                    owner_id: "-" + config.piers[messenger].group_id,
-                    post_id: channelId,
-                    from_group: config.piers[messenger].group_id,
-                    reply_to_comment: 1,
-                    message: chunk,
-                })
-                    .then((res) => { })
-                    .catch(() => { });
-                resolve(null);
-            }, 60000);
-        });
+    await new Promise((resolve) => {
+        const token = generic[messenger].client.vkapp.token;
+        setTimeout(() => {
+            generic[messenger].client.bot
+                .api("wall.createComment", {
+                access_token: token,
+                owner_id: "-" + config.piers[messenger].group_id,
+                post_id: channelId,
+                from_group: config.piers[messenger].group_id,
+                reply_to_comment: 1,
+                message: chunk,
+            })
+                .then((res) => { })
+                .catch(() => { });
+            resolve(null);
+        }, 60000);
     });
 };
-sendTo.vkboard = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly
-    //todo: !vk.WaitingForCaptcha
-    )
-        return;
-    if (!generic[messenger].client.app) {
+pierObj.vkboard.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    //todo: if !vk.WaitingForCaptcha return
+    if (!generic[messenger].client.vkapp) {
         config.MessengersAvailable[messenger] = false;
         return;
     }
-    const token = generic[messenger].client.app.token;
-    queueOf.vk.add(async () => {
-        await new Promise((resolve) => {
-            setTimeout(() => {
-                generic[messenger].client.bot
-                    .api("board.createComment", {
-                    access_token: token,
-                    group_id: config.piers[messenger].group_id,
-                    topic_id: channelId,
-                    message: chunk,
-                    from_group: 1,
-                })
-                    .then((res) => { })
-                    .catch(() => { });
-                resolve(null);
-            }, 60000);
-        });
+    await new Promise((resolve) => {
+        const token = generic[messenger].client.vkapp.token;
+        setTimeout(() => {
+            generic[messenger].client.bot
+                .api("board.createComment", {
+                access_token: token,
+                group_id: config.piers[messenger].group_id,
+                topic_id: channelId,
+                message: chunk,
+                from_group: 1,
+            })
+                .then((res) => { })
+                .catch(() => { });
+            resolve(null);
+        }, 60000);
     });
     // if (err.error.error_code === 14) {
     //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
@@ -534,40 +515,31 @@ sendTo.vkboard = async ({ messenger, channelId, author, chunk, action, quotation
     // }
 };
 // async function myAwesomeCaptchaHandler() {}
-sendTo.slack = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    queueOf[messenger].add(async () => {
-        await new Promise((resolve) => {
-            chunk = emoji.unemojify(chunk);
-            generic[messenger].client.web.chat
-                .postMessage({
-                channel: channelId,
-                username: (author || "").replace(/(^.{21}).*$/, "$1"),
-                text: chunk,
-            })
-                .then(() => resolve(null))
-                .catch((err) => {
-                console.error(err);
-                resolve(null);
-            });
-        });
-    });
-};
-sendTo.irc = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    var _a, _b, _c, _d;
-    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
-        return;
-    queueOf[messenger].add(async () => {
-        await new Promise((resolve) => {
-            log("irc")({ "sending for irc": chunk });
-            generic[messenger].client.say(channelId, chunk);
+pierObj.slack.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        chunk = emoji.unemojify(chunk);
+        generic[messenger].client.web.chat
+            .postMessage({
+            channel: channelId,
+            username: (author || "").replace(/(^.{21}).*$/, "$1"),
+            text: chunk,
+        })
+            .then(() => resolve(null))
+            .catch((err) => {
+            console.error(err);
             resolve(null);
         });
     });
 };
+pierObj.irc.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
+    await new Promise((resolve) => {
+        log("irc")({ "sending for irc": chunk });
+        generic[messenger].client.say(channelId, chunk);
+        resolve(null);
+    });
+};
 async function prepareChunks({ messenger, channelId, text, edited, messengerTo, }) {
+    var _a;
     const root_messengerTo = common.root_of_messenger(messengerTo);
     let arrChunks, fallback = "fallback";
     if (GetChunks[messengerTo])
@@ -582,11 +554,11 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
                 localized_string_key: `OverlayMessageWithEditedMark.${root_messengerTo}`,
                 arrElemsToInterpolate: [["message", arrChunks[i]]],
             });
-        arrChunks[i] = await convertTo[root_messengerTo]({
+        arrChunks[i] = await ((_a = pierObj[root_messengerTo]) === null || _a === void 0 ? void 0 : _a.convertTo({
             text: arrChunks[i],
             messenger,
             messengerTo,
-        });
+        }));
         log("generic")(`converted for messenger ${messengerTo} to text "` + arrChunks[i] + `"`);
     }
     return arrChunks;
@@ -654,34 +626,50 @@ async function checkHelpers({ messenger, channelId, author, text, ToWhom, quotat
             message: error.toString(),
         });
     }
-    console.log(href);
     if (!href)
         return;
     const [file, localfile] = await common.downloadFile({
         type: "data",
         remote_path: href
     });
-    console.log(file, localfile);
-    sendTo[common.root_of_messenger(messenger)]({
+    universalSendTo({
         messenger,
         channelId,
         author,
         chunk: file,
-        file: localfile,
         quotation,
         action,
-        edited,
+        file: localfile,
+        edited
+    });
+}
+async function universalSendTo({ messenger, channelId, author, chunk, quotation, action, file, edited }) {
+    var _a, _b, _c, _d;
+    if ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.readonly)
+        return;
+    queueOf[messenger].add(async () => {
+        var _a;
+        (_a = pierObj[common.root_of_messenger(messenger)]) === null || _a === void 0 ? void 0 : _a.sendTo({
+            messenger: messenger,
+            channelId,
+            author,
+            chunk,
+            quotation,
+            action,
+            file,
+            edited,
+        });
     });
 }
 async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation, action, file, remote_file, edited, }) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const ConfigNode = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId];
     if (!ConfigNode)
         return common.LogToAdmin(`error finding assignment to ${messenger} channel with id ${channelId}`);
     if (!text || text === "")
         return;
     const messenger_core = common.root_of_messenger(messenger);
-    text = await convertFrom[messenger_core]({ text, messenger });
+    text = await ((_c = pierObj[messenger_core]) === null || _c === void 0 ? void 0 : _c.convertFrom({ text, messenger }));
     text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
     text = text.replace(/^(<br\/>)+/, "");
     //zbalermorna etc.
@@ -722,7 +710,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 });
             }
             Chunks.map((chunk) => {
-                sendTo[common.root_of_messenger(messenger)]({
+                universalSendTo({
                     messenger,
                     channelId: ConfigNode[messenger],
                     author,
@@ -730,7 +718,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                     quotation,
                     action,
                     file,
-                    edited,
+                    edited
                 });
             });
             text = text + "<br/>" + translated_text;
@@ -782,7 +770,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 Chunks[i] = await FormatMessageChunkForSending({
                     messenger: messengerTo,
                     channelId,
-                    title: (_c = config.piers[messenger]) === null || _c === void 0 ? void 0 : _c.group_id,
+                    title: (_d = config.piers[messenger]) === null || _d === void 0 ? void 0 : _d.group_id,
                     author,
                     chunk: thisToWhom + chunk,
                     action,
@@ -790,7 +778,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 });
             }
             Chunks.map((chunk) => {
-                sendTo[common.root_of_messenger(messengerTo)]({
+                universalSendTo({
                     messenger: messengerTo,
                     channelId: ConfigNode[messengerTo],
                     author,
@@ -798,7 +786,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                     quotation,
                     action,
                     file,
-                    edited,
+                    edited
                 });
             });
         }
@@ -831,7 +819,7 @@ async function getNSFWString(file) {
     image.dispose(); // Tensor memory must be managed explicitly (it is not sufficient to let a tf.Tensor go out of scope for its memory to be released).
     return predictions.length > 0 ? predictions : null;
 }
-receivedFrom.discord = async (messenger, message) => {
+pierObj.discord.receivedFrom = async (messenger, message) => {
     var _a, _b, _c;
     if (!((_a = config === null || config === void 0 ? void 0 : config.channelMapping[messenger]) === null || _a === void 0 ? void 0 : _a[(((_b = message === null || message === void 0 ? void 0 : message.channel) === null || _b === void 0 ? void 0 : _b.id) || "").toString()]))
         return;
@@ -858,49 +846,49 @@ receivedFrom.discord = async (messenger, message) => {
         sendFrom({
             messenger,
             channelId: message.channel.id,
-            author: AdaptName.discord(messenger, message),
+            author: pierObj.discord.adaptName(messenger, message),
             text: file,
             file: localfile,
             remote_file: file,
             edited,
         });
         //text of attachment
-        const text = common.discord_reconstructPlainText(messenger, message, value.content);
+        const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message, value.content);
         log("discord")("sending text of attachment: " + text);
         sendFrom({
             messenger,
             channelId: message.channel.id,
-            author: AdaptName.discord(messenger, message),
+            author: pierObj.discord.adaptName(messenger, message),
             text,
             edited,
         });
     }
     if ((_c = message === null || message === void 0 ? void 0 : message.reference) === null || _c === void 0 ? void 0 : _c.messageID) {
         const message_ = await message.channel.messages.fetch(message.reference.messageID);
-        const text = common.discord_reconstructPlainText(messenger, message_, message_.content);
+        const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message_, message_.content);
         log("discord")(`sending reconstructed text: ${text}`);
-        // console.log(message_, AdaptName.discord(message_))
+        // console.log(message_, pierObj.discord.adaptName(message_))
         sendFrom({
             messenger,
             channelId: message_.channel.id,
-            author: AdaptName.discord(messenger, message_),
+            author: pierObj.discord.adaptName(messenger, message_),
             text,
             quotation: true,
             edited,
         });
     }
-    const text = common.discord_reconstructPlainText(messenger, message, message.content);
+    const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message, message.content);
     log("discord")("sending reconstructed text: " + text);
     sendFrom({
         messenger,
         channelId: message.channel.id,
-        author: AdaptName.discord(messenger, message),
+        author: pierObj.discord.adaptName(messenger, message),
         text,
         edited,
     });
 };
 // receivedFrom
-receivedFrom.facebook = async (messenger, message) => {
+pierObj.facebook.receivedFrom = async (messenger, message) => {
     var _a;
     if (!((_a = config === null || config === void 0 ? void 0 : config.channelMapping[messenger]) === null || _a === void 0 ? void 0 : _a[((message === null || message === void 0 ? void 0 : message.threadId) || "").toString()]))
         return;
@@ -909,7 +897,7 @@ receivedFrom.facebook = async (messenger, message) => {
     if (err)
         return;
     let author;
-    author = AdaptName.facebook(res);
+    author = pierObj.facebook.adaptName(res);
     if (!message.attachments)
         message.attachments = [];
     if (message.stickerId)
@@ -949,7 +937,7 @@ receivedFrom.facebook = async (messenger, message) => {
             text: message.message,
         });
 };
-receivedFrom.telegram = async (messenger, message) => {
+pierObj.telegram.receivedFrom = async (messenger, message) => {
     //spammer
     //1. remove entered bots
     TelegramRemoveAddedBots(messenger, message);
@@ -1000,7 +988,7 @@ receivedFrom.telegram = async (messenger, message) => {
     });
     sendFromTelegram({ messenger, message, author });
 };
-common.discord_reconstructPlainText = (messenger, message, text) => {
+pierObj.discord.common.discord_reconstructPlainText = (messenger, message, text) => {
     if (!text)
         return "";
     const massMentions = ["@everyone", "@here"];
@@ -1037,7 +1025,7 @@ common.discord_reconstructPlainText = (messenger, message, text) => {
     return text;
 };
 // reconstructs the original raw markdown message
-common.telegram_reconstructMarkdown = (msg) => {
+pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
     if (!msg.entities)
         return msg;
     return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) };
@@ -1104,7 +1092,7 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
     if (!message)
         return;
     let action;
-    message = common.telegram_reconstructMarkdown(message);
+    message = pierObj.telegram.common.telegram_reconstructMarkdown(message);
     //collect attachments
     const jsonMessage = {};
     let i = 0;
@@ -1204,7 +1192,11 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
             [
                 jsonMessage[el].url,
                 jsonMessage[el].local_file,
-            ] = await common.telegram_serveFile(messenger, jsonMessage[el].url);
+            ] = await common.downloadFile({
+                messenger,
+                type: "telegram",
+                fileId: jsonMessage[el].url
+            });
         const arrForLocal = Object.keys(jsonMessage[el]).map((i) => [
             i,
             jsonMessage[el][i],
@@ -1229,7 +1221,7 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
         });
     }
 }
-receivedFrom.vkwall = async (messenger, message) => {
+pierObj.vkwall.receivedFrom = async (messenger, message) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!config.channelMapping[messenger])
         return;
@@ -1237,7 +1229,7 @@ receivedFrom.vkwall = async (messenger, message) => {
     if (!config.channelMapping[messenger][channelId] ||
         "-" + config.piers[messenger].group_id === message.from_id.toString())
         return;
-    if (!generic[messenger].client.app) {
+    if (!generic[messenger].client.vkapp) {
         config.MessengersAvailable[messenger] = false;
         return;
     }
@@ -1248,7 +1240,7 @@ receivedFrom.vkwall = async (messenger, message) => {
         fields: "nickname,screen_name",
     }));
     res = ((_a = res === null || res === void 0 ? void 0 : res.response) === null || _a === void 0 ? void 0 : _a[0]) || fromwhomId;
-    const author = AdaptName.vkwall(messenger, res);
+    const author = pierObj.vkwall.adaptName(messenger, res);
     let arrQuotes = [];
     text.replace(/\[[^\]]+:bp-([^\]]+)_([^\]]+)\|[^\]]*\]/g, (match, group_id, post_id) => {
         if (group_id === config.piers[messenger].group_id) {
@@ -1256,7 +1248,7 @@ receivedFrom.vkwall = async (messenger, message) => {
         }
     });
     if (arrQuotes.length > 0) {
-        const token = generic[messenger].client.app.token;
+        const token = generic[messenger].client.vkapp.token;
         for (const el of arrQuotes) {
             const opts = {
                 access_token: token,
@@ -1284,7 +1276,7 @@ receivedFrom.vkwall = async (messenger, message) => {
                     fields: "nickname,screen_name",
                 }));
                 replyuser = ((_j = res === null || res === void 0 ? void 0 : res.response) === null || _j === void 0 ? void 0 : _j[0]) || "";
-                replyuser = AdaptName.vkwall(messenger, replyuser);
+                replyuser = pierObj.vkwall.adaptName(messenger, replyuser);
             }
             sendFrom({
                 messenger,
@@ -1340,7 +1332,7 @@ receivedFrom.vkwall = async (messenger, message) => {
         text,
     });
 };
-receivedFrom.vkboard = async (messenger, message) => {
+pierObj.vkboard.receivedFrom = async (messenger, message) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!config.channelMapping[messenger])
         return;
@@ -1348,7 +1340,7 @@ receivedFrom.vkboard = async (messenger, message) => {
     if (!config.channelMapping[messenger][channelId] ||
         message.topic_owner_id === message.from_id)
         return;
-    if (!generic[messenger].client.app) {
+    if (!generic[messenger].client.vkapp) {
         config.MessengersAvailable[messenger] = false;
         return;
     }
@@ -1360,7 +1352,7 @@ receivedFrom.vkboard = async (messenger, message) => {
         fields: "nickname,screen_name",
     }));
     res = ((_a = res === null || res === void 0 ? void 0 : res.response) === null || _a === void 0 ? void 0 : _a[0]) || fromwhomId;
-    const author = AdaptName.vkboard(messenger, res);
+    const author = pierObj.vkboard.adaptName(messenger, res);
     let arrQuotes = [];
     text.replace(/\[[^\]]+:bp-([^\]]+)_([^\]]+)\|[^\]]*\]/g, (match, group_id, post_id) => {
         if (group_id === config.piers[messenger].group_id) {
@@ -1368,7 +1360,7 @@ receivedFrom.vkboard = async (messenger, message) => {
         }
     });
     if (arrQuotes.length > 0) {
-        const token = generic[messenger].client.app.token;
+        const token = generic[messenger].client.vkapp.token;
         for (const el of arrQuotes) {
             const opts = {
                 access_token: token,
@@ -1396,7 +1388,7 @@ receivedFrom.vkboard = async (messenger, message) => {
                     fields: "nickname,screen_name",
                 }));
                 replyuser = ((_j = res === null || res === void 0 ? void 0 : res.response) === null || _j === void 0 ? void 0 : _j[0]) || "";
-                replyuser = AdaptName.vkboard(messenger, replyuser);
+                replyuser = pierObj.vkboard.adaptName(messenger, replyuser);
             }
             sendFrom({
                 messenger,
@@ -1452,7 +1444,7 @@ receivedFrom.vkboard = async (messenger, message) => {
         text,
     });
 };
-receivedFrom.slack = async (messenger, message) => {
+pierObj.slack.receivedFrom = async (messenger, message) => {
     var _a, _b;
     if (!config.channelMapping[messenger])
         return;
@@ -1492,7 +1484,7 @@ receivedFrom.slack = async (messenger, message) => {
     [err, files] = await to(Promise.all(promFiles));
     if (err)
         files = [];
-    const author = AdaptName.slack(messenger, user);
+    const author = pierObj.slack.adaptName(messenger, user);
     const channelId = chan.channel.name || message.channel;
     let action;
     if (message.subtype === "me_message")
@@ -1531,7 +1523,7 @@ receivedFrom.slack = async (messenger, message) => {
         });
     }
 };
-receivedFrom.mattermost = async (messenger, message) => {
+pierObj.mattermost.receivedFrom = async (messenger, message) => {
     var _a, _b, _c, _d, _e, _f;
     // log("mattermost")(message);
     // if (process.env.log)
@@ -1709,7 +1701,7 @@ receivedFrom.mattermost = async (messenger, message) => {
         });
     }
 };
-receivedFrom.irc = async (messenger, { author, channelId, text, handler, error, type, }) => {
+pierObj.irc.receivedFrom = async (messenger, { author, channelId, text, handler, error, type, }) => {
     var _a, _b, _c;
     if (!(config === null || config === void 0 ? void 0 : config.channelMapping[messenger]))
         return;
@@ -1788,13 +1780,13 @@ receivedFrom.irc = async (messenger, { author, channelId, text, handler, error, 
     }
 };
 // AdaptName
-AdaptName.discord = (messenger, message) => {
+pierObj.discord.adaptName = (messenger, message) => {
     var _a, _b;
     return ((_a = message.member) === null || _a === void 0 ? void 0 : _a.nickname) || ((_b = message.author) === null || _b === void 0 ? void 0 : _b.username);
 };
-AdaptName.facebook = (user) => user.name; // || user.vanity || user.firstName;
-AdaptName.telegram = (messenger, name) => config.piers[messenger].userMapping[name] || name;
-AdaptName.vkboard = (messenger, user) => {
+pierObj.facebook.adaptName = (user) => user.name; // || user.vanity || user.firstName;
+pierObj.telegram.adaptName = (messenger, name) => config.piers[messenger].userMapping[name] || name;
+pierObj.vkboard.adaptName = (messenger, user) => {
     let full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim();
     if (full_name === "")
         full_name = undefined;
@@ -1804,15 +1796,15 @@ AdaptName.vkboard = (messenger, user) => {
         user.screen_name = null;
     return user.screen_name || user.nickname || full_name || user.id;
 };
-AdaptName.vkwall = AdaptName.vkboard;
-AdaptName.slack = (messenger, user) => { var _a, _b, _c, _d; return ((_b = (_a = user === null || user === void 0 ? void 0 : user.user) === null || _a === void 0 ? void 0 : _a.profile) === null || _b === void 0 ? void 0 : _b.display_name) || ((_c = user === null || user === void 0 ? void 0 : user.user) === null || _c === void 0 ? void 0 : _c.real_name) || ((_d = user === null || user === void 0 ? void 0 : user.user) === null || _d === void 0 ? void 0 : _d.name); };
+pierObj.vkwall.adaptName = pierObj.vkboard.adaptName;
+pierObj.slack.adaptName = (messenger, user) => { var _a, _b, _c, _d; return ((_b = (_a = user === null || user === void 0 ? void 0 : user.user) === null || _a === void 0 ? void 0 : _a.profile) === null || _b === void 0 ? void 0 : _b.display_name) || ((_c = user === null || user === void 0 ? void 0 : user.user) === null || _c === void 0 ? void 0 : _c.real_name) || ((_d = user === null || user === void 0 ? void 0 : user.user) === null || _d === void 0 ? void 0 : _d.name); };
 // GetName
 GetName.telegram = (messenger, user) => {
     var _a;
     let name = config.piers[messenger].nameFormat;
     if (user.username) {
         name = name.replace("%username%", user.username, "g");
-        name = AdaptName.telegram(messenger, name);
+        name = pierObj.telegram.adaptName(messenger, name);
     }
     else {
         // if user lacks username, use fallback format string instead
@@ -1824,7 +1816,7 @@ GetName.telegram = (messenger, user) => {
     name = name.replace(/(^\s*)|(\s*$)/g, "");
     return name;
 };
-convertFrom.slack = async ({ text, messenger, }) => {
+pierObj.slack.convertFrom = async ({ text, messenger, }) => {
     const source = text;
     const RE_ALPHANUMERIC = new RegExp("^\\w?$"), RE_TAG = new RegExp("<(.+?)>", "g"), RE_BOLD = new RegExp("\\*([^\\*]+?)\\*", "g"), RE_ITALIC = new RegExp("_([^_]+?)_", "g"), RE_FIXED = new RegExp("(?<!`)`([^`]+?)`(?!`)", "g"), RE_MULTILINE_FIXED = new RegExp("```((?:(?!```)[\\s\\S])+?)```", "gm");
     const pipeSplit = (payload) => payload.split `|`;
@@ -1915,7 +1907,7 @@ convertFrom.slack = async ({ text, messenger, }) => {
                     error: err,
                 });
             }
-            jsonUsers[userId] = AdaptName.slack(messenger, user);
+            jsonUsers[userId] = pierObj.slack.adaptName(messenger, user);
         }
         return (emoji
             .emojify(text)
@@ -1967,22 +1959,22 @@ convertFrom.slack = async ({ text, messenger, }) => {
     });
     return result || text;
 };
-convertFrom.facebook = async ({ text, messenger, }) => common.escapeHTML(text);
-convertFrom.telegram = async ({ text, messenger, }) => {
+pierObj.facebook.convertFrom = async ({ text, messenger, }) => common.escapeHTML(text);
+pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
     const res = markedParse({
         text: common.escapeHTML(text).replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
         messenger: "telegram",
     });
     return res;
 };
-convertFrom.vkboard = async ({ text, messenger, }) => common.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
-convertFrom.vkwall = convertFrom.vkboard;
-convertFrom.mattermost = async ({ text, messenger, }) => markedParse({
+pierObj.vkboard.convertFrom = async ({ text, messenger, }) => common.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
+pierObj.vkwall.convertFrom = pierObj.vkboard.convertFrom;
+pierObj.mattermost.convertFrom = async ({ text, messenger, }) => markedParse({
     text: common.escapeHTML(text),
     messenger: "mattermost",
     unescapeCodeBlocks: true,
 });
-convertFrom.discord = async ({ text, messenger, }) => {
+pierObj.discord.convertFrom = async ({ text, messenger, }) => {
     const result = discordParser.toHTML(text);
     log(messenger)({
         messenger,
@@ -1996,8 +1988,8 @@ convertFrom.discord = async ({ text, messenger, }) => {
 //   messenger: "discord",
 //   dontEscapeBackslash: true
 // });
-convertFrom.webwidget = async ({ text, messenger, }) => text;
-convertFrom.irc = async ({ text, messenger, }) => {
+pierObj.webwidget.convertFrom = async ({ text, messenger, }) => text;
+pierObj.irc.convertFrom = async ({ text, messenger, }) => {
     const result = common.escapeHTML(text)
         .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
         .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
@@ -2036,8 +2028,8 @@ async function convertToPlainText(text) {
     }
     return a;
 }
-convertTo.facebook = async ({ text, messenger, messengerTo, }) => convertToPlainText(text);
-convertTo.telegram = async ({ text, messenger, messengerTo, }) => {
+pierObj.facebook.convertTo = async ({ text, messenger, messengerTo, }) => convertToPlainText(text);
+pierObj.telegram.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = common
         .sanitizeHtml(text
         .replace(/<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim, "<pre>$1</pre>")
@@ -2064,7 +2056,7 @@ convertTo.telegram = async ({ text, messenger, messengerTo, }) => {
     });
     return result;
 };
-convertTo.vkboard = async ({ text, messenger, messengerTo, }) => {
+pierObj.vkboard.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = await common.unescapeHTML({
         text: html2irc(text),
         convertHtmlEntities: false,
@@ -2072,13 +2064,13 @@ convertTo.vkboard = async ({ text, messenger, messengerTo, }) => {
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-convertTo.vkwall = convertTo.vkboard;
-convertTo.slack = async ({ text, messenger, messengerTo, }) => {
+pierObj.vkwall.convertTo = pierObj.vkboard.convertTo;
+pierObj.slack.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = html2slack(text);
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-convertTo.mattermost = async ({ text, messenger, messengerTo, }) => {
+pierObj.mattermost.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = await common.unescapeHTML({
         text: html2md.convert({
             string: text,
@@ -2090,7 +2082,7 @@ convertTo.mattermost = async ({ text, messenger, messengerTo, }) => {
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-convertTo.discord = async ({ text, messenger, messengerTo, }) => {
+pierObj.discord.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = await common.unescapeHTML({
         text: html2md.convert({
             string: text
@@ -2105,8 +2097,8 @@ convertTo.discord = async ({ text, messenger, messengerTo, }) => {
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-convertTo.webwidget = async ({ text, messenger, messengerTo, }) => text;
-convertTo.irc = async ({ text, messenger, messengerTo, }) => {
+pierObj.webwidget.convertTo = async ({ text, messenger, messengerTo, }) => text;
+pierObj.irc.convertTo = async ({ text, messenger, messengerTo, }) => {
     const result = await common.unescapeHTML({
         text: html2irc(text),
         convertHtmlEntities: true,
@@ -2114,12 +2106,6 @@ convertTo.irc = async ({ text, messenger, messengerTo, }) => {
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-// common.telegram
-common.telegram_serveFile = (messenger, fileId) => common.downloadFile({
-    messenger,
-    type: "telegram",
-    fileId,
-});
 common.writeCache = async ({ channelName, channelId, action, }) => {
     await new Promise((resolve) => {
         fs.writeFile(`${cache_folder}/cache.json`, JSON.stringify(config.cache), (err) => {
@@ -2148,7 +2134,7 @@ async function TelegramRemoveSpam(messenger, message) {
                 const invite_link = chat.invite_link;
                 cloned_message.text = cloned_message.text.replace(invite_link, "");
                 if (IsSpam(cloned_message))
-                    common.telegram_DeleteMessage({ messenger, message, log: true });
+                    pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true });
             }
             else {
                 common.LogToAdmin(`error on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`);
@@ -2157,7 +2143,7 @@ async function TelegramRemoveSpam(messenger, message) {
         else {
             const [err, chat] = await to(generic[messenger].client.getChat(cloned_message.chat.id));
             if (!err) {
-                common.telegram_DeleteMessage({ messenger, message, log: true });
+                pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true });
             }
             else {
                 common.LogToAdmin(`error on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`);
@@ -2196,7 +2182,7 @@ function TelegramRemoveNewMemberMessage(messenger, message) {
         ((message === null || message === void 0 ? void 0 : message.new_chat_members) || []).filter((u) => (u.username || "").length > 100 ||
             (u.first_name || "").length > 100 ||
             (u.last_name || "").length > 100).length > 0) {
-        common.telegram_DeleteMessage({ messenger, message, log: false });
+        pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: false });
     }
     if (message.left_chat_member || message.new_chat_members)
         return true;
@@ -2233,7 +2219,7 @@ async function TelegramLeaveChatIfNotAdmin(messenger, message) {
     }
     return false;
 }
-common.telegram_DeleteMessage = async ({ messenger, message, log, }) => {
+pierObj.telegram.common.telegram_DeleteMessage = async ({ messenger, message, log, }) => {
     if (log)
         await to(common.LogMessageToAdmin(messenger, message));
     await to(generic[messenger].client.deleteMessage(message.chat.id, message.message_id));
@@ -2422,17 +2408,16 @@ common.MessengersAvailable = () => {
     });
     Object.keys(config.MessengersAvailable).forEach((messenger) => generic[messenger] = {});
 };
-StartService.facebook = async ({ force, messenger = "facebook" }) => {
+pierObj.facebook.StartService = async ({ force, messenger = "facebook" }) => {
     //facebook
     if (!force && !config.MessengersAvailable[messenger])
         return;
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
     try {
         generic[messenger].client = await login(config.piers[messenger].email, config.piers[messenger].password);
         console.log(generic[messenger].client);
         console.log(JSON.stringify(generic[messenger].client.getSession()));
         generic[messenger].client.on("message", (message) => {
-            receivedFrom.facebook(messenger, message);
+            pierObj.facebook.receivedFrom(messenger, message);
         });
         config.MessengersAvailable[messenger] = true;
     }
@@ -2442,7 +2427,7 @@ StartService.facebook = async ({ force, messenger = "facebook" }) => {
         // StartService[messenger]({force: true});
     }
 };
-StartService.webwidget = async ({ messenger }) => {
+pierObj.webwidget.StartService = async ({ messenger }) => {
     generic[messenger] = {
         Lojban1ChatHistory: [],
         client: require("socket.io")(server)
@@ -2451,17 +2436,16 @@ StartService.webwidget = async ({ messenger }) => {
         socket.emit("history", generic[messenger].Lojban1ChatHistory);
     });
 };
-StartService.telegram = async ({ messenger }) => {
+pierObj.telegram.StartService = async ({ messenger }) => {
     //telegram
     if (!config.MessengersAvailable[messenger])
         return;
-    generic[messenger].client = await common.telegram.Start({ messenger });
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
+    generic[messenger].client = await pierObj.telegram.common.Start({ messenger });
     generic[messenger].client.on("message", (message) => {
-        receivedFrom.telegram(messenger, message);
+        pierObj.telegram.receivedFrom(messenger, message);
     });
     generic[messenger].client.on("edited_message", (message) => {
-        receivedFrom.telegram(messenger, message);
+        pierObj.telegram.receivedFrom(messenger, message);
     });
     generic[messenger].client.on("polling_error", (error) => {
         if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
@@ -2473,52 +2457,46 @@ StartService.telegram = async ({ messenger }) => {
     if (!err)
         config.piers[messenger].myUser = res;
 };
-StartService.vkwall = async ({ messenger }) => {
+pierObj.vkwall.StartService = async ({ messenger }) => {
     //vkboard
     if (!config.MessengersAvailable[messenger])
         return;
-    generic[messenger].client = await common.vkwall.Start({ messenger });
-    if (!queueOf.vk)
-        queueOf.vk = new PQueue({ concurrency: 1 });
+    generic[messenger].client = await pierObj.vkwall.common.Start({ messenger });
     generic[messenger].client.bot.event("wall_reply_new", async ({ message }) => {
-        receivedFrom.vkwall(messenger, message);
+        pierObj.vkwall.receivedFrom(messenger, message);
     });
     generic[messenger].client.bot.event("wall_reply_edit", async ({ message }) => {
-        receivedFrom.vkwall(messenger, { ...message, edited: true });
+        pierObj.vkwall.receivedFrom(messenger, { ...message, edited: true });
     });
     generic[messenger].client.bot.startPolling();
 };
-StartService.vkboard = async ({ messenger }) => {
+pierObj.vkboard.StartService = async ({ messenger }) => {
     //vkboard
     if (!config.MessengersAvailable[messenger])
         return;
-    generic[messenger].client = await common.vkboard.Start({ messenger });
-    if (!queueOf.vk)
-        queueOf.vk = new PQueue({ concurrency: 1 });
+    generic[messenger].client = await pierObj.vkboard.common.Start({ messenger });
     generic[messenger].client.bot.event("board_post_new", async ({ message }) => {
-        receivedFrom.vkboard(messenger, message);
+        pierObj.vkboard.receivedFrom(messenger, message);
     });
     generic[messenger].client.bot.event("board_post_edit", async ({ message }) => {
-        receivedFrom.vkboard(messenger, { ...message, edited: true });
+        pierObj.vkboard.receivedFrom(messenger, { ...message, edited: true });
     });
     generic[messenger].client.bot.startPolling();
 };
-StartService.slack = async ({ messenger }) => {
+pierObj.slack.StartService = async ({ messenger }) => {
     //slack
-    await common.slack.Start({ messenger });
+    await pierObj.slack.common.Start({ messenger });
     if (!config.MessengersAvailable[messenger])
         return;
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
     generic[messenger].client.rtm.on("message", (message) => {
-        receivedFrom.slack(messenger, message);
+        pierObj.slack.receivedFrom(messenger, message);
     });
 };
-StartService.mattermost = async ({ messenger }) => {
+pierObj.mattermost.StartService = async ({ messenger }) => {
     //mattermost
-    generic[messenger].client = await common.mattermost.Start({ messenger });
+    generic[messenger].client = await pierObj.mattermost.common.Start({ messenger });
     if (!config.MessengersAvailable[messenger])
         return;
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
     generic[messenger].client.addEventListener("open", () => {
         generic[messenger].client.send(JSON.stringify({
             seq: 1,
@@ -2532,18 +2510,17 @@ StartService.mattermost = async ({ messenger }) => {
         if (!(message === null || message === void 0 ? void 0 : message.data) || !config.piers[messenger].team_id)
             return;
         message = JSON.parse(message.data);
-        receivedFrom.mattermost(messenger, message);
+        pierObj.mattermost.receivedFrom(messenger, message);
     });
     generic[messenger].client.addEventListener("close", () => generic[messenger].client._connect());
     generic[messenger].client.addEventListener("error", () => generic[messenger].client._connect());
 };
-StartService.discord = async ({ messenger }) => {
+pierObj.discord.StartService = async ({ messenger }) => {
     if (!config.MessengersAvailable[messenger])
         return;
     await new Promise((resolve) => {
         const client = new Discord.Client();
         generic[messenger].client = client;
-        queueOf[messenger] = new PQueue({ concurrency: 1 });
         generic[messenger].client.once("ready", () => {
             generic[messenger].guilds = client.guilds.cache.array();
             if (config.piers[messenger].guildId) {
@@ -2560,21 +2537,21 @@ StartService.discord = async ({ messenger }) => {
         generic[messenger].client.on("error", (error) => {
             resolve(null);
             log("discord")(error);
-            // StartService.discord();
+            // pierObj.discord();.StartService
         });
         generic[messenger].client.on("message", (message) => {
-            receivedFrom.discord(messenger, message);
+            pierObj.discord.receivedFrom(messenger, message);
         });
         generic[messenger].client.on("messageUpdate", (oldMessage, message) => {
             if (oldMessage.content != message.content) {
                 message.edited = true;
-                receivedFrom.discord(messenger, message);
+                pierObj.discord.receivedFrom(messenger, message);
             }
         });
         generic[messenger].client.login(config.piers[messenger].token);
     });
 };
-StartService.irc = async ({ messenger }) => {
+pierObj.irc.StartService = async ({ messenger }) => {
     // irc
     const channels = config.new_channels;
     const results = [];
@@ -2591,22 +2568,21 @@ StartService.irc = async ({ messenger }) => {
     generic[messenger].client = new Irc.Client(config.piers[messenger].ircServer, config.piers[messenger].ircOptions.nick, config.piers[messenger].ircOptions);
     if (!config.MessengersAvailable[messenger])
         return;
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
     generic[messenger].client.on("error", (error) => {
-        receivedFrom.irc(messenger, {
+        pierObj.irc.receivedFrom(messenger, {
             error,
             type: "error",
         });
-        // StartService.irc();
+        // pierObj.irc();.StartService
     });
     generic[messenger].client.on("registered", () => {
-        receivedFrom.irc(messenger, {
+        pierObj.irc.receivedFrom(messenger, {
             handler: generic[messenger].client,
             type: "registered",
         });
     });
     generic[messenger].client.on("message", (author, channelId, text) => {
-        receivedFrom.irc(messenger, {
+        pierObj.irc.receivedFrom(messenger, {
             author,
             channelId,
             text,
@@ -2614,7 +2590,7 @@ StartService.irc = async ({ messenger }) => {
         });
     });
     generic[messenger].client.on("topic", (channelId, topic, author) => {
-        receivedFrom.irc(messenger, {
+        pierObj.irc.receivedFrom(messenger, {
             author,
             channelId,
             text: topic,
@@ -2622,7 +2598,7 @@ StartService.irc = async ({ messenger }) => {
         });
     });
     generic[messenger].client.on("action", (author, channelId, text) => {
-        receivedFrom.irc(messenger, {
+        pierObj.irc.receivedFrom(messenger, {
             author,
             channelId,
             text,
@@ -2631,13 +2607,16 @@ StartService.irc = async ({ messenger }) => {
     });
 };
 async function StartServices() {
+    var _a, _b;
     common.MessengersAvailable();
     if (!config.channelMapping)
         config.channelMapping = {};
     for (const messenger_with_index of Object.keys(config.MessengersAvailable)) {
         const messenger = messenger_with_index.replace(/_.*/g, '');
-        if (StartService[messenger])
-            await StartService[messenger]({ messenger: messenger_with_index });
+        if ((_a = pierObj[messenger]) === null || _a === void 0 ? void 0 : _a.StartService) {
+            queueOf[messenger_with_index] = new PQueue({ concurrency: 1 });
+            await ((_b = pierObj[messenger]) === null || _b === void 0 ? void 0 : _b.StartService({ messenger: messenger_with_index }));
+        }
     }
     await common.PopulateChannelMapping();
     console.log("Lojban-1Chat-Bridge started!");
