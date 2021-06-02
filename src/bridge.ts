@@ -33,8 +33,8 @@ const DOMPurify = createDOMPurify(window)
 
 const util = require("util")
 
-import { VK } from "vk-io"
-import { Authorization } from "@vk-io/authorization"
+import { CallbackService } from 'vk-io';
+import { DirectAuthorization } from '@vk-io/authorization';
 
 const VkBot = require("node-vk-bot-api")
 
@@ -44,8 +44,6 @@ const emoji = require("node-emoji")
 const html2slack = require("./formatting-converters/html2slack")
 const html2irc = require("./formatting-converters/html2irc")
 
-const Discord = require("discord.js")
-const discordParser = require("discord-markdown")
 const marked = require("marked")
 const lexer = marked.Lexer
 lexer.rules.list = { exec: () => { } }
@@ -55,7 +53,7 @@ const markedRenderer = new marked.Renderer()
 const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
 
-const avatar = require("../src/animalicons/index.js")
+const Avatar = require("../src/animalicons/index.js")
 
 let server: http.Server
 
@@ -187,9 +185,6 @@ const prepareAuthor: Igeneric = {}
 const GetChunks: Igeneric = {}
 
 const queueOf: IMessengerInfo = {}
-const receivedFrom: IMessengerInfo = {}
-const sendTo: IMessengerInfo = {}
-const StartService: IMessengerInfo = {}
 interface IsendToArgs {
   messenger: string
   channelId: string
@@ -199,19 +194,332 @@ interface IsendToArgs {
   quotation: boolean
   file?: string
   edited?: boolean
+  avatar?: string
 }
 
-const convertTo: IMessengerFunctions = {}
-const convertFrom: IMessengerFunctions = {}
+const pierObj: any = {
+  facebook: {},
+  discord: {},
+  mattermost: {},
+  telegram: {},
+  irc: {},
+  slack: {},
+  vkboard: {},
+  vkwall: {},
+  webwidget: {}
+}
+
+Object.keys(pierObj).forEach((key: any) => {
+  pierObj[key].common = {}
+})
+
 const GetName: IMessengerInfo = {}
 const GetChannels: IMessengerInfo = {}
-const GotProblem: IMessengerInfo = {}
-const AdaptName: IMessengerInfo = {}
-const BootService: IMessengerInfo = {}
-const NewChannelAppeared: IMessengerInfo = {}
 
-//declare messengers
-common.telegram = {
+//discord
+const Discord = require("discord.js")
+const discordParser = require("discord-markdown")
+
+pierObj.discord.sendTo = async ({
+  messenger,
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file,
+  edited,
+  avatar
+}: IsendToArgs) => {
+  const channel = generic[messenger].client.channels.cache.get(channelId)
+  const webhooks = await channel.fetchWebhooks()
+  let webhook = webhooks.first()
+  const authorTemp = author
+    .replace(/[0-9_\.-]+$/, " ")
+    .replace(/\[.*/, "")
+    .replace(/[^0-9A-Za-z].*$/, "")
+    .trim()
+  const parsedName = modzi.modzi(author)
+  if (!avatar) {
+    const animava = new Avatar(
+      authorTemp,
+      512,
+      parsedName.snada ? parsedName.output : undefined
+    )
+    await animava.draw()
+    avatar = await animava.toDataURL()
+  }
+  if (!webhook) {
+    webhook = await channel.createWebhook(author || "-", avatar)
+  } else {
+    webhook = await webhook.edit({
+      name: author || "-",
+      avatar,
+    })
+  }
+
+  let files = undefined
+  if (file) {
+    files = [
+      {
+        attachment: file,
+      },
+    ]
+  }
+  const [error] = await to(
+    webhook.send(chunk, {
+      username: author || "-",
+      files,
+      // avatarURL: generic.discord.avatar.path,
+    })
+  )
+
+  if (error) {
+    logger.log({
+      level: "error",
+      function: "discord.sendTo",
+      message: error.toString(),
+      chunk, author
+    })
+    //try to send without the attachment. useful when the file is too large for Discord to handle
+    await to(
+      webhook.send(chunk, {
+        username: author || "-",
+        // avatarURL: generic.discord.avatar.path,
+      })
+    )
+  }
+
+
+  // await new Promise((resolve: any) => {
+  //   generic.discord.client.channels.cache
+  //     .get(channelId)
+  //     .send(chunk)
+  //     .catch(catchError)
+  //   resolve(null)
+  // })
+}
+
+pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
+  if (
+    !config?.channelMapping[messenger]?.[(message?.channel?.id || "").toString()]
+  )
+    return
+  if (message.author.bot || message.channel.type !== "text") return
+  const edited = message.edited ? true : false
+  for (let value of message.attachments.values()) {
+    //media of attachment
+    //todo: height,width,common.LocalizeString
+    let [, res] = await to(
+      common.downloadFile({
+        type: "simple",
+        remote_path: value.url,
+      })
+    )
+    let file: string, localfile: string
+
+    if (res?.[1]) {
+      ;[file, localfile] = res
+    } else {
+      file = value.url
+      localfile = value.url
+    }
+    log("discord")("sending attachment text: " + file)
+    sendFrom({
+      messenger,
+      channelId: message.channel.id,
+      author: pierObj.discord.adaptName(messenger, message),
+      text: file,
+      file: localfile,
+      remote_file: file,
+      edited,
+    })
+    //text of attachment
+    const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message, value.content)
+    log("discord")("sending text of attachment: " + text)
+    sendFrom({
+      messenger,
+      channelId: message.channel.id,
+      author: pierObj.discord.adaptName(messenger, message),
+      text,
+      edited,
+    })
+  }
+
+  if (message?.reference?.messageID) {
+    const message_ = await message.channel.messages.fetch(
+      message.reference.messageID
+    )
+    const text = pierObj.discord.common.discord_reconstructPlainText(messenger,
+      message_,
+      message_.content
+    )
+    log("discord")(`sending reconstructed text: ${text}`)
+    // console.log(message_, pierObj.discord.adaptName(message_))
+    sendFrom({
+      messenger,
+      channelId: message_.channel.id,
+      author: pierObj.discord.adaptName(messenger, message_),
+      text,
+      quotation: true,
+      edited,
+    })
+  }
+
+  const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message, message.content)
+  log("discord")("sending reconstructed text: " + text)
+  sendFrom({
+    messenger,
+    channelId: message.channel.id,
+    author: pierObj.discord.adaptName(messenger, message),
+    text,
+    edited,
+  })
+}
+
+pierObj.discord.common.discord_reconstructPlainText = (messenger: string, message: any, text: string) => {
+  if (!text) return ""
+  const massMentions = ["@everyone", "@here"]
+  if (
+    massMentions.some((massMention: string) => text.includes(massMention)) &&
+    !config.piers[messenger].massMentions
+  ) {
+    massMentions.forEach((massMention: string) => {
+      text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``)
+    })
+  }
+  let matches = text.replace(/#0000/, "").match(/<[\!&]?@[^# ]{2,32}>/g)
+  if (matches && matches[0])
+    for (let match of matches) {
+      const core = match.replace(/[@<>\!&]/g, "")
+      const member = message.channel.guild.members.cache
+        .array()
+        .find(
+          (member: any) =>
+            (member.nickname || member.user?.username) &&
+            member.user.id.toLowerCase() === core
+        )
+      if (member)
+        text = text
+          .replace(/#0000/, "")
+          .replace(match, "@" + (member.nickname || member.user.username))
+    }
+  matches = text.match(/<#[^# ]{2,32}>/g)
+  if (matches && matches[0])
+    for (let match of matches) {
+      const core = match.replace(/[<>#]/g, "")
+      const chan = Object.keys(config.cache[messenger]).filter(
+        (i) => config.cache[messenger][i] === core
+      )
+      if (chan[0]) text = text.replace(match, "#" + chan[0])
+    }
+
+  return text
+}
+
+pierObj.discord.adaptName = (messenger: string, message: any) => {
+  return message.member?.nickname || message.author?.username
+}
+
+pierObj.discord.convertFrom = async ({
+  text,
+  messenger,
+}: {
+  text: string
+  messenger: string
+}) => {
+  const result = discordParser.toHTML(text)
+  log(messenger)({
+    messenger,
+    "converting text": text,
+    result,
+  })
+  return result
+}
+
+pierObj.discord.convertTo = async ({
+  text,
+  messenger,
+  messengerTo,
+}: {
+  text: string
+  messenger: string
+  messengerTo: string
+}) => {
+  const result = await common.unescapeHTML({
+    text: html2md.convert({
+      string: text
+        .replace(/&#x2A;/g, "&#x5C;&#x2A;")
+        .replace(/&#x5F;/g, "&#x5C;&#x5F;"),
+      hrefConvert: false,
+      dialect: messengerTo,
+    }),
+    convertHtmlEntities: true,
+    escapeBackslashes: false,
+  })
+  log(messenger)({ messengerTo, "converting text": text, result })
+  return result
+}
+
+GetChannels.discord = async (pier: string): Promise<void> => {
+  const json: Json = {}
+  for (const value of generic[pier].client.channels.cache.values()) {
+    if (value.guild.id === config.piers[pier].guildId) {
+      json[value.name] = value.id
+    }
+  }
+  config.cache[pier] = json
+}
+
+pierObj.discord.StartService = async ({ messenger }: { messenger: string }) => {
+  if (!config.MessengersAvailable[messenger]) return
+
+  await new Promise((resolve: any) => {
+    const client = new Discord.Client()
+    generic[messenger].client = client
+    generic[messenger].client.once("ready", () => {
+      generic[messenger].guilds = client.guilds.cache.array()
+      if (config.piers[messenger].guildId) {
+        const guild = client.guilds.cache.find(
+          (guild: any) =>
+            guild.name.toLowerCase() === config.piers[messenger].guildId.toLowerCase() ||
+            guild.id === config.piers[messenger].guildId
+        )
+        if (guild)
+          generic[messenger].guilds = [
+            guild,
+            ...generic[messenger].guilds.filter(
+              (_guild: any) => _guild.id !== guild.id
+            ),
+          ]
+      }
+      resolve(null)
+    })
+    generic[messenger].client.on("error", (error: any) => {
+      resolve(null)
+      log("discord")(error)
+      // pierObj.discord();.StartService
+    })
+
+    generic[messenger].client.on("message", (message: any) => {
+      pierObj.discord.receivedFrom(messenger, message)
+    })
+    generic[messenger].client.on(
+      "messageUpdate",
+      (oldMessage: any, message: any) => {
+        if (oldMessage.content != message.content) {
+          message.edited = true
+          pierObj.discord.receivedFrom(messenger, message)
+        }
+      }
+    )
+    generic[messenger].client.login(config.piers[messenger].token)
+  })
+}
+///discord
+
+//telegram
+pierObj.telegram.common = {
   Start: async function ({ messenger }: { messenger: string }) {
     return new Telegram(config.piers[messenger].token, {
       polling: true,
@@ -219,23 +527,588 @@ common.telegram = {
   }
 }
 
-common.webwidget = {
+pierObj.telegram.sendTo = async ({
+  messenger,
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file,
+  edited,
+}: IsendToArgs) => {
+  await new Promise((resolve: any) => {
+    log("telegram")({ "sending text": chunk })
+    generic[messenger].client
+      .sendMessage(channelId, chunk, {
+        parse_mode: "HTML",
+      })
+      .then(() => resolve(null))
+      .catch((err: any) => {
+        err = util.inspect(err, { showHidden: false, depth: 4 })
+        common.LogToAdmin(
+          `
+Error sending a chunk:
+
+Channel: ${channelId}.
+
+Chunk: ${common.escapeHTML(chunk)}
+
+Error message: ${err}
+            `
+        )
+        resolve(null)
+      })
+  })
+}
+
+pierObj.telegram.receivedFrom = async (messenger: string, message: Telegram.Message) => {
+  //spammer
+  //1. remove entered bots
+  pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message)
+  //2. check if admin else leave chat and return
+  if (await pierObj.telegram.common.TelegramLeaveChatIfNotAdmin(messenger, message)) return
+  //3. check for spam
+  if (await pierObj.telegram.common.TelegramRemoveSpam(messenger, message)) return
+  //4. check if new member event
+  if (pierObj.telegram.common.TelegramRemoveNewMemberMessage(messenger, message)) return
+  //now deal with the message that is fine
+  if (!config.channelMapping[messenger]) return
+
+  const age = Math.floor(Date.now() / 1000) - message.date
+  if (age > (config.piers[messenger].maxMsgAge || 0))
+    return console.log(
+      `skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`
+    )
+
+  if (!config.channelMapping[messenger][message.chat.id]) {
+    if (
+      config.cache[messenger][message.chat.title] &&
+      config.cache[messenger][message.chat.title] === message.chat.id
+    )
+      return //cached but unmapped channel so ignore it and exit the function
+    await to(
+      pierObj.telegram.common.NewChannelAppeared({
+        messenger,
+        channelName: message.chat.title,
+        channelId: message.chat.id,
+      })
+    )
+    if (!config.channelMapping[messenger][message.chat.id]) return
+  }
+
+  // skip posts containing media if it's configured off
+  if (
+    (message.audio ||
+      message.document ||
+      message.photo ||
+      message.sticker ||
+      message.video ||
+      message.voice ||
+      message.contact ||
+      message.location) &&
+    !config.generic.showMedia
+  )
+    return
+
+  const { author, avatar } = await pierObj.telegram.GetName(messenger, message.from)
+  await pierObj.telegram.common.sendFromTelegram({
+    messenger,
+    message: message.reply_to_message,
+    quotation: true,
+    author,
+    avatar
+  })
+  pierObj.telegram.common.sendFromTelegram({ messenger, message, author, avatar })
+}
+
+// reconstructs the original raw markdown message
+pierObj.telegram.common.telegram_reconstructMarkdown = (msg: Telegram.Message) => {
+  if (!msg.entities) return msg
+  return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) }
+}
+
+pierObj.telegram.common.IsSpam = (message: any): boolean => {
+  const l = config.spamremover.telegram
+    .map((rule: any) => {
+      let matches = true
+      for (const key of Object.keys(rule)) {
+        const msg_val = R.path(key.split("."), message)
+        if (rule[key] === true && !msg_val) matches = false
+        if (
+          typeof rule[key] === "object" &&
+          (!msg_val || msg_val.search(new RegExp(rule[key].source, "i")) === -1)
+        )
+          matches = false
+      }
+      return matches
+    })
+    .some(Boolean)
+  return l
+}
+
+pierObj.telegram.common.sendFromTelegram = async ({
+  messenger,
+  message,
+  quotation,
+  author,
+  avatar
+}: {
+  messenger: string
+  message: any
+  quotation?: boolean
+  author?: string
+  avatar?: string
+}) => {
+  if (!message) return
+  let action
+  message = pierObj.telegram.common.telegram_reconstructMarkdown(message)
+  //collect attachments
+  const jsonMessage: any = {}
+  let i = 0
+  for (const el of [
+    "document",
+    "photo",
+    "new_chat_photo",
+    "sticker",
+    "video",
+    "audio",
+    "voice",
+    "location",
+    "contact",
+    "caption",
+    "text",
+  ]) {
+    if (message[el]) {
+      jsonMessage[el] = { url: message[el].file_id }
+      if (el === "photo") {
+        const photo = message[el][message[el].length - 1]
+        jsonMessage[el] = {
+          ...jsonMessage[el],
+          url: photo.file_id,
+          width: photo.width,
+          height: photo.height,
+          index: i++,
+        }
+      } else if (el === "sticker") {
+        jsonMessage[el] = {
+          ...jsonMessage[el],
+          width: message[el].width,
+          height: message[el].height,
+          index: i++,
+        }
+      } else if (el === "location") {
+        jsonMessage[el] = {
+          latitude: message[el]["latitude"],
+          longtitude: message[el]["longtitude"],
+          index: i++,
+        }
+      } else if (el === "contact") {
+        jsonMessage[el] = {
+          first_name: message[el]["first_name"],
+          last_name: message[el]["last_name"],
+          phone_number: message[el]["phone_number"],
+          index: i++,
+        }
+      } else if (el === "caption") {
+        jsonMessage[el] = {
+          text: message[el],
+          index: 998,
+        }
+      } else if (["video", "voice", "audio"].includes(el)) {
+        jsonMessage[el] = {
+          ...jsonMessage[el],
+          duration: message[el].duration,
+          index: i++,
+        }
+      }
+    }
+    if (el === "text") {
+      message[el] = message[el] || ""
+      if (!quotation && message[el].indexOf("/me ") === 0) {
+        action = "action"
+        message[el] = message[el].split("/me ").slice(1).join("/me ")
+      }
+      jsonMessage[el] = {
+        text: message[el],
+        index: 999,
+      }
+    }
+  }
+  let arrMessage = Object.keys(jsonMessage).sort(
+    (a, b) => jsonMessage[a].index - jsonMessage[b].index
+  )
+
+  // const reply_to_bot =
+  //   quotation && message.from.id === config.telegram.myUser.id
+  // if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
+  //   const arrTxtMsg = jsonMessage["text"].text.split(": ")
+  //   author = author ?? arrTxtMsg[0]
+  //   jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ")
+  // } else if (!reply_to_bot) {
+  // }
+  // now send from Telegram
+  for (let i: number = 0; i < arrMessage.length; i++) {
+    const el = arrMessage[i]
+    if (el === "text") {
+      jsonMessage[el].text = jsonMessage[el].text.replace(
+        `@${config.piers[messenger].myUser.username}`,
+        ""
+      )
+      if (
+        quotation &&
+        jsonMessage[el].text.length > config.piers[messenger].MessageLength
+      )
+        jsonMessage[el].text = `${jsonMessage[el].text.substring(
+          0,
+          config.piers[messenger].MessageLength - 1
+        )} ...`
+    }
+    if (jsonMessage[el].url)
+      [
+        jsonMessage[el].url,
+        jsonMessage[el].local_file,
+      ] = await common.downloadFile({
+        messenger,
+        type: "telegram",
+        fileId: jsonMessage[el].url
+      })
+    const arrForLocal = Object.keys(jsonMessage[el]).map((i) => [
+      i,
+      jsonMessage[el][i],
+    ])
+    const text = common.LocalizeString({
+      messenger: "telegram",
+      channelId: message.chat.id,
+      localized_string_key: `MessageWith.${el}.telegram`,
+      arrElemsToInterpolate: arrForLocal,
+    })
+    const edited = message.edit_date ? true : false
+    sendFrom({
+      messenger,
+      channelId: message.chat.id,
+      author,
+      text,
+      action,
+      quotation,
+      file: jsonMessage[el].local_file,
+      remote_file: jsonMessage[el].url,
+      edited,
+      avatar
+    })
+  }
+}
+
+pierObj.telegram.adaptName = (messenger: string, name: string) => config.piers[messenger].userMapping[name] || name
+
+pierObj.telegram.GetName = async (messenger: string, user: Telegram.User) => {
+  let name = config.piers[messenger].nameFormat
+  if (user.username) {
+    name = name.replace("%username%", user.username, "g")
+    name = pierObj.telegram.adaptName(messenger, name)
+  } else {
+    // if user lacks username, use fallback format string instead
+    name = name.replace(
+      "%username%",
+      config.piers[messenger]?.usernameFallbackFormat,
+      "g"
+    )
+  }
+
+  name = name.replace("%firstName%", user.first_name || "", "g")
+  name = name.replace("%lastName%", user.last_name || "", "g")
+
+  // get rid of leading and trailing whitespace
+  name = name.replace(/(^\s*)|(\s*$)/g, "")
+
+  //now avatar
+  let link: string
+  try {
+    const { photos } = await generic[messenger].client.getUserProfilePhotos(user.id, { limit: 1 })
+    const file_id = photos?.[0]?.[0]?.file_id
+    link = await generic[messenger].client.getFileLink(file_id)
+  } catch (error) {
+
+  }
+  return { author: name, avatar: link }
+}
+
+pierObj.telegram.convertFrom = async ({
+  text,
+  messenger,
+}: {
+  text: string
+  messenger: string
+}) => {
+  const res = markedParse({
+    text: common.escapeHTML(text).replace(
+      /<p><code>([\s\S]*?)<\/code><\/p>/gim,
+      "<p><pre>$1</pre></p>"
+    ),
+    messenger: "telegram",
+  })
+  return res
+}
+
+pierObj.telegram.convertTo = async ({
+  text,
+  messenger,
+  messengerTo,
+}: {
+  text: string
+  messenger: string
+  messengerTo: string
+}) => {
+  const result = common
+    .sanitizeHtml(
+      text
+        .replace(
+          /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
+          "<pre>$1</pre>"
+        )
+        .replace(/<blockquote>([\s\S]*?)<\/blockquote>/gim, "<pre>$1</pre>"),
+      [
+        "b",
+        "strong",
+        "i",
+        "pre",
+        "code",
+        "a",
+        "em",
+        "u",
+        "ins",
+        "s",
+        "br",
+        "del",
+      ]
+    )
+    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>")
+    .replace(/<br( \/|)>/g, "\n")
+  log(messenger)({
+    messengerTo,
+    "converting text": text,
+    result,
+  })
+  return result
+}
+
+pierObj.telegram.common.TelegramRemoveSpam = async (messenger: string, message: Telegram.Message) => {
+  const cloned_message = JSON.parse(JSON.stringify(message))
+  if (pierObj.telegram.common.IsSpam(cloned_message)) {
+    if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
+      const [err, chat] = await to(
+        generic[messenger].client.getChat(message.chat.id)
+      )
+      if (!err) {
+        const invite_link = chat.invite_link
+        cloned_message.text = cloned_message.text.replace(invite_link, "")
+        if (pierObj.telegram.common.IsSpam(cloned_message))
+          pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true })
+      } else {
+        common.LogToAdmin(
+          `error on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`
+        )
+      }
+    } else {
+      const [err, chat] = await to(
+        generic[messenger].client.getChat(cloned_message.chat.id)
+      )
+      if (!err) {
+        pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true })
+      } else {
+        common.LogToAdmin(
+          `error on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`
+        )
+      }
+    }
+    return true
+  } else if (message.chat.title === "jbosnu" && message.text) {
+    // dealing with non-lojban spam
+    const xovahe = xovahelojbo({ text: message.text })
+    if (xovahe < 0.5) {
+      generic[messenger].client
+        .sendMessage(
+          message.chat.id,
+          ".i mi smadi le du'u do na tavla fo su'o lojbo .i ja'e bo mi na benji di'u fi la IRC\n\nIn this group only Lojban is allowed. Try posting your question to [#lojban](https://t.me/joinchat/BLVsYz3hCF8mCAb6fzW1Rw) or [#ckule](https://telegram.me/joinchat/BLVsYz4hC9ulWahupDLovA) (school) group",
+          {
+            reply_to_message_id: message.message_id,
+            parse_mode: "Markdown",
+          }
+        )
+        .catch((e: any) =>
+          log("telegram")({
+            error: e.toString(),
+          })
+        )
+      return true
+    }
+  }
+}
+
+pierObj.telegram.common.TelegramRemoveAddedBots = (messenger: string, message: Telegram.Message) => {
+  if (config.piers[messenger].remove_added_bots)
+    (message?.new_chat_members || []).map((u: Telegram.User) => {
+      if (u.is_bot && config.piers[messenger]?.myUser?.id !== u.id)
+        generic[messenger].client
+          .kickChatMember(message.chat.id, u.id)
+          .catch(catchError)
+    })
+}
+
+pierObj.telegram.common.TelegramRemoveNewMemberMessage = (messenger: string, message: Telegram.Message) => {
+  if (
+    message?.left_chat_member ||
+    (message?.new_chat_members || []).filter(
+      (u: Telegram.User) =>
+        (u.username || "").length > 100 ||
+        (u.first_name || "").length > 100 ||
+        (u.last_name || "").length > 100
+    ).length > 0
+  ) {
+    pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: false })
+  }
+  if (message.left_chat_member || message.new_chat_members) return true
+  return false
+}
+
+pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger: string, message: Telegram.Message) => {
+  if (
+    !["group", "supergroup"].includes(message?.chat?.type) ||
+    !message?.chat?.id ||
+    !config.piers[messenger]?.myUser?.id
+  )
+    return
+
+  let [err, res] = await to(
+    generic[messenger].client.getChatMember(
+      message.chat.id,
+      config.piers[messenger]?.myUser?.id
+    )
+  )
+  if (!res) return true
+  if (!res.can_delete_messages) {
+    ;[err, res] = await to(generic[messenger].client.leaveChat(message.chat.id))
+
+    const jsonMessage = {
+      id: message?.chat?.id || message?.from?.id,
+      title: message?.chat?.title,
+      first_name: message?.from?.first_name,
+      last_name: message?.from?.last_name,
+      username: message?.from?.username,
+      message: message?.text,
+    }
+    common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`)
+    config.cache[messenger][message.chat.title] = undefined
+    await to(
+      common.writeCache({
+        channelName: message.chat.title,
+        channelId: message.chat.id,
+        action: "leave",
+      })
+    )
+    return true
+  }
+  return false
+}
+
+pierObj.telegram.common.telegram_DeleteMessage = async ({
+  messenger,
+  message,
+  log,
+}: {
+  messenger: string
+  message: Telegram.Message
+  log: boolean
+}) => {
+  if (log) await to(common.LogMessageToAdmin(messenger, message))
+  await to(
+    generic[messenger].client.deleteMessage(message.chat.id, message.message_id)
+  )
+}
+
+pierObj.telegram.common.NewChannelAppeared = async ({
+  messenger,
+  channelName,
+  channelId,
+}: {
+  messenger: string
+  channelName: string
+  channelId: string
+}) => {
+  config.cache[messenger][channelName] = channelId
+  let [err, res] = await to(
+    common.writeCache({ channelName, channelId, action: "join" })
+  )
+  if (err) {
+    console.error(err)
+    return
+  }
+  ;[err, res] = await to(common.PopulateChannelMapping())
+  if (err)
+    common.LogToAdmin(
+      `got problem in the new telegram chat ${channelName}, ${channelId}`
+    )
+  if (err) {
+    console.error(err)
+    return
+  }
+  return true
+}
+
+GetChannels.telegram = async (pier: string): Promise<void> => {
+  //read from file
+  let res = {}
+  try {
+    res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`))[pier]
+  } catch (error) { }
+  config.cache[pier] = res
+}
+
+pierObj.telegram.StartService = async ({ messenger }: { messenger: string }) => {
+  //telegram
+  if (!config.MessengersAvailable[messenger]) return
+  generic[messenger].client = await pierObj.telegram.common.Start({ messenger })
+  generic[messenger].client.on("message", (message: any) => {
+    pierObj.telegram.receivedFrom(messenger, message)
+  })
+  generic[messenger].client.on("edited_message", (message: any) => {
+    pierObj.telegram.receivedFrom(messenger, message)
+  })
+  generic[messenger].client.on("polling_error", (error: any) => {
+    if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
+      config.MessengersAvailable[messenger] = false
+      generic[messenger].client.stopPolling()
+    }
+  })
+  const [err, res] = await to(generic[messenger].client.getMe())
+  if (!err) config.piers[messenger].myUser = res
+}
+
+pierObj.webwidget.common = {
   Start: async function () {
     return
   }
 }
 
-common.vkboard = {
+pierObj.vkboard.common = {
   Start: async function ({ messenger }: { messenger: string }) {
-    const vkio = new VK({
-      appId: config.piers[messenger].appId,
+    const callbackService = new CallbackService();
+
+    const direct = new DirectAuthorization({
+      callbackService,
+      // manually provide app credentials
+      // clientId: process.env.CLIENT_ID,
+      // clientSecret: process.env.CLIENT_SECRET,
+
+      clientId: config.piers[messenger].appId,
+      clientSecret: config.piers[messenger].appSecret,
       login: config.piers[messenger].login,
       password: config.piers[messenger].password,
-      authScope: "offline,wall,messages,groups",
-    })
-    const authorization = new Authorization(vkio)
-    const direct = authorization.implicitFlowUser()
-    const [err, app] = await to(direct.run())
+      scope: "offline,wall,messages,groups",
+      apiVersion: config.piers[messenger].apiVersion
+    });
+
+    const [err, vkapp] = await to(direct.run())
 
     if (err) {
       console.error("vkboard", err.toString())
@@ -244,21 +1117,28 @@ common.vkboard = {
       token: config.piers[messenger].token,
       group_id: config.piers[messenger].group_id,
     })
-    return { bot: vkbot, app }
+    return { bot: vkbot, vkapp }
   }
 }
 
-common.vkwall = {
+pierObj.vkwall.common = {
   Start: async function ({ messenger }: { messenger: string }) {
-    const vkio = new VK({
-      appId: config.piers[messenger].appId,
+    const callbackService = new CallbackService();
+
+    const direct = new DirectAuthorization({
+      callbackService,
+      // manually provide app credentials
+      // clientId: process.env.CLIENT_ID,
+      // clientSecret: process.env.CLIENT_SECRET,
+
+      clientId: config.piers[messenger].appId,
+      clientSecret: config.piers[messenger].appSecret,
       login: config.piers[messenger].login,
       password: config.piers[messenger].password,
-      authScope: "offline,wall,messages,groups",
-    })
-    const authorization = new Authorization(vkio)
-    const direct = authorization.implicitFlowUser()
-    const [err, app] = await to(direct.run())
+      scope: "offline,wall,messages,groups",
+      apiVersion: config.piers[messenger].apiVersion
+    });
+    const [err, vkapp] = await to(direct.run())
     if (err) {
       console.error("vkwall", err.toString())
     }
@@ -266,11 +1146,11 @@ common.vkwall = {
       token: config.piers[messenger].token,
       group_id: config.piers[messenger].group_id,
     })
-    return { bot: vkbot, app }
+    return { bot: vkbot, vkapp }
   }
 }
 
-common.slack = {
+pierObj.slack.common = {
   Start: async function ({ messenger }: { messenger: string }) {
     generic[messenger].client = {
       rtm: new RTMClient(config.piers[messenger].token),
@@ -287,7 +1167,7 @@ common.slack = {
     return true
   }
 }
-common.mattermost = {
+pierObj.mattermost.common = {
   Start: async function ({ messenger }: { messenger: string }) {
     let [err, res] = await to(
       new Promise((resolve) => {
@@ -436,7 +1316,7 @@ async function FormatMessageChunkForSending({
   return chunk
 }
 
-sendTo.webwidget = async ({
+pierObj.webwidget.sendTo = async ({
   messenger,
   channelId,
   author,
@@ -446,177 +1326,29 @@ sendTo.webwidget = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-  const data = {
-    channelId,
-    author,
-    chunk,
-    action,
-    quotation,
-    file,
-    edited,
-  }
-  generic[messenger].Lojban1ChatHistory.push(data)
-  generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice(
-    (config.piers[messenger].historyLength || 201) * -1
-  )
-  generic[messenger].client.emit("sentFrom", {
-    data,
-  })
-  log("webwidget")({ "sending message": data })
-  return true
-}
-
-sendTo.facebook = async ({
-  messenger,
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file,
-  edited,
-}: IsendToArgs) => {
-  if (
-    config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly ||
-    !generic[messenger].client
-  )
-    return
-  queueOf[messenger].add(async () => {
-    await new Promise((resolve: any) => {
-      setTimeout(() => {
-        const jsonMessage: Json = {
-          body: chunk,
-        }
-        if (file) jsonMessage.attachment = fs.createReadStream(file)
-        generic[messenger].client.sendMessage(channelId, chunk).catch(catchError)
-        resolve(null)
-      }, 500)
-    })
-  })
-  return true
-}
-
-sendTo.telegram = async ({
-  messenger,
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file,
-  edited,
-}: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-  queueOf[messenger].add(async () => {
-    await new Promise((resolve: any) => {
-      log("telegram")({ "sending text": chunk })
-      generic[messenger].client
-        .sendMessage(channelId, chunk, {
-          parse_mode: "HTML",
-        })
-        .then(() => resolve(null))
-        .catch((err: any) => {
-          err = util.inspect(err, { showHidden: false, depth: 4 })
-          common.LogToAdmin(
-            `
-Error sending a chunk:
-
-Channel: ${channelId}.
-
-Chunk: ${common.escapeHTML(chunk)}
-
-Error message: ${err}
-            `
-          )
-          resolve(null)
-        })
-    })
-  })
-  return true
-}
-
-sendTo.discord = async ({
-  messenger,
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file,
-  edited,
-}: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-
-  queueOf[messenger].add(async () => {
-    const channel = generic[messenger].client.channels.cache.get(channelId)
-    const webhooks = await channel.fetchWebhooks()
-    let webhook = webhooks.first()
-    const authorTemp = author
-      .replace(/[0-9_\.-]+$/, " ")
-      .replace(/\[.*/, "")
-      .replace(/[^0-9A-Za-z].*$/, "")
-      .trim()
-    const parsedName = modzi.modzi(author)
-    let ava = new avatar(
-      authorTemp,
-      512,
-      parsedName.snada ? parsedName.output : undefined
+  await new Promise((resolve: any) => {
+    const data = {
+      channelId,
+      author,
+      chunk,
+      action,
+      quotation,
+      file,
+      edited,
+    }
+    generic[messenger].Lojban1ChatHistory.push(data)
+    generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice(
+      (config.piers[messenger].historyLength || 201) * -1
     )
-    await ava.draw()
-    ava = await ava.toDataURL()
-    if (!webhook) {
-      webhook = await channel.createWebhook(author || "-", ava)
-    } else {
-      webhook = await webhook.edit({
-        name: author || "-",
-        avatar: ava,
-      })
-    }
-
-    let files = undefined
-    if (file) {
-      files = [
-        {
-          attachment: file,
-        },
-      ]
-    }
-    const [error] = await to(
-      webhook.send(chunk, {
-        username: author || "-",
-        files,
-        // avatarURL: generic.discord.avatar.path,
-      })
-    )
-
-    if (error) {
-      logger.log({
-        level: "error",
-        function: "sendTo.discord",
-        message: error.toString(),
-        chunk, author
-      })
-      //try to send without the attachment. useful when the file is too large for Discord to handle
-      await to(
-        webhook.send(chunk, {
-          username: author || "-",
-          // avatarURL: generic.discord.avatar.path,
-        })
-      )
-    }
-
-    // await new Promise((resolve: any) => {
-    //   generic.discord.client.channels.cache
-    //     .get(channelId)
-    //     .send(chunk)
-    //     .catch(catchError)
-    //   resolve(null)
-    // })
+    generic[messenger].client.emit("sentFrom", {
+      data,
+    })
+    log("webwidget")({ "sending message": data })
+    resolve(null)
   })
 }
 
-sendTo.mattermost = async ({
+pierObj.facebook.sendTo = async ({
   messenger,
   channelId,
   author,
@@ -626,64 +1358,20 @@ sendTo.mattermost = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly)
-    return
-  queueOf[messenger].add(async () => {
-    await new Promise((resolve: any) => {
-      const option = {
-        url: config.piers[messenger].HookUrl,
-        json: {
-          text: chunk,
-          // username: author,
-          channel: channelId,
-        },
+  await new Promise((resolve: any) => {
+    setTimeout(() => {
+      const jsonMessage: Json = {
+        body: chunk,
       }
-      request.post(
-        option,
-        (error: any, response: any, body: any) => {
-          resolve(null)
-        }
-      )
-    })
-  })
-}
-sendTo.vkwall = async ({
-  messenger,
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file,
-  edited,
-}: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-  if (!generic[messenger].client.app) {
-    config.MessengersAvailable[messenger] = false
-    return
-  }
-  const token = generic[messenger].client.app.token
-  queueOf.vk.add(async () => {
-    await new Promise((resolve: any) => {
-      setTimeout(() => {
-        generic[messenger].client.bot
-          .api("wall.createComment", {
-            access_token: token,
-            owner_id: "-" + config.piers[messenger].group_id,
-            post_id: channelId,
-            from_group: config.piers[messenger].group_id,
-            reply_to_comment: 1,
-            message: chunk,
-          })
-          .then((res: any) => { })
-          .catch(() => { })
-        resolve(null)
-      }, 60000)
-    })
+      if (file) jsonMessage.attachment = fs.createReadStream(file)
+      generic[messenger].client.sendMessage(channelId, chunk).catch(catchError)
+      resolve(null)
+    }, 500)
   })
 }
 
-sendTo.vkboard = async ({
+
+pierObj.mattermost.sendTo = async ({
   messenger,
   channelId,
   author,
@@ -693,32 +1381,87 @@ sendTo.vkboard = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  if (
-    config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly
-    //todo: !vk.WaitingForCaptcha
-  )
-    return
-  if (!generic[messenger].client.app) {
+  await new Promise((resolve: any) => {
+    const option = {
+      url: config.piers[messenger].HookUrl,
+      json: {
+        text: chunk,
+        // username: author,
+        channel: channelId,
+      },
+    }
+    request.post(
+      option,
+      (error: any, response: any, body: any) => {
+        resolve(null)
+      }
+    )
+  })
+}
+pierObj.vkwall.sendTo = async ({
+  messenger,
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file,
+  edited,
+}: IsendToArgs) => {
+  if (!generic[messenger].client.vkapp) {
     config.MessengersAvailable[messenger] = false
     return
   }
-  const token = generic[messenger].client.app.token
-  queueOf.vk.add(async () => {
-    await new Promise((resolve: any) => {
-      setTimeout(() => {
-        generic[messenger].client.bot
-          .api("board.createComment", {
-            access_token: token,
-            group_id: config.piers[messenger].group_id,
-            topic_id: channelId,
-            message: chunk,
-            from_group: 1,
-          })
-          .then((res: any) => { })
-          .catch(() => { })
-        resolve(null)
-      }, 60000)
-    })
+  await new Promise((resolve: any) => {
+    const token = generic[messenger].client.vkapp.token
+    setTimeout(() => {
+      generic[messenger].client.bot
+        .api("wall.createComment", {
+          access_token: token,
+          owner_id: "-" + config.piers[messenger].group_id,
+          post_id: channelId,
+          from_group: config.piers[messenger].group_id,
+          reply_to_comment: 1,
+          message: chunk,
+        })
+        .then((res: any) => { })
+        .catch(() => { })
+      resolve(null)
+    }, 60000)
+  })
+}
+
+pierObj.vkboard.sendTo = async ({
+  messenger,
+  channelId,
+  author,
+  chunk,
+  action,
+  quotation,
+  file,
+  edited,
+}: IsendToArgs) => {
+  //todo: if !vk.WaitingForCaptcha return
+
+  if (!generic[messenger].client.vkapp) {
+    config.MessengersAvailable[messenger] = false
+    return
+  }
+  await new Promise((resolve: any) => {
+    const token = generic[messenger].client.vkapp.token
+    setTimeout(() => {
+      generic[messenger].client.bot
+        .api("board.createComment", {
+          access_token: token,
+          group_id: config.piers[messenger].group_id,
+          topic_id: channelId,
+          message: chunk,
+          from_group: 1,
+        })
+        .then((res: any) => { })
+        .catch(() => { })
+      resolve(null)
+    }, 60000)
   })
   // if (err.error.error_code === 14) {
   //   vkboard.io.setCaptchaHandler(async ({ src }, retry) => {
@@ -738,7 +1481,7 @@ sendTo.vkboard = async ({
 }
 // async function myAwesomeCaptchaHandler() {}
 
-sendTo.slack = async ({
+pierObj.slack.sendTo = async ({
   messenger,
   channelId,
   author,
@@ -748,26 +1491,23 @@ sendTo.slack = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-  queueOf[messenger].add(async () => {
-    await new Promise((resolve: any) => {
-      chunk = emoji.unemojify(chunk)
-      generic[messenger].client.web.chat
-        .postMessage({
-          channel: channelId,
-          username: (author || "").replace(/(^.{21}).*$/, "$1"),
-          text: chunk,
-        })
-        .then(() => resolve(null))
-        .catch((err: any) => {
-          console.error(err)
-          resolve(null)
-        })
-    })
+  await new Promise((resolve: any) => {
+    chunk = emoji.unemojify(chunk)
+    generic[messenger].client.web.chat
+      .postMessage({
+        channel: channelId,
+        username: (author || "").replace(/(^.{21}).*$/, "$1"),
+        text: chunk,
+      })
+      .then(() => resolve(null))
+      .catch((err: any) => {
+        console.error(err)
+        resolve(null)
+      })
   })
 }
 
-sendTo.irc = async ({
+pierObj.irc.sendTo = async ({
   messenger,
   channelId,
   author,
@@ -777,13 +1517,10 @@ sendTo.irc = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
-  queueOf[messenger].add(async () => {
-    await new Promise((resolve: any) => {
-      log("irc")({ "sending for irc": chunk })
-      generic[messenger].client.say(channelId, chunk)
-      resolve(null)
-    })
+  await new Promise((resolve: any) => {
+    log("irc")({ "sending for irc": chunk })
+    generic[messenger].client.say(channelId, chunk)
+    resolve(null)
   })
 }
 
@@ -817,7 +1554,7 @@ async function prepareChunks({
         arrElemsToInterpolate: [["message", arrChunks[i]]],
       })
 
-    arrChunks[i] = await convertTo[root_messengerTo]({
+    arrChunks[i] = await pierObj[root_messengerTo]?.convertTo({
       text: arrChunks[i],
       messenger,
       messengerTo,
@@ -896,6 +1633,7 @@ async function checkHelpers({
   quotation,
   action,
   edited,
+  avatar
 }: {
   messenger: string
   channelId: string | number
@@ -905,6 +1643,7 @@ async function checkHelpers({
   quotation?: boolean
   action?: string
   edited?: boolean
+  avatar?: string
 }) {
   const tags = ["#zlm", "#modzi"]
   text = text.replace(/<[^>]*>/g, '')
@@ -951,7 +1690,6 @@ async function checkHelpers({
       message: error.toString(),
     })
   }
-  console.log(href)
   if (!href) return
   const [file, localfile]: [string, string] = await common.downloadFile(
     {
@@ -959,16 +1697,49 @@ async function checkHelpers({
       remote_path: href
     }
   )
-  console.log(file, localfile)
-  sendTo[common.root_of_messenger(messenger)]({
+  universalSendTo({
     messenger,
     channelId,
     author,
     chunk: file,
-    file: localfile,
     quotation,
     action,
+    file: localfile,
     edited,
+    avatar
+  })
+}
+
+async function universalSendTo({ messenger, channelId, author,
+  chunk,
+  quotation,
+  action,
+  file,
+  edited, avatar }: {
+    messenger: string
+    channelId: string | number
+    author: string
+    chunk: string
+    quotation?: boolean
+    action?: string
+    file?: string
+    remote_file?: string
+    edited?: boolean
+    avatar?: string
+  }) {
+  if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly) return
+  queueOf[messenger].add(async () => {
+    pierObj[common.root_of_messenger(messenger)]?.sendTo({
+      messenger: messenger,
+      channelId,
+      author,
+      chunk,
+      quotation,
+      action,
+      file,
+      edited,
+      avatar
+    })
   })
 }
 
@@ -983,6 +1754,7 @@ async function sendFrom({
   file,
   remote_file,
   edited,
+  avatar
 }: {
   messenger: string
   channelId: string | number
@@ -994,6 +1766,7 @@ async function sendFrom({
   file?: string
   remote_file?: string
   edited?: boolean
+  avatar?: string
 }) {
   const ConfigNode = config?.channelMapping?.[messenger]?.[channelId]
   if (!ConfigNode)
@@ -1002,7 +1775,7 @@ async function sendFrom({
     )
   if (!text || text === "") return
   const messenger_core = common.root_of_messenger(messenger)
-  text = await convertFrom[messenger_core]({ text, messenger })
+  text = await pierObj[messenger_core]?.convertFrom({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
 
@@ -1015,6 +1788,7 @@ async function sendFrom({
     quotation,
     action,
     edited,
+    avatar
   })
   const nsfw: any = file ? (await to(getNSFWString(remote_file)))[1] : null
   if (nsfw) {
@@ -1045,7 +1819,7 @@ async function sendFrom({
       }
 
       Chunks.map((chunk) => {
-        sendTo[common.root_of_messenger(messenger)]({
+        universalSendTo({
           messenger,
           channelId: ConfigNode[messenger],
           author,
@@ -1054,6 +1828,7 @@ async function sendFrom({
           action,
           file,
           edited,
+          avatar
         })
       })
 
@@ -1116,7 +1891,7 @@ async function sendFrom({
       }
 
       Chunks.map((chunk) => {
-        sendTo[common.root_of_messenger(messengerTo)]({
+        universalSendTo({
           messenger: messengerTo,
           channelId: ConfigNode[messengerTo],
           author,
@@ -1125,6 +1900,7 @@ async function sendFrom({
           action,
           file,
           edited,
+          avatar
         })
       })
     }
@@ -1159,91 +1935,14 @@ async function getNSFWString(file: string) {
   return predictions.length > 0 ? predictions : null
 }
 
-receivedFrom.discord = async (messenger: string, message: any) => {
-  if (
-    !config?.channelMapping[messenger]?.[(message?.channel?.id || "").toString()]
-  )
-    return
-  if (message.author.bot || message.channel.type !== "text") return
-  const edited = message.edited ? true : false
-  for (let value of message.attachments.values()) {
-    //media of attachment
-    //todo: height,width,common.LocalizeString
-    let [, res] = await to(
-      common.downloadFile({
-        type: "simple",
-        remote_path: value.url,
-      })
-    )
-    let file: string, localfile: string
-
-    if (res?.[1]) {
-      ;[file, localfile] = res
-    } else {
-      file = value.url
-      localfile = value.url
-    }
-    log("discord")("sending attachment text: " + file)
-    sendFrom({
-      messenger,
-      channelId: message.channel.id,
-      author: AdaptName.discord(messenger, message),
-      text: file,
-      file: localfile,
-      remote_file: file,
-      edited,
-    })
-    //text of attachment
-    const text = common.discord_reconstructPlainText(messenger, message, value.content)
-    log("discord")("sending text of attachment: " + text)
-    sendFrom({
-      messenger,
-      channelId: message.channel.id,
-      author: AdaptName.discord(messenger, message),
-      text,
-      edited,
-    })
-  }
-
-  if (message?.reference?.messageID) {
-    const message_ = await message.channel.messages.fetch(
-      message.reference.messageID
-    )
-    const text = common.discord_reconstructPlainText(messenger,
-      message_,
-      message_.content
-    )
-    log("discord")(`sending reconstructed text: ${text}`)
-    // console.log(message_, AdaptName.discord(message_))
-    sendFrom({
-      messenger,
-      channelId: message_.channel.id,
-      author: AdaptName.discord(messenger, message_),
-      text,
-      quotation: true,
-      edited,
-    })
-  }
-
-  const text = common.discord_reconstructPlainText(messenger, message, message.content)
-  log("discord")("sending reconstructed text: " + text)
-  sendFrom({
-    messenger,
-    channelId: message.channel.id,
-    author: AdaptName.discord(messenger, message),
-    text,
-    edited,
-  })
-}
-
 // receivedFrom
-receivedFrom.facebook = async (messenger: string, message: any) => {
+pierObj.facebook.receivedFrom = async (messenger: string, message: any) => {
   if (!config?.channelMapping[messenger]?.[(message?.threadId || "").toString()]) return
   let err, res
     ;[err, res] = await to(generic[messenger].client.getUserInfo(message.authorId))
   if (err) return
   let author: string
-  author = AdaptName.facebook(res)
+  author = pierObj.facebook.adaptName(res)
 
   if (!message.attachments) message.attachments = []
   if (message.stickerId)
@@ -1285,321 +1984,7 @@ receivedFrom.facebook = async (messenger: string, message: any) => {
     })
 }
 
-receivedFrom.telegram = async (messenger: string, message: Telegram.Message) => {
-  //spammer
-  //1. remove entered bots
-  TelegramRemoveAddedBots(messenger, message)
-  //2. check if admin else leave chat and return
-  if (await TelegramLeaveChatIfNotAdmin(messenger, message)) return
-  //3. check for spam
-  if (await TelegramRemoveSpam(messenger, message)) return
-  //4. check if new member event
-  if (TelegramRemoveNewMemberMessage(messenger, message)) return
-  //now deal with the message that is fine
-  if (!config.channelMapping[messenger]) return
-
-  const age = Math.floor(Date.now() / 1000) - message.date
-  if (age > (config.piers[messenger].maxMsgAge || 0))
-    return console.log(
-      `skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`
-    )
-
-  if (!config.channelMapping[messenger][message.chat.id]) {
-    if (
-      config.cache[messenger][message.chat.title] &&
-      config.cache[messenger][message.chat.title] === message.chat.id
-    )
-      return //cached but unmapped channel so ignore it and exit the function
-    await to(
-      NewChannelAppeared.telegram({
-        messenger,
-        channelName: message.chat.title,
-        channelId: message.chat.id,
-      })
-    )
-    if (!config.channelMapping[messenger][message.chat.id]) return
-  }
-
-  // skip posts containing media if it's configured off
-  if (
-    (message.audio ||
-      message.document ||
-      message.photo ||
-      message.sticker ||
-      message.video ||
-      message.voice ||
-      message.contact ||
-      message.location) &&
-    !config.generic.showMedia
-  )
-    return
-
-  const author = GetName.telegram(messenger, message.from)
-  await sendFromTelegram({
-    messenger,
-    message: message.reply_to_message,
-    quotation: true,
-    author,
-  })
-  sendFromTelegram({ messenger, message, author })
-}
-
-common.discord_reconstructPlainText = (messenger: string, message: any, text: string) => {
-  if (!text) return ""
-  const massMentions = ["@everyone", "@here"]
-  if (
-    massMentions.some((massMention: string) => text.includes(massMention)) &&
-    !config.piers[messenger].massMentions
-  ) {
-    massMentions.forEach((massMention: string) => {
-      text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``)
-    })
-  }
-  let matches = text.replace(/#0000/, "").match(/<[\!&]?@[^# ]{2,32}>/g)
-  if (matches && matches[0])
-    for (let match of matches) {
-      const core = match.replace(/[@<>\!&]/g, "")
-      const member = message.channel.guild.members.cache
-        .array()
-        .find(
-          (member: any) =>
-            (member.nickname || member.user?.username) &&
-            member.user.id.toLowerCase() === core
-        )
-      if (member)
-        text = text
-          .replace(/#0000/, "")
-          .replace(match, "@" + (member.nickname || member.user.username))
-    }
-  matches = text.match(/<#[^# ]{2,32}>/g)
-  if (matches && matches[0])
-    for (let match of matches) {
-      const core = match.replace(/[<>#]/g, "")
-      const chan = Object.keys(config.cache[messenger]).filter(
-        (i) => config.cache[messenger][i] === core
-      )
-      if (chan[0]) text = text.replace(match, "#" + chan[0])
-    }
-
-  return text
-}
-
-// reconstructs the original raw markdown message
-common.telegram_reconstructMarkdown = (msg: Telegram.Message) => {
-  if (!msg.entities) return msg
-  return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) }
-  const incrementOffsets = (from: number, by: number) => {
-    msg.entities.forEach((entity: any) => {
-      if (entity.offset > from) entity.offset += by
-    })
-  }
-
-  // example markdown:
-  // pre `txt` end
-  let pre // contains 'pre '
-  let txt // contains 'txt'
-  let end // contains ' end'
-
-  msg.entities.forEach(({ type, offset, length, url }) => {
-    switch (type) {
-      case "text_link": // [text](url)
-        pre = msg.text.substr(0, offset)
-        txt = msg.text.substr(offset, length)
-        end = msg.text.substr(offset + length)
-
-        msg.text = `${pre}[${txt}](${url})${end}`
-        incrementOffsets(offset, 4 + url.length)
-        break
-      case "code": // ` code
-        pre = msg.text.substr(0, offset)
-        txt = msg.text.substr(offset, length)
-        end = msg.text.substr(offset + length)
-
-        msg.text = `${pre}\`${txt}\`${end}`
-        incrementOffsets(offset, 2)
-        break
-      case "pre": // ``` code blocks
-        pre = msg.text.substr(0, offset)
-        txt = msg.text.substr(offset, length)
-        end = msg.text.substr(offset + length)
-
-        msg.text = `${pre}\`\`\`${txt}\`\`\`${end}`
-        incrementOffsets(offset, 6)
-      //   break;
-      // case "hashtag": // #hashtags can be passed on as is
-      // break;
-      // default:
-      //   console.warn("unsupported entity type:", type, msg);
-    }
-  })
-  return msg
-}
-
-function IsSpam(message: any): boolean {
-  const l = config.spamremover.telegram
-    .map((rule: any) => {
-      let matches = true
-      for (const key of Object.keys(rule)) {
-        const msg_val = R.path(key.split("."), message)
-        if (rule[key] === true && !msg_val) matches = false
-        if (
-          typeof rule[key] === "object" &&
-          (!msg_val || msg_val.search(new RegExp(rule[key].source, "i")) === -1)
-        )
-          matches = false
-      }
-      return matches
-    })
-    .some(Boolean)
-  return l
-}
-
-async function sendFromTelegram({
-  messenger,
-  message,
-  quotation,
-  author,
-}: {
-  messenger: string
-  message: any
-  quotation?: boolean
-  author?: string
-}) {
-  if (!message) return
-  let action
-  message = common.telegram_reconstructMarkdown(message)
-  //collect attachments
-  const jsonMessage: any = {}
-  let i = 0
-  for (const el of [
-    "document",
-    "photo",
-    "new_chat_photo",
-    "sticker",
-    "video",
-    "audio",
-    "voice",
-    "location",
-    "contact",
-    "caption",
-    "text",
-  ]) {
-    if (message[el]) {
-      jsonMessage[el] = { url: message[el].file_id }
-      if (el === "photo") {
-        const photo = message[el][message[el].length - 1]
-        jsonMessage[el] = {
-          ...jsonMessage[el],
-          url: photo.file_id,
-          width: photo.width,
-          height: photo.height,
-          index: i++,
-        }
-      } else if (el === "sticker") {
-        jsonMessage[el] = {
-          ...jsonMessage[el],
-          width: message[el].width,
-          height: message[el].height,
-          index: i++,
-        }
-      } else if (el === "location") {
-        jsonMessage[el] = {
-          latitude: message[el]["latitude"],
-          longtitude: message[el]["longtitude"],
-          index: i++,
-        }
-      } else if (el === "contact") {
-        jsonMessage[el] = {
-          first_name: message[el]["first_name"],
-          last_name: message[el]["last_name"],
-          phone_number: message[el]["phone_number"],
-          index: i++,
-        }
-      } else if (el === "caption") {
-        jsonMessage[el] = {
-          text: message[el],
-          index: 998,
-        }
-      } else if (["video", "voice", "audio"].includes(el)) {
-        jsonMessage[el] = {
-          ...jsonMessage[el],
-          duration: message[el].duration,
-          index: i++,
-        }
-      }
-    }
-    if (el === "text") {
-      message[el] = message[el] || ""
-      if (!quotation && message[el].indexOf("/me ") === 0) {
-        action = "action"
-        message[el] = message[el].split("/me ").slice(1).join("/me ")
-      }
-      jsonMessage[el] = {
-        text: message[el],
-        index: 999,
-      }
-    }
-  }
-  let arrMessage = Object.keys(jsonMessage).sort(
-    (a, b) => jsonMessage[a].index - jsonMessage[b].index
-  )
-
-  // const reply_to_bot =
-  //   quotation && message.from.id === config.telegram.myUser.id
-  // if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
-  //   const arrTxtMsg = jsonMessage["text"].text.split(": ")
-  //   author = author ?? arrTxtMsg[0]
-  //   jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ")
-  // } else if (!reply_to_bot) {
-  // }
-  // now send from Telegram
-  for (let i: number = 0; i < arrMessage.length; i++) {
-    const el = arrMessage[i]
-    if (el === "text") {
-      jsonMessage[el].text = jsonMessage[el].text.replace(
-        `@${config.piers[messenger].myUser.username}`,
-        ""
-      )
-      if (
-        quotation &&
-        jsonMessage[el].text.length > config.piers[messenger].MessageLength
-      )
-        jsonMessage[el].text = `${jsonMessage[el].text.substring(
-          0,
-          config.piers[messenger].MessageLength - 1
-        )} ...`
-    }
-    if (jsonMessage[el].url)
-      [
-        jsonMessage[el].url,
-        jsonMessage[el].local_file,
-      ] = await common.telegram_serveFile(messenger, jsonMessage[el].url)
-    const arrForLocal = Object.keys(jsonMessage[el]).map((i) => [
-      i,
-      jsonMessage[el][i],
-    ])
-    const text = common.LocalizeString({
-      messenger: "telegram",
-      channelId: message.chat.id,
-      localized_string_key: `MessageWith.${el}.telegram`,
-      arrElemsToInterpolate: arrForLocal,
-    })
-    const edited = message.edit_date ? true : false
-    sendFrom({
-      messenger,
-      channelId: message.chat.id,
-      author,
-      text,
-      action,
-      quotation,
-      file: jsonMessage[el].local_file,
-      remote_file: jsonMessage[el].url,
-      edited,
-    })
-  }
-}
-
-receivedFrom.vkwall = async (messenger: string, message: any) => {
+pierObj.vkwall.receivedFrom = async (messenger: string, message: any) => {
   if (!config.channelMapping[messenger]) return
   const channelId = message.post_id
   if (
@@ -1607,7 +1992,7 @@ receivedFrom.vkwall = async (messenger: string, message: any) => {
     "-" + config.piers[messenger].group_id === message.from_id.toString()
   )
     return
-  if (!generic[messenger].client.app) {
+  if (!generic[messenger].client.vkapp) {
     config.MessengersAvailable[messenger] = false
     return
   }
@@ -1620,7 +2005,7 @@ receivedFrom.vkwall = async (messenger: string, message: any) => {
     })
   )
   res = res?.response?.[0] || fromwhomId
-  const author = AdaptName.vkwall(messenger, res)
+  const author = pierObj.vkwall.adaptName(messenger, res)
 
   let arrQuotes: string[] = []
   text.replace(
@@ -1632,7 +2017,7 @@ receivedFrom.vkwall = async (messenger: string, message: any) => {
     }
   )
   if (arrQuotes.length > 0) {
-    const token = generic[messenger].client.app.token
+    const token = generic[messenger].client.vkapp.token
     for (const el of arrQuotes) {
       const opts = {
         access_token: token,
@@ -1663,7 +2048,7 @@ receivedFrom.vkwall = async (messenger: string, message: any) => {
             })
           )
         replyuser = res?.response?.[0] || ""
-        replyuser = AdaptName.vkwall(messenger, replyuser)
+        replyuser = pierObj.vkwall.adaptName(messenger, replyuser)
       }
       sendFrom({
         messenger,
@@ -1718,7 +2103,7 @@ receivedFrom.vkwall = async (messenger: string, message: any) => {
   })
 }
 
-receivedFrom.vkboard = async (messenger: string, message: any) => {
+pierObj.vkboard.receivedFrom = async (messenger: string, message: any) => {
   if (!config.channelMapping[messenger]) return
   const channelId = message.topic_id
   if (
@@ -1726,7 +2111,7 @@ receivedFrom.vkboard = async (messenger: string, message: any) => {
     message.topic_owner_id === message.from_id
   )
     return
-  if (!generic[messenger].client.app) {
+  if (!generic[messenger].client.vkapp) {
     config.MessengersAvailable[messenger] = false
     return
   }
@@ -1740,7 +2125,7 @@ receivedFrom.vkboard = async (messenger: string, message: any) => {
     })
   )
   res = res?.response?.[0] || fromwhomId
-  const author = AdaptName.vkboard(messenger, res)
+  const author = pierObj.vkboard.adaptName(messenger, res)
 
   let arrQuotes: string[] = []
   text.replace(
@@ -1752,7 +2137,7 @@ receivedFrom.vkboard = async (messenger: string, message: any) => {
     }
   )
   if (arrQuotes.length > 0) {
-    const token = generic[messenger].client.app.token
+    const token = generic[messenger].client.vkapp.token
     for (const el of arrQuotes) {
       const opts = {
         access_token: token,
@@ -1783,7 +2168,7 @@ receivedFrom.vkboard = async (messenger: string, message: any) => {
             })
           )
         replyuser = res?.response?.[0] || ""
-        replyuser = AdaptName.vkboard(messenger, replyuser)
+        replyuser = pierObj.vkboard.adaptName(messenger, replyuser)
       }
       sendFrom({
         messenger,
@@ -1838,7 +2223,7 @@ receivedFrom.vkboard = async (messenger: string, message: any) => {
   })
 }
 
-receivedFrom.slack = async (messenger: string, message: any) => {
+pierObj.slack.receivedFrom = async (messenger: string, message: any) => {
   if (!config.channelMapping[messenger]) return
   if (
     message.subtype === "message_changed" &&
@@ -1884,7 +2269,7 @@ receivedFrom.slack = async (messenger: string, message: any) => {
   if (err) chan = message.channel
     ;[err, files] = await to(Promise.all(promFiles))
   if (err) files = []
-  const author = AdaptName.slack(messenger, user)
+  const author = pierObj.slack.adaptName(messenger, user)
   const channelId = chan.channel.name || message.channel
 
   let action
@@ -1926,7 +2311,7 @@ receivedFrom.slack = async (messenger: string, message: any) => {
   }
 }
 
-receivedFrom.mattermost = async (messenger: string, message: any) => {
+pierObj.mattermost.receivedFrom = async (messenger: string, message: any) => {
   // log("mattermost")(message);
   // if (process.env.log)
   //   logger.log({
@@ -2116,7 +2501,7 @@ receivedFrom.mattermost = async (messenger: string, message: any) => {
   }
 }
 
-receivedFrom.irc = async (messenger: string, {
+pierObj.irc.receivedFrom = async (messenger: string, {
   author,
   channelId,
   text,
@@ -2210,46 +2595,19 @@ receivedFrom.irc = async (messenger: string, {
 }
 
 // AdaptName
-AdaptName.discord = (messenger: string, message: any) => {
-  return message.member?.nickname || message.author?.username
-}
-AdaptName.facebook = (user: any) => user.name // || user.vanity || user.firstName;
-AdaptName.telegram = (messenger: string, name: string) => config.piers[messenger].userMapping[name] || name
-AdaptName.vkboard = (messenger: string, user: any) => {
+pierObj.facebook.adaptName = (user: any) => user.name // || user.vanity || user.firstName;
+pierObj.vkboard.adaptName = (messenger: string, user: any) => {
   let full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim()
   if (full_name === "") full_name = undefined
   if (user.nickname && user.nickname.length < 1) user.nickname = null
   if (user.screen_name && user.screen_name.length < 1) user.screen_name = null
   return user.screen_name || user.nickname || full_name || user.id
 }
-AdaptName.vkwall = AdaptName.vkboard
-AdaptName.slack = (messenger: string, user: any) =>
+pierObj.vkwall.adaptName = pierObj.vkboard.adaptName
+pierObj.slack.adaptName = (messenger: string, user: any) =>
   user?.user?.profile?.display_name || user?.user?.real_name || user?.user?.name
 
-// GetName
-GetName.telegram = (messenger: string, user: Telegram.User) => {
-  let name = config.piers[messenger].nameFormat
-  if (user.username) {
-    name = name.replace("%username%", user.username, "g")
-    name = AdaptName.telegram(messenger, name)
-  } else {
-    // if user lacks username, use fallback format string instead
-    name = name.replace(
-      "%username%",
-      config.piers[messenger]?.usernameFallbackFormat,
-      "g"
-    )
-  }
-
-  name = name.replace("%firstName%", user.first_name || "", "g")
-  name = name.replace("%lastName%", user.last_name || "", "g")
-
-  // get rid of leading and trailing whitespace
-  name = name.replace(/(^\s*)|(\s*$)/g, "")
-  return name
-}
-
-convertFrom.slack = async ({
+pierObj.slack.convertFrom = async ({
   text,
   messenger,
 }: {
@@ -2393,7 +2751,7 @@ convertFrom.slack = async ({
           error: err,
         })
       }
-      jsonUsers[userId] = AdaptName.slack(messenger, user)
+      jsonUsers[userId] = pierObj.slack.adaptName(messenger, user)
     }
     return (
       emoji
@@ -2459,38 +2817,23 @@ convertFrom.slack = async ({
   return result || text
 }
 
-convertFrom.facebook = async ({
+pierObj.facebook.convertFrom = async ({
   text,
   messenger,
 }: {
   text: string
   messenger: string
 }) => common.escapeHTML(text)
-convertFrom.telegram = async ({
-  text,
-  messenger,
-}: {
-  text: string
-  messenger: string
-}) => {
-  const res = markedParse({
-    text: common.escapeHTML(text).replace(
-      /<p><code>([\s\S]*?)<\/code><\/p>/gim,
-      "<p><pre>$1</pre></p>"
-    ),
-    messenger: "telegram",
-  })
-  return res
-}
-convertFrom.vkboard = async ({
+
+pierObj.vkboard.convertFrom = async ({
   text,
   messenger,
 }: {
   text: string
   messenger: string
 }) => common.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "")
-convertFrom.vkwall = convertFrom.vkboard
-convertFrom.mattermost = async ({
+pierObj.vkwall.convertFrom = pierObj.vkboard.convertFrom
+pierObj.mattermost.convertFrom = async ({
   text,
   messenger,
 }: {
@@ -2502,35 +2845,20 @@ convertFrom.mattermost = async ({
     messenger: "mattermost",
     unescapeCodeBlocks: true,
   })
-convertFrom.discord = async ({
-  text,
-  messenger,
-}: {
-  text: string
-  messenger: string
-}) => {
-  const result = discordParser.toHTML(text)
-  log(messenger)({
-    messenger,
-    "converting text": text,
-    result,
-  })
-  return result
-}
 
 // markedParse({
 //   text: text.replace(/^(>[^\n]*?\n)/gm, "$1\n").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
 //   messenger: "discord",
 //   dontEscapeBackslash: true
 // });
-convertFrom.webwidget = async ({
+pierObj.webwidget.convertFrom = async ({
   text,
   messenger,
 }: {
   text: string
   messenger: string
 }) => text
-convertFrom.irc = async ({
+pierObj.irc.convertFrom = async ({
   text,
   messenger,
 }: {
@@ -2577,7 +2905,7 @@ async function convertToPlainText(text: string) {
   return a
 }
 
-convertTo.facebook = async ({
+pierObj.facebook.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2587,48 +2915,7 @@ convertTo.facebook = async ({
   messengerTo: string
 }) => convertToPlainText(text)
 
-convertTo.telegram = async ({
-  text,
-  messenger,
-  messengerTo,
-}: {
-  text: string
-  messenger: string
-  messengerTo: string
-}) => {
-  const result = common
-    .sanitizeHtml(
-      text
-        .replace(
-          /<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim,
-          "<pre>$1</pre>"
-        )
-        .replace(/<blockquote>([\s\S]*?)<\/blockquote>/gim, "<pre>$1</pre>"),
-      [
-        "b",
-        "strong",
-        "i",
-        "pre",
-        "code",
-        "a",
-        "em",
-        "u",
-        "ins",
-        "s",
-        "br",
-        "del",
-      ]
-    )
-    .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gim, "<pre>$1</pre>")
-    .replace(/<br( \/|)>/g, "\n")
-  log(messenger)({
-    messengerTo,
-    "converting text": text,
-    result,
-  })
-  return result
-}
-convertTo.vkboard = async ({
+pierObj.vkboard.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2644,8 +2931,8 @@ convertTo.vkboard = async ({
   log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
-convertTo.vkwall = convertTo.vkboard
-convertTo.slack = async ({
+pierObj.vkwall.convertTo = pierObj.vkboard.convertTo
+pierObj.slack.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2659,7 +2946,7 @@ convertTo.slack = async ({
   return result
 }
 
-convertTo.mattermost = async ({
+pierObj.mattermost.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2679,31 +2966,8 @@ convertTo.mattermost = async ({
   log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
-convertTo.discord = async ({
-  text,
-  messenger,
-  messengerTo,
-}: {
-  text: string
-  messenger: string
-  messengerTo: string
-}) => {
-  const result = await common.unescapeHTML({
-    text: html2md.convert({
-      string: text
-        .replace(/&#x2A;/g, "&#x5C;&#x2A;")
-        .replace(/&#x5F;/g, "&#x5C;&#x5F;"),
-      hrefConvert: false,
-      dialect: messengerTo,
-    }),
-    convertHtmlEntities: true,
-    escapeBackslashes: false,
-  })
-  log(messenger)({ messengerTo, "converting text": text, result })
-  return result
-}
 
-convertTo.webwidget = async ({
+pierObj.webwidget.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2713,7 +2977,7 @@ convertTo.webwidget = async ({
   messengerTo: string
 }) => text
 
-convertTo.irc = async ({
+pierObj.irc.convertTo = async ({
   text,
   messenger,
   messengerTo,
@@ -2729,14 +2993,6 @@ convertTo.irc = async ({
   log(messenger)({ messengerTo, "converting text": text, result })
   return result
 }
-
-// common.telegram
-common.telegram_serveFile = (messenger: string, fileId: number) =>
-  common.downloadFile({
-    messenger,
-    type: "telegram",
-    fileId,
-  })
 
 common.writeCache = async ({
   channelName,
@@ -2774,139 +3030,6 @@ function xovahelojbo({ text }: { text: string }) {
     ).length / arrText.length
   return xovahe
 }
-async function TelegramRemoveSpam(messenger: string, message: Telegram.Message) {
-  const cloned_message = JSON.parse(JSON.stringify(message))
-  if (IsSpam(cloned_message)) {
-    if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
-      const [err, chat] = await to(
-        generic[messenger].client.getChat(message.chat.id)
-      )
-      if (!err) {
-        const invite_link = chat.invite_link
-        cloned_message.text = cloned_message.text.replace(invite_link, "")
-        if (IsSpam(cloned_message))
-          common.telegram_DeleteMessage({ messenger, message, log: true })
-      } else {
-        common.LogToAdmin(
-          `error on getting an invite link of the chat ${message.chat.id} ${message.chat.title}`
-        )
-      }
-    } else {
-      const [err, chat] = await to(
-        generic[messenger].client.getChat(cloned_message.chat.id)
-      )
-      if (!err) {
-        common.telegram_DeleteMessage({ messenger, message, log: true })
-      } else {
-        common.LogToAdmin(
-          `error on getting an invite link of the chat ${cloned_message.chat.id} ${cloned_message.chat.title}`
-        )
-      }
-    }
-    return true
-  } else if (message.chat.title === "jbosnu" && message.text) {
-    // dealing with non-lojban spam
-    const xovahe = xovahelojbo({ text: message.text })
-    if (xovahe < 0.5) {
-      generic[messenger].client
-        .sendMessage(
-          message.chat.id,
-          ".i mi smadi le du'u do na tavla fo su'o lojbo .i ja'e bo mi na benji di'u fi la IRC\n\nIn this group only Lojban is allowed. Try posting your question to [#lojban](https://t.me/joinchat/BLVsYz3hCF8mCAb6fzW1Rw) or [#ckule](https://telegram.me/joinchat/BLVsYz4hC9ulWahupDLovA) (school) group",
-          {
-            reply_to_message_id: message.message_id,
-            parse_mode: "Markdown",
-          }
-        )
-        .catch((e: any) =>
-          log("telegram")({
-            error: e.toString(),
-          })
-        )
-      return true
-    }
-  }
-}
-
-function TelegramRemoveAddedBots(messenger: string, message: Telegram.Message) {
-  if (config.piers[messenger].remove_added_bots)
-    (message?.new_chat_members || []).map((u: Telegram.User) => {
-      if (u.is_bot && config.piers[messenger]?.myUser?.id !== u.id)
-        generic[messenger].client
-          .kickChatMember(message.chat.id, u.id)
-          .catch(catchError)
-    })
-}
-
-function TelegramRemoveNewMemberMessage(messenger: string, message: Telegram.Message) {
-  if (
-    message?.left_chat_member ||
-    (message?.new_chat_members || []).filter(
-      (u: Telegram.User) =>
-        (u.username || "").length > 100 ||
-        (u.first_name || "").length > 100 ||
-        (u.last_name || "").length > 100
-    ).length > 0
-  ) {
-    common.telegram_DeleteMessage({ messenger, message, log: false })
-  }
-  if (message.left_chat_member || message.new_chat_members) return true
-  return false
-}
-
-async function TelegramLeaveChatIfNotAdmin(messenger: string, message: Telegram.Message) {
-  if (
-    !["group", "supergroup"].includes(message?.chat?.type) ||
-    !message?.chat?.id ||
-    !config.piers[messenger]?.myUser?.id
-  )
-    return
-
-  let [err, res] = await to(
-    generic[messenger].client.getChatMember(
-      message.chat.id,
-      config.piers[messenger]?.myUser?.id
-    )
-  )
-  if (!res) return true
-  if (!res.can_delete_messages) {
-    ;[err, res] = await to(generic[messenger].client.leaveChat(message.chat.id))
-
-    const jsonMessage = {
-      id: message?.chat?.id || message?.from?.id,
-      title: message?.chat?.title,
-      first_name: message?.from?.first_name,
-      last_name: message?.from?.last_name,
-      username: message?.from?.username,
-      message: message?.text,
-    }
-    common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`)
-    config.cache[messenger][message.chat.title] = undefined
-    await to(
-      common.writeCache({
-        channelName: message.chat.title,
-        channelId: message.chat.id,
-        action: "leave",
-      })
-    )
-    return true
-  }
-  return false
-}
-
-common.telegram_DeleteMessage = async ({
-  messenger,
-  message,
-  log,
-}: {
-  messenger: string
-  message: Telegram.Message
-  log: boolean
-}) => {
-  if (log) await to(common.LogMessageToAdmin(messenger, message))
-  await to(
-    generic[messenger].client.deleteMessage(message.chat.id, message.message_id)
-  )
-}
 
 // common
 common.ConfigBeforeStart = () => {
@@ -2943,46 +3066,8 @@ common.ConfigBeforeStart = () => {
 }
 
 
-NewChannelAppeared.telegram = async ({
-  messenger,
-  channelName,
-  channelId,
-}: {
-  messenger: string
-  channelName: string
-  channelId: string
-}) => {
-  config.cache[messenger][channelName] = channelId
-  let [err, res] = await to(
-    common.writeCache({ channelName, channelId, action: "join" })
-  )
-  if (err) {
-    console.error(err)
-    return
-  }
-  ;[err, res] = await to(common.PopulateChannelMapping())
-  if (err)
-    common.LogToAdmin(
-      `got problem in the new telegram chat ${channelName}, ${channelId}`
-    )
-  if (err) {
-    console.error(err)
-    return
-  }
-  return true
-}
-
 common.getMessengersWithPrefix = async (prefix: string) => {
   return Object.keys(config.MessengersAvailable).filter((el: string) => el.indexOf(prefix + "_") === 0 && config.MessengersAvailable[el] === true)
-}
-
-GetChannels.telegram = async (pier: string): Promise<void> => {
-  //read from file
-  let res = {}
-  try {
-    res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`))[pier]
-  } catch (error) { }
-  config.cache[pier] = res
 }
 
 GetChannels.irc = async (pier: string): Promise<void> => {
@@ -3009,16 +3094,6 @@ GetChannels.mattermost = async (pier: string): Promise<void> => {
   json = await GetChannelsMattermostCore(pier, json, url)
   url = `${config.piers[pier].ProviderUrl}/api/v4/users/${config.piers[pier].user_id}/teams/${config.piers[pier].team_id}/channels`
   json = await GetChannelsMattermostCore(pier, json, url)
-  config.cache[pier] = json
-}
-
-GetChannels.discord = async (pier: string): Promise<void> => {
-  const json: Json = {}
-  for (const value of generic[pier].client.channels.cache.values()) {
-    if (value.guild.id === config.piers[pier].guildId) {
-      json[value.name] = value.id
-    }
-  }
   config.cache[pier] = json
 }
 
@@ -3135,10 +3210,9 @@ common.MessengersAvailable = () => {
   Object.keys(config.MessengersAvailable).forEach((messenger: string) => generic[messenger] = {})
 }
 
-StartService.facebook = async ({ force, messenger = "facebook" }: { force: boolean, messenger?: string }) => {
+pierObj.facebook.StartService = async ({ force, messenger = "facebook" }: { force: boolean, messenger?: string }) => {
   //facebook
   if (!force && !config.MessengersAvailable[messenger]) return
-  queueOf[messenger] = new PQueue({ concurrency: 1 })
   try {
     generic[messenger].client = await login(
       config.piers[messenger].email,
@@ -3148,7 +3222,7 @@ StartService.facebook = async ({ force, messenger = "facebook" }: { force: boole
     console.log(JSON.stringify(generic[messenger].client.getSession()))
 
     generic[messenger].client.on("message", (message: any) => {
-      receivedFrom.facebook(messenger, message)
+      pierObj.facebook.receivedFrom(messenger, message)
     })
     config.MessengersAvailable[messenger] = true
   } catch (e) {
@@ -3158,7 +3232,7 @@ StartService.facebook = async ({ force, messenger = "facebook" }: { force: boole
   }
 }
 
-StartService.webwidget = async ({ messenger }: { messenger: string }) => {
+pierObj.webwidget.StartService = async ({ messenger }: { messenger: string }) => {
   generic[messenger] = {
     Lojban1ChatHistory: [],
     client: require("socket.io")(server)
@@ -3167,70 +3241,46 @@ StartService.webwidget = async ({ messenger }: { messenger: string }) => {
     socket.emit("history", generic[messenger].Lojban1ChatHistory)
   })
 }
-StartService.telegram = async ({ messenger }: { messenger: string }) => {
-  //telegram
-  if (!config.MessengersAvailable[messenger]) return
-  generic[messenger].client = await common.telegram.Start({ messenger })
-  queueOf[messenger] = new PQueue({ concurrency: 1 })
-  generic[messenger].client.on("message", (message: any) => {
-    receivedFrom.telegram(messenger, message)
-  })
-  generic[messenger].client.on("edited_message", (message: any) => {
-    receivedFrom.telegram(messenger, message)
-  })
-  generic[messenger].client.on("polling_error", (error: any) => {
-    if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
-      config.MessengersAvailable[messenger] = false
-      generic[messenger].client.stopPolling()
-    }
-  })
-  const [err, res] = await to(generic[messenger].client.getMe())
-  if (!err) config.piers[messenger].myUser = res
-}
 
-StartService.vkwall = async ({ messenger }: { messenger: string }) => {
+pierObj.vkwall.StartService = async ({ messenger }: { messenger: string }) => {
   //vkboard
   if (!config.MessengersAvailable[messenger]) return
-  generic[messenger].client = await common.vkwall.Start({ messenger })
-  if (!queueOf.vk) queueOf.vk = new PQueue({ concurrency: 1 })
+  generic[messenger].client = await pierObj.vkwall.common.Start({ messenger })
   generic[messenger].client.bot.event("wall_reply_new", async ({ message }: { message: any }) => {
-    receivedFrom.vkwall(messenger, message)
+    pierObj.vkwall.receivedFrom(messenger, message)
   })
   generic[messenger].client.bot.event("wall_reply_edit", async ({ message }: { message: any }) => {
-    receivedFrom.vkwall(messenger, { ...message, edited: true })
+    pierObj.vkwall.receivedFrom(messenger, { ...message, edited: true })
   })
   generic[messenger].client.bot.startPolling()
 }
 
-StartService.vkboard = async ({ messenger }: { messenger: string }) => {
+pierObj.vkboard.StartService = async ({ messenger }: { messenger: string }) => {
   //vkboard
   if (!config.MessengersAvailable[messenger]) return
-  generic[messenger].client = await common.vkboard.Start({ messenger })
-  if (!queueOf.vk) queueOf.vk = new PQueue({ concurrency: 1 })
+  generic[messenger].client = await pierObj.vkboard.common.Start({ messenger })
   generic[messenger].client.bot.event("board_post_new", async ({ message }: { message: any }) => {
-    receivedFrom.vkboard(messenger, message)
+    pierObj.vkboard.receivedFrom(messenger, message)
   })
   generic[messenger].client.bot.event("board_post_edit", async ({ message }: { message: any }) => {
-    receivedFrom.vkboard(messenger, { ...message, edited: true })
+    pierObj.vkboard.receivedFrom(messenger, { ...message, edited: true })
   })
   generic[messenger].client.bot.startPolling()
 }
 
-StartService.slack = async ({ messenger }: { messenger: string }) => {
+pierObj.slack.StartService = async ({ messenger }: { messenger: string }) => {
   //slack
-  await common.slack.Start({ messenger })
+  await pierObj.slack.common.Start({ messenger })
   if (!config.MessengersAvailable[messenger]) return
-  queueOf[messenger] = new PQueue({ concurrency: 1 })
   generic[messenger].client.rtm.on("message", (message: any) => {
-    receivedFrom.slack(messenger, message)
+    pierObj.slack.receivedFrom(messenger, message)
   })
 }
 
-StartService.mattermost = async ({ messenger }: { messenger: string }) => {
+pierObj.mattermost.StartService = async ({ messenger }: { messenger: string }) => {
   //mattermost
-  generic[messenger].client = await common.mattermost.Start({ messenger })
+  generic[messenger].client = await pierObj.mattermost.common.Start({ messenger })
   if (!config.MessengersAvailable[messenger]) return
-  queueOf[messenger] = new PQueue({ concurrency: 1 })
   generic[messenger].client.addEventListener("open", () => {
     generic[messenger].client.send(
       JSON.stringify({
@@ -3245,7 +3295,7 @@ StartService.mattermost = async ({ messenger }: { messenger: string }) => {
   generic[messenger].client.addEventListener("message", (message: any) => {
     if (!message?.data || !config.piers[messenger].team_id) return
     message = JSON.parse(message.data)
-    receivedFrom.mattermost(messenger, message)
+    pierObj.mattermost.receivedFrom(messenger, message)
   })
   generic[messenger].client.addEventListener("close", () =>
     generic[messenger].client._connect()
@@ -3255,55 +3305,7 @@ StartService.mattermost = async ({ messenger }: { messenger: string }) => {
   )
 }
 
-StartService.discord = async ({ messenger }: { messenger: string }) => {
-  if (!config.MessengersAvailable[messenger]) return
-
-  await new Promise((resolve: any) => {
-    const client = new Discord.Client()
-    generic[messenger].client = client
-
-    queueOf[messenger] = new PQueue({ concurrency: 1 })
-    generic[messenger].client.once("ready", () => {
-      generic[messenger].guilds = client.guilds.cache.array()
-      if (config.piers[messenger].guildId) {
-        const guild = client.guilds.cache.find(
-          (guild: any) =>
-            guild.name.toLowerCase() === config.piers[messenger].guildId.toLowerCase() ||
-            guild.id === config.piers[messenger].guildId
-        )
-        if (guild)
-          generic[messenger].guilds = [
-            guild,
-            ...generic[messenger].guilds.filter(
-              (_guild: any) => _guild.id !== guild.id
-            ),
-          ]
-      }
-      resolve(null)
-    })
-    generic[messenger].client.on("error", (error: any) => {
-      resolve(null)
-      log("discord")(error)
-      // StartService.discord();
-    })
-
-    generic[messenger].client.on("message", (message: any) => {
-      receivedFrom.discord(messenger, message)
-    })
-    generic[messenger].client.on(
-      "messageUpdate",
-      (oldMessage: any, message: any) => {
-        if (oldMessage.content != message.content) {
-          message.edited = true
-          receivedFrom.discord(messenger, message)
-        }
-      }
-    )
-    generic[messenger].client.login(config.piers[messenger].token)
-  })
-}
-
-StartService.irc = async ({ messenger }: { messenger: string }) => {
+pierObj.irc.StartService = async ({ messenger }: { messenger: string }) => {
   // irc
   const channels = config.new_channels
   const results: any = []
@@ -3323,17 +3325,16 @@ StartService.irc = async ({ messenger }: { messenger: string }) => {
     config.piers[messenger].ircOptions
   )
   if (!config.MessengersAvailable[messenger]) return
-  queueOf[messenger] = new PQueue({ concurrency: 1 })
   generic[messenger].client.on("error", (error: any) => {
-    receivedFrom.irc(messenger, {
+    pierObj.irc.receivedFrom(messenger, {
       error,
       type: "error",
     })
-    // StartService.irc();
+    // pierObj.irc();.StartService
   })
 
   generic[messenger].client.on("registered", () => {
-    receivedFrom.irc(messenger, {
+    pierObj.irc.receivedFrom(messenger, {
       handler: generic[messenger].client,
       type: "registered",
     })
@@ -3342,7 +3343,7 @@ StartService.irc = async ({ messenger }: { messenger: string }) => {
   generic[messenger].client.on(
     "message",
     (author: string, channelId: string, text: string) => {
-      receivedFrom.irc(messenger, {
+      pierObj.irc.receivedFrom(messenger, {
         author,
         channelId,
         text,
@@ -3354,7 +3355,7 @@ StartService.irc = async ({ messenger }: { messenger: string }) => {
   generic[messenger].client.on(
     "topic",
     (channelId: string, topic: string, author: string) => {
-      receivedFrom.irc(messenger, {
+      pierObj.irc.receivedFrom(messenger, {
         author,
         channelId,
         text: topic,
@@ -3366,7 +3367,7 @@ StartService.irc = async ({ messenger }: { messenger: string }) => {
   generic[messenger].client.on(
     "action",
     (author: string, channelId: string, text: string) => {
-      receivedFrom.irc(messenger, {
+      pierObj.irc.receivedFrom(messenger, {
         author,
         channelId,
         text,
@@ -3382,7 +3383,10 @@ async function StartServices() {
 
   for (const messenger_with_index of Object.keys(config.MessengersAvailable)) {
     const messenger = messenger_with_index.replace(/_.*/g, '')
-    if (StartService[messenger]) await StartService[messenger]({ messenger: messenger_with_index })
+    if (pierObj[messenger]?.StartService) {
+      queueOf[messenger_with_index] = new PQueue({ concurrency: 1 })
+      await pierObj[messenger]?.StartService({ messenger: messenger_with_index })
+    }
   }
   await common.PopulateChannelMapping()
 
@@ -3401,6 +3405,7 @@ common.LogMessageToAdmin = async (messenger: string, message: Telegram.Message) 
       )
     )
 }
+
 function catchError(err: any) {
   const error = JSON.stringify(err)
   console.log(error)
@@ -3413,20 +3418,20 @@ common.LogToAdmin = (msg_text: string, repeat = true) => {
     message: JSON.stringify(msg_text),
   })
   const telegram_piers_with_logging_to_admin = Object.keys(config.piers).filter((i: any) => typeof config.piers[i].admins_userid !== 'undefined')
-  for (const pier of telegram_piers_with_logging_to_admin) {
-    generic[pier].client
-      .sendMessage(
-        config.piers[pier].admins_userid,
-        `\`\`\`\n${msg_text}\n\`\`\``,
-        {
-          parse_mode: "Markdown",
-        }
-      )
-      .catch((e: any) => {
-        console.log(msg_text)
-        if (repeat) common.LogToAdmin(msg_text, false)
-      })
-  }
+  for (const pier of telegram_piers_with_logging_to_admin)
+    if (generic[pier].client)
+      generic[pier].client
+        .sendMessage(
+          config.piers[pier].admins_userid,
+          `\`\`\`\n${msg_text}\n\`\`\``,
+          {
+            parse_mode: "Markdown",
+          }
+        )
+        .catch((e: any) => {
+          console.log(msg_text)
+          if (repeat) common.LogToAdmin(msg_text, false)
+        })
 }
 
 common.escapeHTML = (arg: string) =>
