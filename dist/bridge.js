@@ -127,9 +127,9 @@ common.webwidget = {
 common.vkboard = {
     Start: async function ({ messenger }) {
         const vkio = new vk_io_1.VK({
-            appId: config[messenger].appId,
-            login: config[messenger].login,
-            password: config[messenger].password,
+            appId: config.piers[messenger].appId,
+            login: config.piers[messenger].login,
+            password: config.piers[messenger].password,
             authScope: "offline,wall,messages,groups",
         });
         const authorization = new authorization_1.Authorization(vkio);
@@ -139,8 +139,8 @@ common.vkboard = {
             console.error("vkboard", err.toString());
         }
         const vkbot = new VkBot({
-            token: config[messenger].token,
-            group_id: config[messenger].group_id,
+            token: config.piers[messenger].token,
+            group_id: config.piers[messenger].group_id,
         });
         return { bot: vkbot, app };
     }
@@ -148,9 +148,9 @@ common.vkboard = {
 common.vkwall = {
     Start: async function ({ messenger }) {
         const vkio = new vk_io_1.VK({
-            appId: config[messenger].appId,
-            login: config[messenger].login,
-            password: config[messenger].password,
+            appId: config.piers[messenger].appId,
+            login: config.piers[messenger].login,
+            password: config.piers[messenger].password,
             authScope: "offline,wall,messages,groups",
         });
         const authorization = new authorization_1.Authorization(vkio);
@@ -160,8 +160,8 @@ common.vkwall = {
             console.error("vkwall", err.toString());
         }
         const vkbot = new VkBot({
-            token: config[messenger].token,
-            group_id: config[messenger].group_id,
+            token: config.piers[messenger].token,
+            group_id: config.piers[messenger].group_id,
         });
         return { bot: vkbot, app };
     }
@@ -169,8 +169,8 @@ common.vkwall = {
 common.slack = {
     Start: async function ({ messenger }) {
         generic[messenger].client = {
-            rtm: new RTMClient(config[messenger].token),
-            web: new WebClient(config[messenger].token),
+            rtm: new RTMClient(config.piers[messenger].token),
+            web: new WebClient(config.piers[messenger].token),
         };
         generic[messenger].client.rtm.start().catch((e) => {
             var _a;
@@ -188,10 +188,10 @@ common.mattermost = {
     Start: async function ({ messenger }) {
         let [err, res] = await to(new Promise((resolve) => {
             const credentials = {
-                login_id: config[messenger].login,
-                password: config[messenger].password,
+                login_id: config.piers[messenger].login,
+                password: config.piers[messenger].password,
             };
-            const url = `${config[messenger].ProviderUrl}/api/v4/users/login`;
+            const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/login`;
             request({
                 body: JSON.stringify(credentials),
                 method: "POST",
@@ -215,18 +215,18 @@ common.mattermost = {
             return;
         }
         else {
-            config[messenger].token = res.token;
-            config[messenger].user_id = res.id;
+            config.piers[messenger].token = res.token;
+            config.piers[messenger].user_id = res.id;
         }
         ;
         [err, res] = await to(new Promise((resolve) => {
-            const user_id = config[messenger].user_id;
-            const url = `${config[messenger].ProviderUrl}/api/v4/users/${user_id}/teams`;
+            const user_id = config.piers[messenger].user_id;
+            const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${user_id}/teams`;
             request({
                 method: "GET",
                 url,
                 headers: {
-                    Authorization: `Bearer ${config[messenger].token}`,
+                    Authorization: `Bearer ${config.piers[messenger].token}`,
                 },
             }, (error, response, body) => {
                 if (err) {
@@ -235,10 +235,10 @@ common.mattermost = {
                 }
                 else {
                     const team = JSON.parse(body).find((i) => {
-                        return (i.display_name === config[messenger].team ||
-                            i.name === config[messenger].team);
+                        return (i.display_name === config.piers[messenger].team ||
+                            i.name === config.piers[messenger].team);
                     });
-                    config[messenger].team_id = team.id;
+                    config.piers[messenger].team_id = team.id;
                     resolve(team);
                 }
             });
@@ -248,20 +248,21 @@ common.mattermost = {
             return;
         }
         const ReconnectingWebSocket = require("reconnecting-websocket");
-        return new ReconnectingWebSocket(config[messenger].APIUrl, [], {
+        return new ReconnectingWebSocket(config.piers[messenger].APIUrl, [], {
             WebSocket: require("ws"),
         });
     }
 };
 // sendTo
 async function FormatMessageChunkForSending({ messenger, channelId, author, chunk, action, title, quotation, }) {
+    const root_messenger = common.root_of_messenger(messenger);
     if (quotation) {
         if (!author || author === "")
             author = "-";
         chunk = common.LocalizeString({
             messenger,
             channelId,
-            localized_string_key: `OverlayMessageWithQuotedMark.${messenger}`,
+            localized_string_key: `OverlayMessageWithQuotedMark.${root_messenger}`,
             arrElemsToInterpolate: [
                 ["author", author],
                 ["chunk", chunk],
@@ -270,12 +271,12 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
         });
     }
     else if ((author || "") !== "") {
-        // console.log(config[messenger], action,chunk)
-        if ((config[messenger].Actions || []).includes(action)) {
+        // console.log(config.piers[messenger], action,chunk)
+        if ((config.piers[messenger].Actions || []).includes(action)) {
             chunk = common.LocalizeString({
                 messenger,
                 channelId,
-                localized_string_key: `sendTo.${messenger}.action`,
+                localized_string_key: `sendTo.${root_messenger}.action`,
                 arrElemsToInterpolate: [
                     ["author", author],
                     ["chunk", chunk],
@@ -287,7 +288,7 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
             chunk = common.LocalizeString({
                 messenger,
                 channelId,
-                localized_string_key: `sendTo.${messenger}.normal`,
+                localized_string_key: `sendTo.${root_messenger}.normal`,
                 arrElemsToInterpolate: [
                     ["author", author],
                     ["chunk", chunk],
@@ -300,7 +301,7 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
         chunk = common.LocalizeString({
             messenger,
             channelId,
-            localized_string_key: `sendTo.${messenger}.ChunkOnly`,
+            localized_string_key: `sendTo.${root_messenger}.ChunkOnly`,
             arrElemsToInterpolate: [
                 ["chunk", chunk],
                 ["title", title],
@@ -323,7 +324,7 @@ sendTo.webwidget = async ({ messenger, channelId, author, chunk, action, quotati
         edited,
     };
     generic[messenger].Lojban1ChatHistory.push(data);
-    generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice((config[messenger].historyLength || 201) * -1);
+    generic[messenger].Lojban1ChatHistory = generic[messenger].Lojban1ChatHistory.slice((config.piers[messenger].historyLength || 201) * -1);
     generic[messenger].client.emit("sentFrom", {
         data,
     });
@@ -413,12 +414,18 @@ sendTo.discord = async ({ messenger, channelId, author, chunk, action, quotation
                 },
             ];
         }
-        const [err] = await to(webhook.send(chunk, {
+        const [error] = await to(webhook.send(chunk, {
             username: author || "-",
             files,
             // avatarURL: generic.discord.avatar.path,
         }));
-        if (err) {
+        if (error) {
+            logger.log({
+                level: "error",
+                function: "sendTo.discord",
+                message: error.toString(),
+                chunk, author
+            });
             //try to send without the attachment. useful when the file is too large for Discord to handle
             await to(webhook.send(chunk, {
                 username: author || "-",
@@ -441,7 +448,7 @@ sendTo.mattermost = async ({ messenger, channelId, author, chunk, action, quotat
     queueOf[messenger].add(async () => {
         await new Promise((resolve) => {
             const option = {
-                url: config[messenger].HookUrl,
+                url: config.piers[messenger].HookUrl,
                 json: {
                     text: chunk,
                     // username: author,
@@ -469,9 +476,9 @@ sendTo.vkwall = async ({ messenger, channelId, author, chunk, action, quotation,
                 generic[messenger].client.bot
                     .api("wall.createComment", {
                     access_token: token,
-                    owner_id: "-" + config[messenger].group_id,
+                    owner_id: "-" + config.piers[messenger].group_id,
                     post_id: channelId,
-                    from_group: config[messenger].group_id,
+                    from_group: config.piers[messenger].group_id,
                     reply_to_comment: 1,
                     message: chunk,
                 })
@@ -499,7 +506,7 @@ sendTo.vkboard = async ({ messenger, channelId, author, chunk, action, quotation
                 generic[messenger].client.bot
                     .api("board.createComment", {
                     access_token: token,
-                    group_id: config[messenger].group_id,
+                    group_id: config.piers[messenger].group_id,
                     topic_id: channelId,
                     message: chunk,
                     from_group: 1,
@@ -561,6 +568,7 @@ sendTo.irc = async ({ messenger, channelId, author, chunk, action, quotation, fi
     });
 };
 async function prepareChunks({ messenger, channelId, text, edited, messengerTo, }) {
+    const root_messengerTo = common.root_of_messenger(messengerTo);
     let arrChunks, fallback = "fallback";
     if (GetChunks[messengerTo])
         fallback = messengerTo;
@@ -571,10 +579,10 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
             arrChunks[i] = common.LocalizeString({
                 messenger,
                 channelId,
-                localized_string_key: `OverlayMessageWithEditedMark.${messengerTo}`,
+                localized_string_key: `OverlayMessageWithEditedMark.${root_messengerTo}`,
                 arrElemsToInterpolate: [["message", arrChunks[i]]],
             });
-        arrChunks[i] = await convertTo[messengerTo]({
+        arrChunks[i] = await convertTo[root_messengerTo]({
             text: arrChunks[i],
             messenger,
             messengerTo,
@@ -666,7 +674,7 @@ async function checkHelpers({ messenger, channelId, author, text, ToWhom, quotat
     });
 }
 async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation, action, file, remote_file, edited, }) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     const ConfigNode = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId];
     if (!ConfigNode)
         return common.LogToAdmin(`error finding assignment to ${messenger} channel with id ${channelId}`);
@@ -706,7 +714,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 Chunks[i] = await FormatMessageChunkForSending({
                     messenger,
                     channelId,
-                    title: (_c = config === null || config === void 0 ? void 0 : config.vkboard) === null || _c === void 0 ? void 0 : _c.group_id,
+                    title: config.piers[messenger].group_id,
                     author,
                     chunk,
                     action,
@@ -774,7 +782,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 Chunks[i] = await FormatMessageChunkForSending({
                     messenger: messengerTo,
                     channelId,
-                    title: (_d = config === null || config === void 0 ? void 0 : config.vkboard) === null || _d === void 0 ? void 0 : _d.group_id,
+                    title: (_c = config.piers[messenger]) === null || _c === void 0 ? void 0 : _c.group_id,
                     author,
                     chunk: thisToWhom + chunk,
                     action,
@@ -860,7 +868,7 @@ receivedFrom.discord = async (messenger, message) => {
         const text = common.discord_reconstructPlainText(messenger, message, value.content);
         log("discord")("sending text of attachment: " + text);
         sendFrom({
-            messenger: "discord",
+            messenger,
             channelId: message.channel.id,
             author: AdaptName.discord(messenger, message),
             text,
@@ -997,7 +1005,7 @@ common.discord_reconstructPlainText = (messenger, message, text) => {
         return "";
     const massMentions = ["@everyone", "@here"];
     if (massMentions.some((massMention) => text.includes(massMention)) &&
-        !config.discord.massMentions) {
+        !config.piers[messenger].massMentions) {
         massMentions.forEach((massMention) => {
             text = text.replace(new RegExp(massMention, "g"), `\`${massMention}\``);
         });
@@ -1096,7 +1104,7 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
     if (!message)
         return;
     let action;
-    message = generic[messenger].reconstructMarkdown(message);
+    message = common.telegram_reconstructMarkdown(message);
     //collect attachments
     const jsonMessage = {};
     let i = 0;
@@ -1187,10 +1195,10 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
     for (let i = 0; i < arrMessage.length; i++) {
         const el = arrMessage[i];
         if (el === "text") {
-            jsonMessage[el].text = jsonMessage[el].text.replace(`@${config[messenger].myUser.username}`, "");
+            jsonMessage[el].text = jsonMessage[el].text.replace(`@${config.piers[messenger].myUser.username}`, "");
             if (quotation &&
-                jsonMessage[el].text.length > config[messenger].MessageLength)
-                jsonMessage[el].text = `${jsonMessage[el].text.substring(0, config[messenger].MessageLength - 1)} ...`;
+                jsonMessage[el].text.length > config.piers[messenger].MessageLength)
+                jsonMessage[el].text = `${jsonMessage[el].text.substring(0, config.piers[messenger].MessageLength - 1)} ...`;
         }
         if (jsonMessage[el].url)
             [
@@ -1222,12 +1230,12 @@ async function sendFromTelegram({ messenger, message, quotation, author, }) {
     }
 }
 receivedFrom.vkwall = async (messenger, message) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!config.channelMapping[messenger])
         return;
     const channelId = message.post_id;
     if (!config.channelMapping[messenger][channelId] ||
-        "-" + config[messenger].group_id === message.from_id.toString())
+        "-" + config.piers[messenger].group_id === message.from_id.toString())
         return;
     if (!generic[messenger].client.app) {
         config.MessengersAvailable[messenger] = false;
@@ -1236,14 +1244,14 @@ receivedFrom.vkwall = async (messenger, message) => {
     let { text, from_id: fromwhomId } = message;
     let [err, res] = await to(generic[messenger].client.bot.api("users.get", {
         user_ids: fromwhomId,
-        access_token: config[messenger].token,
+        access_token: config.piers[messenger].token,
         fields: "nickname,screen_name",
     }));
     res = ((_a = res === null || res === void 0 ? void 0 : res.response) === null || _a === void 0 ? void 0 : _a[0]) || fromwhomId;
     const author = AdaptName.vkwall(messenger, res);
     let arrQuotes = [];
     text.replace(/\[[^\]]+:bp-([^\]]+)_([^\]]+)\|[^\]]*\]/g, (match, group_id, post_id) => {
-        if (group_id === config[messenger].group_id) {
+        if (group_id === config.piers[messenger].group_id) {
             arrQuotes.push(post_id);
         }
     });
@@ -1252,7 +1260,7 @@ receivedFrom.vkwall = async (messenger, message) => {
         for (const el of arrQuotes) {
             const opts = {
                 access_token: token,
-                group_id: config[messenger].group_id,
+                group_id: config.piers[messenger].group_id,
                 topic_id: channelId,
                 start_comment_id: el,
                 count: 1,
@@ -1263,19 +1271,19 @@ receivedFrom.vkwall = async (messenger, message) => {
             if (!text)
                 continue;
             let replyuser;
-            const rg = new RegExp(`^\\[club${config.vkwall.group_id}\\|(.*?)\\]: (.*)$`);
+            const rg = new RegExp(`^\\[club${(_e = config.piers[messenger]) === null || _e === void 0 ? void 0 : _e.group_id}\\|(.*?)\\]: (.*)$`);
             if (rg.test(text)) {
                 ;
                 [, replyuser, text] = text.match(rg);
             }
             else {
-                let authorId = (_g = (_f = (_e = res === null || res === void 0 ? void 0 : res.response) === null || _e === void 0 ? void 0 : _e.items) === null || _f === void 0 ? void 0 : _f[0]) === null || _g === void 0 ? void 0 : _g.from_id;
+                let authorId = (_h = (_g = (_f = res === null || res === void 0 ? void 0 : res.response) === null || _f === void 0 ? void 0 : _f.items) === null || _g === void 0 ? void 0 : _g[0]) === null || _h === void 0 ? void 0 : _h.from_id;
                 [err, res] = await to(generic[messenger].client.bot.api("users.get", {
                     user_ids: authorId,
-                    access_token: config[messenger].token,
+                    access_token: config.piers[messenger].token,
                     fields: "nickname,screen_name",
                 }));
-                replyuser = ((_h = res === null || res === void 0 ? void 0 : res.response) === null || _h === void 0 ? void 0 : _h[0]) || "";
+                replyuser = ((_j = res === null || res === void 0 ? void 0 : res.response) === null || _j === void 0 ? void 0 : _j[0]) || "";
                 replyuser = AdaptName.vkwall(messenger, replyuser);
             }
             sendFrom({
@@ -1333,7 +1341,7 @@ receivedFrom.vkwall = async (messenger, message) => {
     });
 };
 receivedFrom.vkboard = async (messenger, message) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!config.channelMapping[messenger])
         return;
     const channelId = message.topic_id;
@@ -1348,14 +1356,14 @@ receivedFrom.vkboard = async (messenger, message) => {
     const fromwhomId = message.from_id;
     let [err, res] = await to(generic[messenger].client.bot.api("users.get", {
         user_ids: fromwhomId,
-        access_token: config[messenger].token,
+        access_token: config.piers[messenger].token,
         fields: "nickname,screen_name",
     }));
     res = ((_a = res === null || res === void 0 ? void 0 : res.response) === null || _a === void 0 ? void 0 : _a[0]) || fromwhomId;
     const author = AdaptName.vkboard(messenger, res);
     let arrQuotes = [];
     text.replace(/\[[^\]]+:bp-([^\]]+)_([^\]]+)\|[^\]]*\]/g, (match, group_id, post_id) => {
-        if (group_id === config[messenger].group_id) {
+        if (group_id === config.piers[messenger].group_id) {
             arrQuotes.push(post_id);
         }
     });
@@ -1364,7 +1372,7 @@ receivedFrom.vkboard = async (messenger, message) => {
         for (const el of arrQuotes) {
             const opts = {
                 access_token: token,
-                group_id: config[messenger].group_id,
+                group_id: config.piers[messenger].group_id,
                 topic_id: channelId,
                 start_comment_id: el,
                 count: 1,
@@ -1375,7 +1383,7 @@ receivedFrom.vkboard = async (messenger, message) => {
             if (!text)
                 continue;
             let replyuser;
-            const rg = new RegExp(`^\\[club${config[messenger].group_id}\\|(.*?)\\]: (.*)$`);
+            const rg = new RegExp(`^\\[club${config.piers[messenger].group_id}\\|(.*?)\\]: (.*)$`);
             if (rg.test(text)) {
                 ;
                 [, replyuser, text] = text.match(rg);
@@ -1384,10 +1392,10 @@ receivedFrom.vkboard = async (messenger, message) => {
                 let authorId = (_g = (_f = (_e = res === null || res === void 0 ? void 0 : res.response) === null || _e === void 0 ? void 0 : _e.items) === null || _f === void 0 ? void 0 : _f[0]) === null || _g === void 0 ? void 0 : _g.from_id;
                 [err, res] = await to(generic[messenger].client.bot.api("users.get", {
                     user_ids: authorId,
-                    access_token: config.vkboard.token,
+                    access_token: (_h = config.piers[messenger]) === null || _h === void 0 ? void 0 : _h.token,
                     fields: "nickname,screen_name",
                 }));
-                replyuser = ((_h = res === null || res === void 0 ? void 0 : res.response) === null || _h === void 0 ? void 0 : _h[0]) || "";
+                replyuser = ((_j = res === null || res === void 0 ? void 0 : res.response) === null || _j === void 0 ? void 0 : _j[0]) || "";
                 replyuser = AdaptName.vkboard(messenger, replyuser);
             }
             sendFrom({
@@ -1542,12 +1550,12 @@ receivedFrom.mattermost = async (messenger, message) => {
         message.edited = true;
         let err;
         [err] = await to(new Promise((resolve) => {
-            const url = `${config[messenger].ProviderUrl}/api/v4/posts/${post.id}`;
+            const url = `${config.piers[messenger].ProviderUrl}/api/v4/posts/${post.id}`;
             request({
                 method: "GET",
                 url,
                 headers: {
-                    Authorization: `Bearer ${config[messenger].token}`,
+                    Authorization: `Bearer ${config.piers[messenger].token}`,
                 },
             }, (error, response, body) => {
                 if (error) {
@@ -1563,12 +1571,12 @@ receivedFrom.mattermost = async (messenger, message) => {
         if (err)
             console.error(err.toString());
         [err] = await to(new Promise((resolve) => {
-            const url = `${config[messenger].ProviderUrl}/api/v4/users/${post.user_id}`;
+            const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${post.user_id}`;
             request({
                 method: "GET",
                 url,
                 headers: {
-                    Authorization: `Bearer ${config[messenger].token}`,
+                    Authorization: `Bearer ${config.piers[messenger].token}`,
                 },
             }, (error, response, body) => {
                 if (error) {
@@ -1584,12 +1592,12 @@ receivedFrom.mattermost = async (messenger, message) => {
         if (err)
             console.error(err.toString());
         [err] = await to(new Promise((resolve) => {
-            const url = `${config[messenger].ProviderUrl}/api/v4/channels/${post.channel_id}`;
+            const url = `${config.piers[messenger].ProviderUrl}/api/v4/channels/${post.channel_id}`;
             request({
                 method: "GET",
                 url,
                 headers: {
-                    Authorization: `Bearer ${config[messenger].token}`,
+                    Authorization: `Bearer ${config.piers[messenger].token}`,
                 },
             }, (error, response, body) => {
                 const json = {};
@@ -1607,7 +1615,7 @@ receivedFrom.mattermost = async (messenger, message) => {
     }
     else {
         message.edited = false;
-        if (((_b = message.data) === null || _b === void 0 ? void 0 : _b.team_id) !== config[messenger].team_id)
+        if (((_b = message.data) === null || _b === void 0 ? void 0 : _b.team_id) !== config.piers[messenger].team_id)
             return;
         if (message.event !== "posted")
             return;
@@ -1625,12 +1633,12 @@ receivedFrom.mattermost = async (messenger, message) => {
         let files = [];
         for (const file of file_ids) {
             const [err, promfile] = await to(new Promise((resolve) => {
-                const url = `${config[messenger].ProviderUrl}/api/v4/files/${file}/link`;
+                const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/link`;
                 request({
                     method: "GET",
                     url,
                     headers: {
-                        Authorization: `Bearer ${config[messenger].token}`,
+                        Authorization: `Bearer ${config.piers[messenger].token}`,
                     },
                 }, (error, response, body) => {
                     const json = {};
@@ -1646,12 +1654,12 @@ receivedFrom.mattermost = async (messenger, message) => {
             if (err)
                 console.error(err.toString());
             const [err2, promfile2] = await to(new Promise((resolve) => {
-                const url = `${config[messenger].ProviderUrl}/api/v4/files/${file}/info`;
+                const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/info`;
                 request({
                     method: "GET",
                     url,
                     headers: {
-                        Authorization: `Bearer ${config[messenger].token}`,
+                        Authorization: `Bearer ${config.piers[messenger].token}`,
                     },
                 }, (error, response, body) => {
                     const json = {};
@@ -1679,7 +1687,7 @@ receivedFrom.mattermost = async (messenger, message) => {
                     extension,
                 });
                 sendFrom({
-                    messenger: "mattermost",
+                    messenger,
                     channelId,
                     author,
                     text: file_,
@@ -1692,7 +1700,7 @@ receivedFrom.mattermost = async (messenger, message) => {
         let action;
         //todo; handle mattermost actions
         sendFrom({
-            messenger: "mattermost",
+            messenger,
             channelId,
             author,
             text: msgText || (postParsed === null || postParsed === void 0 ? void 0 : postParsed.message),
@@ -1723,7 +1731,7 @@ receivedFrom.irc = async (messenger, { author, channelId, text, handler, error, 
         [, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/);
         if (text && text !== "") {
             sendFrom({
-                messenger: "irc",
+                messenger,
                 channelId,
                 author,
                 text,
@@ -1749,7 +1757,7 @@ receivedFrom.irc = async (messenger, { author, channelId, text, handler, error, 
         if (!config.channelMapping[messenger][channelId])
             return;
         if (!topic ||
-            !config[messenger].sendTopic ||
+            !config.piers[messenger].sendTopic ||
             // ignore first topic event when joining channel and unchanged topics
             // (should handle rejoins)
             !config.channelMapping[messenger][channelId].previousTopic ||
@@ -1771,10 +1779,10 @@ receivedFrom.irc = async (messenger, { author, channelId, text, handler, error, 
         //todo: restart irc
     }
     else if (type === "registered") {
-        config[messenger].ircPerformCmds.forEach((cmd) => {
+        config.piers[messenger].ircPerformCmds.forEach((cmd) => {
             handler.send.apply(null, cmd.split(" "));
         });
-        config[messenger].ircOptions.channels.forEach((channel) => {
+        config.piers[messenger].ircOptions.channels.forEach((channel) => {
             handler.join(channel);
         });
     }
@@ -1785,7 +1793,7 @@ AdaptName.discord = (messenger, message) => {
     return ((_a = message.member) === null || _a === void 0 ? void 0 : _a.nickname) || ((_b = message.author) === null || _b === void 0 ? void 0 : _b.username);
 };
 AdaptName.facebook = (user) => user.name; // || user.vanity || user.firstName;
-AdaptName.telegram = (messenger, name) => config[messenger].userMapping[name] || name;
+AdaptName.telegram = (messenger, name) => config.piers[messenger].userMapping[name] || name;
 AdaptName.vkboard = (messenger, user) => {
     let full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim();
     if (full_name === "")
@@ -1800,14 +1808,15 @@ AdaptName.vkwall = AdaptName.vkboard;
 AdaptName.slack = (messenger, user) => { var _a, _b, _c, _d; return ((_b = (_a = user === null || user === void 0 ? void 0 : user.user) === null || _a === void 0 ? void 0 : _a.profile) === null || _b === void 0 ? void 0 : _b.display_name) || ((_c = user === null || user === void 0 ? void 0 : user.user) === null || _c === void 0 ? void 0 : _c.real_name) || ((_d = user === null || user === void 0 ? void 0 : user.user) === null || _d === void 0 ? void 0 : _d.name); };
 // GetName
 GetName.telegram = (messenger, user) => {
-    let name = config[messenger].nameFormat;
+    var _a;
+    let name = config.piers[messenger].nameFormat;
     if (user.username) {
         name = name.replace("%username%", user.username, "g");
         name = AdaptName.telegram(messenger, name);
     }
     else {
         // if user lacks username, use fallback format string instead
-        name = name.replace("%username%", config.telegram.usernameFallbackFormat, "g");
+        name = name.replace("%username%", (_a = config.piers[messenger]) === null || _a === void 0 ? void 0 : _a.usernameFallbackFormat, "g");
     }
     name = name.replace("%firstName%", user.first_name || "", "g");
     name = name.replace("%lastName%", user.last_name || "", "g");
@@ -2173,10 +2182,10 @@ async function TelegramRemoveSpam(messenger, message) {
     }
 }
 function TelegramRemoveAddedBots(messenger, message) {
-    if (config[messenger].remove_added_bots)
+    if (config.piers[messenger].remove_added_bots)
         ((message === null || message === void 0 ? void 0 : message.new_chat_members) || []).map((u) => {
             var _a, _b;
-            if (u.is_bot && ((_b = (_a = config === null || config === void 0 ? void 0 : config.telegram) === null || _a === void 0 ? void 0 : _a.myUser) === null || _b === void 0 ? void 0 : _b.id) !== u.id)
+            if (u.is_bot && ((_b = (_a = config.piers[messenger]) === null || _a === void 0 ? void 0 : _a.myUser) === null || _b === void 0 ? void 0 : _b.id) !== u.id)
                 generic[messenger].client
                     .kickChatMember(message.chat.id, u.id)
                     .catch(catchError);
@@ -2194,23 +2203,23 @@ function TelegramRemoveNewMemberMessage(messenger, message) {
     return false;
 }
 async function TelegramLeaveChatIfNotAdmin(messenger, message) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     if (!["group", "supergroup"].includes((_a = message === null || message === void 0 ? void 0 : message.chat) === null || _a === void 0 ? void 0 : _a.type) ||
         !((_b = message === null || message === void 0 ? void 0 : message.chat) === null || _b === void 0 ? void 0 : _b.id) ||
-        !((_c = config[messenger].myUser) === null || _c === void 0 ? void 0 : _c.id))
+        !((_d = (_c = config.piers[messenger]) === null || _c === void 0 ? void 0 : _c.myUser) === null || _d === void 0 ? void 0 : _d.id))
         return;
-    let [err, res] = await to(generic[messenger].client.getChatMember(message.chat.id, config.telegram.myUser.id));
+    let [err, res] = await to(generic[messenger].client.getChatMember(message.chat.id, (_f = (_e = config.piers[messenger]) === null || _e === void 0 ? void 0 : _e.myUser) === null || _f === void 0 ? void 0 : _f.id));
     if (!res)
         return true;
     if (!res.can_delete_messages) {
         ;
         [err, res] = await to(generic[messenger].client.leaveChat(message.chat.id));
         const jsonMessage = {
-            id: ((_d = message === null || message === void 0 ? void 0 : message.chat) === null || _d === void 0 ? void 0 : _d.id) || ((_e = message === null || message === void 0 ? void 0 : message.from) === null || _e === void 0 ? void 0 : _e.id),
-            title: (_f = message === null || message === void 0 ? void 0 : message.chat) === null || _f === void 0 ? void 0 : _f.title,
-            first_name: (_g = message === null || message === void 0 ? void 0 : message.from) === null || _g === void 0 ? void 0 : _g.first_name,
-            last_name: (_h = message === null || message === void 0 ? void 0 : message.from) === null || _h === void 0 ? void 0 : _h.last_name,
-            username: (_j = message === null || message === void 0 ? void 0 : message.from) === null || _j === void 0 ? void 0 : _j.username,
+            id: ((_g = message === null || message === void 0 ? void 0 : message.chat) === null || _g === void 0 ? void 0 : _g.id) || ((_h = message === null || message === void 0 ? void 0 : message.from) === null || _h === void 0 ? void 0 : _h.id),
+            title: (_j = message === null || message === void 0 ? void 0 : message.chat) === null || _j === void 0 ? void 0 : _j.title,
+            first_name: (_k = message === null || message === void 0 ? void 0 : message.from) === null || _k === void 0 ? void 0 : _k.first_name,
+            last_name: (_l = message === null || message === void 0 ? void 0 : message.from) === null || _l === void 0 ? void 0 : _l.last_name,
+            username: (_m = message === null || message === void 0 ? void 0 : message.from) === null || _m === void 0 ? void 0 : _m.username,
             message: message === null || message === void 0 ? void 0 : message.text,
         };
         common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`);
@@ -2271,7 +2280,7 @@ NewChannelAppeared.telegram = async ({ messenger, channelName, channelId, }) => 
     return true;
 };
 common.getMessengersWithPrefix = async (prefix) => {
-    return Object.keys(config.MessengersAvailable).filter((el) => el.indexOf(prefix + "_") === 0);
+    return Object.keys(config.MessengersAvailable).filter((el) => el.indexOf(prefix + "_") === 0 && config.MessengersAvailable[el] === true);
 };
 GetChannels.telegram = async (pier) => {
     //read from file
@@ -2281,6 +2290,10 @@ GetChannels.telegram = async (pier) => {
     }
     catch (error) { }
     config.cache[pier] = res;
+};
+GetChannels.irc = async (pier) => {
+    const json = config.piers[pier].ircOptions.channels.reduce((json, value) => { json[value] = value; return json; }, {});
+    config.cache[pier] = json;
 };
 GetChannels.slack = async (pier) => {
     let [err, res] = await to(generic[pier].client.web.conversations.list());
@@ -2296,16 +2309,16 @@ GetChannels.slack = async (pier) => {
 };
 GetChannels.mattermost = async (pier) => {
     let json = {};
-    let url = `${config[pier].ProviderUrl}/api/v4/teams/${config[pier].team_id}/channels`;
+    let url = `${config.piers[pier].ProviderUrl}/api/v4/teams/${config.piers[pier].team_id}/channels`;
     json = await GetChannelsMattermostCore(pier, json, url);
-    url = `${config[pier].ProviderUrl}/api/v4/users/${config[pier].user_id}/teams/${config[pier].team_id}/channels`;
+    url = `${config.piers[pier].ProviderUrl}/api/v4/users/${config.piers[pier].user_id}/teams/${config.piers[pier].team_id}/channels`;
     json = await GetChannelsMattermostCore(pier, json, url);
     config.cache[pier] = json;
 };
 GetChannels.discord = async (pier) => {
     const json = {};
     for (const value of generic[pier].client.channels.cache.values()) {
-        if (value.guild.id === config[pier].guildId) {
+        if (value.guild.id === config.piers[pier].guildId) {
             json[value.name] = value.id;
         }
     }
@@ -2317,7 +2330,7 @@ async function GetChannelsMattermostCore(messenger, json, url) {
             method: "GET",
             url,
             headers: {
-                Authorization: `Bearer ${config[messenger].token}`,
+                Authorization: `Bearer ${config.piers[messenger].token}`,
             },
         }, (error, response, body) => {
             if (error) {
@@ -2341,12 +2354,12 @@ async function PopulateChannelMappingCore({ messenger, }) {
         return;
     if (!config.channelMapping[messenger])
         config.channelMapping[messenger] = {};
-    const arrMappingKeys = Object.keys(config.MessengersAvailable);
+    const arrMappingKeys = Object.keys(config.MessengersAvailable).filter((el) => config.MessengersAvailable[el] === true);
     config.new_channels.map((i) => {
         var _a, _b, _c, _d;
         let i_mapped = i[messenger];
         if (config.cache[messenger])
-            i_mapped = (_b = (_a = config === null || config === void 0 ? void 0 : config.cache) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[i[messenger]];
+            i_mapped = (_b = (_a = config.cache) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[i[messenger]];
         if (!i_mapped)
             return;
         const mapping = {
@@ -2359,9 +2372,10 @@ async function PopulateChannelMappingCore({ messenger, }) {
             },
         };
         for (const key of arrMappingKeys)
-            mapping[key] = ((_d = (_c = config === null || config === void 0 ? void 0 : config.cache) === null || _c === void 0 ? void 0 : _c[key]) === null || _d === void 0 ? void 0 : _d[i[key]]) || i[key];
+            mapping[key] = ((_d = (_c = config.cache) === null || _c === void 0 ? void 0 : _c[key]) === null || _d === void 0 ? void 0 : _d[i[key]]) || i[key];
         config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(mapping, config.channelMapping[messenger][i_mapped] || {});
     });
+    fs.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping, null, 2));
 }
 common.PopulateChannelMapping = async () => {
     if (!config.channelMapping)
@@ -2372,7 +2386,7 @@ common.PopulateChannelMapping = async () => {
     for (const pier of arrAvailableMessengers) {
         const messenger = common.root_of_messenger(pier);
         if (GetChannels[messenger])
-            await GetChannels[messenger]();
+            await GetChannels[messenger](pier);
     }
     for (const pier of arrAvailableMessengers) {
         await PopulateChannelMappingCore({ messenger: pier });
@@ -2414,7 +2428,7 @@ StartService.facebook = async ({ force, messenger = "facebook" }) => {
         return;
     queueOf[messenger] = new PQueue({ concurrency: 1 });
     try {
-        generic[messenger].client = await login(config[messenger].email, config[messenger].password);
+        generic[messenger].client = await login(config.piers[messenger].email, config.piers[messenger].password);
         console.log(generic[messenger].client);
         console.log(JSON.stringify(generic[messenger].client.getSession()));
         generic[messenger].client.on("message", (message) => {
@@ -2441,7 +2455,7 @@ StartService.telegram = async ({ messenger }) => {
     //telegram
     if (!config.MessengersAvailable[messenger])
         return;
-    generic[messenger].client = await generic[messenger].Start({ messenger });
+    generic[messenger].client = await common.telegram.Start({ messenger });
     queueOf[messenger] = new PQueue({ concurrency: 1 });
     generic[messenger].client.on("message", (message) => {
         receivedFrom.telegram(messenger, message);
@@ -2457,7 +2471,7 @@ StartService.telegram = async ({ messenger }) => {
     });
     const [err, res] = await to(generic[messenger].client.getMe());
     if (!err)
-        config[messenger].myUser = res;
+        config.piers[messenger].myUser = res;
 };
 StartService.vkwall = async ({ messenger }) => {
     //vkboard
@@ -2510,12 +2524,12 @@ StartService.mattermost = async ({ messenger }) => {
             seq: 1,
             action: "authentication_challenge",
             data: {
-                token: config[messenger].token,
+                token: config.piers[messenger].token,
             },
         }));
     });
     generic[messenger].client.addEventListener("message", (message) => {
-        if (!(message === null || message === void 0 ? void 0 : message.data) || !config[messenger].team_id)
+        if (!(message === null || message === void 0 ? void 0 : message.data) || !config.piers[messenger].team_id)
             return;
         message = JSON.parse(message.data);
         receivedFrom.mattermost(messenger, message);
@@ -2526,49 +2540,55 @@ StartService.mattermost = async ({ messenger }) => {
 StartService.discord = async ({ messenger }) => {
     if (!config.MessengersAvailable[messenger])
         return;
-    const client = new Discord.Client();
-    generic[messenger].client = client;
-    queueOf[messenger] = new PQueue({ concurrency: 1 });
-    generic[messenger].client.once("ready", () => {
-        generic[messenger].guilds = client.guilds.cache.array();
-        if (config[messenger].guildId) {
-            const guild = client.guilds.cache.find((guild) => guild.name.toLowerCase() === config[messenger].guildId.toLowerCase() ||
-                guild.id === config[messenger].guildId);
-            if (guild)
-                generic[messenger].guilds = [
-                    guild,
-                    ...generic[messenger].guilds.filter((_guild) => _guild.id !== guild.id),
-                ];
-        }
-    });
-    generic[messenger].client.on("error", (error) => {
-        log("discord")(error);
-        // StartService.discord();
-    });
-    generic[messenger].client.on("message", (message) => {
-        receivedFrom.discord(messenger, message);
-    });
-    generic[messenger].client.on("messageUpdate", (oldMessage, message) => {
-        if (oldMessage.content != message.content) {
-            message.edited = true;
+    await new Promise((resolve) => {
+        const client = new Discord.Client();
+        generic[messenger].client = client;
+        queueOf[messenger] = new PQueue({ concurrency: 1 });
+        generic[messenger].client.once("ready", () => {
+            generic[messenger].guilds = client.guilds.cache.array();
+            if (config.piers[messenger].guildId) {
+                const guild = client.guilds.cache.find((guild) => guild.name.toLowerCase() === config.piers[messenger].guildId.toLowerCase() ||
+                    guild.id === config.piers[messenger].guildId);
+                if (guild)
+                    generic[messenger].guilds = [
+                        guild,
+                        ...generic[messenger].guilds.filter((_guild) => _guild.id !== guild.id),
+                    ];
+            }
+            resolve(null);
+        });
+        generic[messenger].client.on("error", (error) => {
+            resolve(null);
+            log("discord")(error);
+            // StartService.discord();
+        });
+        generic[messenger].client.on("message", (message) => {
             receivedFrom.discord(messenger, message);
-        }
+        });
+        generic[messenger].client.on("messageUpdate", (oldMessage, message) => {
+            if (oldMessage.content != message.content) {
+                message.edited = true;
+                receivedFrom.discord(messenger, message);
+            }
+        });
+        generic[messenger].client.login(config.piers[messenger].token);
     });
-    generic[messenger].client.login(config[messenger].token);
 };
 StartService.irc = async ({ messenger }) => {
     // irc
     const channels = config.new_channels;
     const results = [];
     for (const channel of channels) {
+        if (!channel[messenger])
+            continue;
         const chanName = channel[`${messenger}-password`]
-            ? `${channels[messenger]} ${channels[`${messenger}-password`]}`
-            : channels[messenger];
+            ? `${channel[messenger]} ${channel[`${messenger}-password`]}`
+            : channel[messenger];
         results.push(chanName);
     }
     config.piers[messenger].ircOptions.channels = [...new Set(results)];
     config.piers[messenger].ircOptions.encoding = "utf-8";
-    generic[messenger].client = new Irc.Client(config[messenger].ircServer, config[messenger].ircOptions.nick, config[messenger].ircOptions);
+    generic[messenger].client = new Irc.Client(config.piers[messenger].ircServer, config.piers[messenger].ircOptions.nick, config.piers[messenger].ircOptions);
     if (!config.MessengersAvailable[messenger])
         return;
     queueOf[messenger] = new PQueue({ concurrency: 1 });
@@ -2614,18 +2634,18 @@ async function StartServices() {
     common.MessengersAvailable();
     if (!config.channelMapping)
         config.channelMapping = {};
-    config.MessengersAvailable.forEach(async (messenger_with_index) => {
+    for (const messenger_with_index of Object.keys(config.MessengersAvailable)) {
         const messenger = messenger_with_index.replace(/_.*/g, '');
         if (StartService[messenger])
             await StartService[messenger]({ messenger: messenger_with_index });
-    });
+    }
     await common.PopulateChannelMapping();
     console.log("Lojban-1Chat-Bridge started!");
 }
 // helper functions
 common.LogMessageToAdmin = async (messenger, message) => {
-    if (config[messenger].admins_userid)
-        await to(generic[messenger].client.forwardMessage(config[messenger].admins_userid, message.chat.id, message.message_id));
+    if (config.piers[messenger].admins_userid)
+        await to(generic[messenger].client.forwardMessage(config.piers[messenger].admins_userid, message.chat.id, message.message_id));
 };
 function catchError(err) {
     const error = JSON.stringify(err);
@@ -2640,7 +2660,7 @@ common.LogToAdmin = (msg_text, repeat = true) => {
     const telegram_piers_with_logging_to_admin = Object.keys(config.piers).filter((i) => typeof config.piers[i].admins_userid !== 'undefined');
     for (const pier of telegram_piers_with_logging_to_admin) {
         generic[pier].client
-            .sendMessage(config[pier].admins_userid, `\`\`\`\n${msg_text}\n\`\`\``, {
+            .sendMessage(config.piers[pier].admins_userid, `\`\`\`\n${msg_text}\n\`\`\``, {
             parse_mode: "Markdown",
         })
             .catch((e) => {
@@ -2698,7 +2718,7 @@ common.unescapeHTML = ({ text, convertHtmlEntities, escapeBackslashes = true, })
 //   sendto?: boolean,
 //   messenger?: string
 // ) {
-//   if (config[messenger].sendPageTitles) {
+//   if (config.piers[messenger].sendPageTitles) {
 //     const urls = text.match(UrlRegExp);
 //     if (urls.length > 0) {
 //       for (const url of urls) {
@@ -2736,7 +2756,7 @@ common.unescapeHTML = ({ text, convertHtmlEntities, escapeBackslashes = true, })
 //   return text;
 // }
 GetChunks.irc = async (text, messenger) => {
-    const limit = config[messenger].MessageLength || 400;
+    const limit = config.piers[messenger].MessageLength || 400;
     // text = await appendPageTitles(text)
     return text.split(/<br>/).flatMap((line) => HTMLSplitter(line, limit));
 };
@@ -2805,7 +2825,7 @@ function HTMLSplitter(text, limit = 400) {
 }
 GetChunks.fallback = async (text, messenger) => {
     // text = await appendPageTitles(text);
-    const limit = config[messenger].MessageLength || 400;
+    const limit = config.piers[messenger].MessageLength || 400;
     let arrText = HTMLSplitter(text, limit);
     return arrText;
 };
@@ -2847,11 +2867,12 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
                 let file = fs.createWriteStream(local_fullname);
                 file
                     .on("open", () => {
+                    var _a;
                     request({
                         method: "GET",
                         url: remote_path,
                         headers: {
-                            Authorization: `Bearer ${config.slack.token}`,
+                            Authorization: `Bearer ${(_a = config.piers[messenger]) === null || _a === void 0 ? void 0 : _a.token}`,
                         },
                         timeout: 3000,
                     }, (err) => {

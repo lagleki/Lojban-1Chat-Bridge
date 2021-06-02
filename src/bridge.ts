@@ -582,7 +582,7 @@ sendTo.discord = async ({
         },
       ]
     }
-    const [err] = await to(
+    const [error] = await to(
       webhook.send(chunk, {
         username: author || "-",
         files,
@@ -590,7 +590,13 @@ sendTo.discord = async ({
       })
     )
 
-    if (err) {
+    if (error) {
+      logger.log({
+        level: "error",
+        function: "sendTo.discord",
+        message: error.toString(),
+        chunk, author
+      })
       //try to send without the attachment. useful when the file is too large for Discord to handle
       await to(
         webhook.send(chunk, {
@@ -3078,7 +3084,7 @@ async function PopulateChannelMappingCore({
   })
   fs.writeFileSync(
     `${cache_folder}/channelMapping.json`,
-    JSON.stringify(config.channelMapping,null,2)
+    JSON.stringify(config.channelMapping, null, 2)
   )
 }
 

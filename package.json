@@ -35,7 +35,7 @@
     "color-space": "1.16.0",
     "delta-e": "0.0.8",
     "discord-markdown": "^2.4.1",
-    "discord.js": "12.5.1",
+    "discord.js": "12.5.3",
     "dompurify": "^2.2.6",
     "emoji-aware": "^3.0.5",
     "fast-png": "^5.0.3",
