@@ -34,7 +34,7 @@ const DOMPurify = createDOMPurify(window)
 const util = require("util")
 
 import { CallbackService } from 'vk-io';
-import { DirectAuthorization } from '@vk-io/authorization';
+import { ImplicitFlowUser } from '@vk-io/authorization';
 
 const VkBot = require("node-vk-bot-api")
 
@@ -175,16 +175,14 @@ interface Igeneric extends IMessengerInfo {
   MessengersAvailable?: any
 }
 
-const generic: Igeneric = {
+//global scope mutable vars:
+const generic: Igeneric = {}
+let config: any, localizationConfig: any
+const queueOf: IMessengerInfo = {}
 
-}
+//global functions (for all piers):
 const common: any = {}
 
-const prepareToWhom: Igeneric = {}
-const prepareAuthor: Igeneric = {}
-const GetChunks: Igeneric = {}
-
-const queueOf: IMessengerInfo = {}
 interface IsendToArgs {
   messenger: string
   channelId: string
@@ -213,9 +211,6 @@ Object.keys(pierObj).forEach((key: any) => {
   pierObj[key].common = {}
 })
 
-const GetName: IMessengerInfo = {}
-const GetChannels: IMessengerInfo = {}
-
 //discord
 const Discord = require("discord.js")
 const discordParser = require("discord-markdown")
@@ -233,7 +228,7 @@ pierObj.discord.sendTo = async ({
 }: IsendToArgs) => {
   const channel = generic[messenger].client.channels.cache.get(channelId)
   const webhooks = await channel.fetchWebhooks()
-  let webhook = webhooks.first()
+  let webhook = webhooks.last()
   const authorTemp = author
     .replace(/[0-9_\.-]+$/, " ")
     .replace(/\[.*/, "")
@@ -266,28 +261,45 @@ pierObj.discord.sendTo = async ({
       },
     ]
   }
-  const [error] = await to(
+  let [error] = await to(
     webhook.send(chunk, {
       username: author || "-",
       files,
       // avatarURL: generic.discord.avatar.path,
     })
   )
-
   if (error) {
+    //try to create a new webhook and send again
+    webhook = await channel.createWebhook(author || "-", avatar);
+    [error] = await to(
+      webhook.send(chunk, {
+        username: author || "-",
+        files,
+        // avatarURL: generic.discord.avatar.path,
+      })
+    )
+  }
+  if (error) {
+    //now we have a real problem with sending. try to send without attachments. useful when the attachments are too large for Discord to handle
     logger.log({
       level: "error",
       function: "discord.sendTo",
       message: error.toString(),
       chunk, author
     })
-    //try to send without the attachment. useful when the file is too large for Discord to handle
-    await to(
+    [error] = await to(
       webhook.send(chunk, {
         username: author || "-",
         // avatarURL: generic.discord.avatar.path,
       })
     )
+    //now this fails anyway so just log that we failed to send a message to Discord
+    if (error) logger.log({
+      level: "error",
+      function: "discord.sendTo",
+      message: error.toString(),
+      chunk, author
+    })
   }
 
 
@@ -461,7 +473,7 @@ pierObj.discord.convertTo = async ({
   return result
 }
 
-GetChannels.discord = async (pier: string): Promise<void> => {
+pierObj.discord.getChannels = async (pier: string): Promise<void> => {
   const json: Json = {}
   for (const value of generic[pier].client.channels.cache.values()) {
     if (value.guild.id === config.piers[pier].guildId) {
@@ -1055,7 +1067,7 @@ pierObj.telegram.common.NewChannelAppeared = async ({
   return true
 }
 
-GetChannels.telegram = async (pier: string): Promise<void> => {
+pierObj.telegram.getChannels = async (pier: string): Promise<void> => {
   //read from file
   let res = {}
   try {
@@ -1094,18 +1106,15 @@ pierObj.vkboard.common = {
   Start: async function ({ messenger }: { messenger: string }) {
     const callbackService = new CallbackService();
 
-    const direct = new DirectAuthorization({
+    const direct = new ImplicitFlowUser({
       callbackService,
-      // manually provide app credentials
-      // clientId: process.env.CLIENT_ID,
-      // clientSecret: process.env.CLIENT_SECRET,
-
-      clientId: config.piers[messenger].appId,
-      clientSecret: config.piers[messenger].appSecret,
+      scope: "offline,wall,groups",
+      apiVersion: config.piers[messenger].apiVersion,
       login: config.piers[messenger].login,
       password: config.piers[messenger].password,
-      scope: "offline,wall,messages,groups",
-      apiVersion: config.piers[messenger].apiVersion
+      // manually provide app credentials
+      clientId: config.piers[messenger].appId,
+      clientSecret: config.piers[messenger].appSecret
     });
 
     const [err, vkapp] = await to(direct.run())
@@ -1125,18 +1134,15 @@ pierObj.vkwall.common = {
   Start: async function ({ messenger }: { messenger: string }) {
     const callbackService = new CallbackService();
 
-    const direct = new DirectAuthorization({
+    const direct = new ImplicitFlowUser({
       callbackService,
-      // manually provide app credentials
-      // clientId: process.env.CLIENT_ID,
-      // clientSecret: process.env.CLIENT_SECRET,
-
-      clientId: config.piers[messenger].appId,
-      clientSecret: config.piers[messenger].appSecret,
+      scope: "offline,wall,groups",
+      apiVersion: config.piers[messenger].apiVersion,
       login: config.piers[messenger].login,
       password: config.piers[messenger].password,
-      scope: "offline,wall,messages,groups",
-      apiVersion: config.piers[messenger].apiVersion
+      // manually provide app credentials
+      clientId: config.piers[messenger].appId,
+      clientSecret: config.piers[messenger].appSecret
     });
     const [err, vkapp] = await to(direct.run())
     if (err) {
@@ -1517,11 +1523,8 @@ pierObj.irc.sendTo = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  await new Promise((resolve: any) => {
-    log("irc")({ "sending for irc": chunk })
-    generic[messenger].client.say(channelId, chunk)
-    resolve(null)
-  })
+  log("irc")({ "sending for irc": chunk })
+  generic[messenger].client.say(channelId, chunk)
 }
 
 async function prepareChunks({
@@ -1538,10 +1541,8 @@ async function prepareChunks({
   edited?: boolean
 }) {
   const root_messengerTo = common.root_of_messenger(messengerTo)
-  let arrChunks: string[],
-    fallback: string = "fallback"
-  if (GetChunks[messengerTo]) fallback = messengerTo
-  arrChunks = await GetChunks[fallback](text, messengerTo)
+  const arrChunks: string[] = (pierObj[messengerTo]?.common?.GetChunks) ? await pierObj[messengerTo]?.common?.GetChunks(text, messengerTo) : await common.GetChunks(text, messengerTo)
+
   for (let i in arrChunks) {
     log("generic")(
       `converting for messenger ${messengerTo} the text "` + arrChunks[i] + `"`
@@ -1566,7 +1567,7 @@ async function prepareChunks({
   return arrChunks
 }
 
-prepareToWhom.irc = function ({
+pierObj.irc.common.prepareToWhom = function ({
   messenger,
   text,
   targetChannel,
@@ -1583,7 +1584,7 @@ prepareToWhom.irc = function ({
   })}: `
 }
 
-prepareToWhom.fallback = function ({
+common.prepareToWhom = function ({
   messenger,
   text,
   targetChannel,
@@ -1595,7 +1596,7 @@ prepareToWhom.fallback = function ({
   return `${text}: `
 }
 
-prepareAuthor.irc = function ({
+pierObj.irc.common.prepareAuthor = function ({
   messenger,
   text,
   targetChannel,
@@ -1612,7 +1613,7 @@ prepareAuthor.irc = function ({
   })}`
 }
 
-prepareAuthor.fallback = function ({
+common.prepareAuthor = function ({
   messenger,
   text,
   targetChannel,
@@ -1843,27 +1844,27 @@ async function sendFrom({
     ) {
       let thisToWhom: string = ""
       if (ToWhom)
-        if (prepareToWhom[messengerTo]) {
-          thisToWhom = prepareToWhom[messengerTo]({
+        if (pierObj[messengerTo]?.common?.prepareToWhom) {
+          thisToWhom = pierObj[messengerTo]?.common.prepareToWhom({
             messenger: messengerTo,
             text: ToWhom,
             targetChannel: ConfigNode[messengerTo],
           })
         } else
-          thisToWhom = prepareToWhom.fallback({
+          thisToWhom = common.prepareToWhom({
             messenger: messengerTo,
             text: ToWhom,
             targetChannel: ConfigNode[messengerTo],
           })
       if (!author) author = ""
-      if (prepareAuthor[messengerTo]) {
-        author = prepareAuthor[messengerTo]({
+      if (pierObj[messengerTo]?.common?.prepareAuthor) {
+        author = pierObj[messengerTo]?.common?.prepareAuthor({
           messenger: messengerTo,
           text: author,
           targetChannel: ConfigNode[messengerTo],
         })
       } else
-        author = prepareAuthor.fallback({
+        author = common.prepareAuthor({
           messenger: messengerTo,
           text: author,
           targetChannel: ConfigNode[messengerTo],
@@ -3045,8 +3046,6 @@ common.ConfigBeforeStart = () => {
     )
   }
 
-  let config
-
   try {
     config = require(`${cache_folder}/config.js`)
   } catch (e) {
@@ -3060,9 +3059,7 @@ common.ConfigBeforeStart = () => {
   const defaultConfig = require(defaults)
   config = R.mergeDeepLeft(config, defaultConfig)
 
-  const localConfig = require("/home/app/1chat/src/local/dict.json")
-
-  return [config, localConfig]
+  localizationConfig = require("/home/app/1chat/src/local/dict.json")
 }
 
 
@@ -3070,12 +3067,12 @@ common.getMessengersWithPrefix = async (prefix: string) => {
   return Object.keys(config.MessengersAvailable).filter((el: string) => el.indexOf(prefix + "_") === 0 && config.MessengersAvailable[el] === true)
 }
 
-GetChannels.irc = async (pier: string): Promise<void> => {
+pierObj.irc.getChannels = async (pier: string): Promise<void> => {
   const json = config.piers[pier].ircOptions.channels.reduce((json: { [x: string]: string }, value: string) => { json[value] = value; return json; }, {});
   config.cache[pier] = json
 }
 
-GetChannels.slack = async (pier: string): Promise<void> => {
+pierObj.slack.getChannels = async (pier: string): Promise<void> => {
   let [err, res] = await to(generic[pier].client.web.conversations.list())
   if (err) {
     console.error(err)
@@ -3088,16 +3085,16 @@ GetChannels.slack = async (pier: string): Promise<void> => {
   config.cache[pier] = json
 }
 
-GetChannels.mattermost = async (pier: string): Promise<void> => {
+pierObj.mattermost.getChannels = async (pier: string): Promise<void> => {
   let json: Json = {}
   let url: string = `${config.piers[pier].ProviderUrl}/api/v4/teams/${config.piers[pier].team_id}/channels`
-  json = await GetChannelsMattermostCore(pier, json, url)
+  json = await pierObj.mattermost.common.GetChannelsMattermostCore(pier, json, url)
   url = `${config.piers[pier].ProviderUrl}/api/v4/users/${config.piers[pier].user_id}/teams/${config.piers[pier].team_id}/channels`
-  json = await GetChannelsMattermostCore(pier, json, url)
+  json = await pierObj.mattermost.common.GetChannelsMattermostCore(pier, json, url)
   config.cache[pier] = json
 }
 
-async function GetChannelsMattermostCore(messenger: string, json: Json, url: string) {
+pierObj.mattermost.common.GetChannelsMattermostCore = async (messenger: string, json: Json, url: string) => {
   await to(
     new Promise((resolve) => {
       request(
@@ -3170,7 +3167,7 @@ common.PopulateChannelMapping = async () => {
   const arrAvailableMessengers = Object.keys(config.MessengersAvailable).filter((i: string) => !!config.MessengersAvailable[i])
   for (const pier of arrAvailableMessengers) {
     const messenger = common.root_of_messenger(pier)
-    if (GetChannels[messenger]) await GetChannels[messenger](pier)
+    if (pierObj[messenger]?.getChannels) await pierObj[messenger].getChannels(pier)
   }
 
   for (const pier of arrAvailableMessengers) {
@@ -3429,7 +3426,6 @@ common.LogToAdmin = (msg_text: string, repeat = true) => {
           }
         )
         .catch((e: any) => {
-          console.log(msg_text)
           if (repeat) common.LogToAdmin(msg_text, false)
         })
 }
@@ -3528,13 +3524,13 @@ common.unescapeHTML = ({
 //   return text;
 // }
 
-GetChunks.irc = async (text: string, messenger: string) => {
+pierObj.irc.common.GetChunks = async (text: string, messenger: string) => {
   const limit = config.piers[messenger].MessageLength || 400
   // text = await appendPageTitles(text)
   return text.split(/<br>/).flatMap((line) => HTMLSplitter(line, limit))
 }
 
-GetChunks.webwidget = async (text: string, messenger: string) => {
+pierObj.webwidget.common.GetChunks = async (text: string, messenger: string) => {
   return [text]
 }
 
@@ -3606,7 +3602,7 @@ function HTMLSplitter(text: string, limit = 400) {
   return Chunks
 }
 
-GetChunks.fallback = async (text: string, messenger: string) => {
+common.GetChunks = async (text: string, messenger: string) => {
   // text = await appendPageTitles(text);
   const limit = config.piers[messenger].MessageLength || 400
   let arrText: string[] = HTMLSplitter(text, limit)
@@ -3900,8 +3896,8 @@ common.LocalizeString = ({
     const language =
       config?.channelMapping?.[messenger]?.[channelId]?.settings?.language ||
       "English"
-    let template = localConfig[language][localized_string_key]
-    const def_template = localConfig["English"][localized_string_key]
+    let template = localizationConfig[language][localized_string_key]
+    const def_template = localizationConfig["English"][localized_string_key]
     if (!def_template) {
       console.log(`no ${localized_string_key} key specified in the dictionary`)
       return
@@ -3919,7 +3915,7 @@ common.LocalizeString = ({
 
 //START
 // get/set config
-const [config, localConfig] = common.ConfigBeforeStart()
+common.ConfigBeforeStart()
 
 // map channels & start listening
 StartServices()

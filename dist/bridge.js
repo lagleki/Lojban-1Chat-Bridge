@@ -33,7 +33,7 @@ const markedRenderer = new marked.Renderer();
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler");
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
-const { avatar: animAvatar } = require("../src/animalicons/index.js");
+const Avatar = require("../src/animalicons/index.js");
 let server;
 function markedParse({ text, messenger, dontEscapeBackslash, unescapeCodeBlocks, }) {
     if (!dontEscapeBackslash)
@@ -92,12 +92,12 @@ const blalalavla = require("./sugar/blalalavla");
 const modzi = require("./sugar/modzi");
 // NLP & spam libs
 const lojban = require("lojban");
+//global scope mutable vars:
 const generic = {};
-const common = {};
-const prepareToWhom = {};
-const prepareAuthor = {};
-const GetChunks = {};
+let config, localizationConfig;
 const queueOf = {};
+//global functions (for all piers):
+const common = {};
 const pierObj = {
     facebook: {},
     discord: {},
@@ -112,9 +112,6 @@ const pierObj = {
 Object.keys(pierObj).forEach((key) => {
     pierObj[key].common = {};
 });
-const GetName = {};
-const GetChannels = {};
-const NewChannelAppeared = {};
 //discord
 const Discord = require("discord.js");
 const discordParser = require("discord-markdown");
@@ -129,7 +126,7 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
         .trim();
     const parsedName = modzi.modzi(author);
     if (!avatar) {
-        const animava = new animAvatar(authorTemp, 512, parsedName.snada ? parsedName.output : undefined);
+        const animava = new Avatar(authorTemp, 512, parsedName.snada ? parsedName.output : undefined);
         await animava.draw();
         avatar = await animava.toDataURL();
     }
@@ -308,7 +305,7 @@ pierObj.discord.convertTo = async ({ text, messenger, messengerTo, }) => {
     log(messenger)({ messengerTo, "converting text": text, result });
     return result;
 };
-GetChannels.discord = async (pier) => {
+pierObj.discord.getChannels = async (pier) => {
     const json = {};
     for (const value of generic[pier].client.channels.cache.values()) {
         if (value.guild.id === config.piers[pier].guildId) {
@@ -388,15 +385,15 @@ Error message: ${err}
 pierObj.telegram.receivedFrom = async (messenger, message) => {
     //spammer
     //1. remove entered bots
-    TelegramRemoveAddedBots(messenger, message);
+    pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message);
     //2. check if admin else leave chat and return
-    if (await TelegramLeaveChatIfNotAdmin(messenger, message))
+    if (await pierObj.telegram.common.TelegramLeaveChatIfNotAdmin(messenger, message))
         return;
     //3. check for spam
     if (await pierObj.telegram.common.TelegramRemoveSpam(messenger, message))
         return;
     //4. check if new member event
-    if (TelegramRemoveNewMemberMessage(messenger, message))
+    if (pierObj.telegram.common.TelegramRemoveNewMemberMessage(messenger, message))
         return;
     //now deal with the message that is fine
     if (!config.channelMapping[messenger])
@@ -408,7 +405,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
         if (config.cache[messenger][message.chat.title] &&
             config.cache[messenger][message.chat.title] === message.chat.id)
             return; //cached but unmapped channel so ignore it and exit the function
-        await to(NewChannelAppeared.telegram({
+        await to(pierObj.telegram.common.NewChannelAppeared({
             messenger,
             channelName: message.chat.title,
             channelId: message.chat.id,
@@ -428,14 +425,14 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
         !config.generic.showMedia)
         return;
     const { author, avatar } = await pierObj.telegram.GetName(messenger, message.from);
-    await sendFromTelegram({
+    await pierObj.telegram.common.sendFromTelegram({
         messenger,
         message: message.reply_to_message,
         quotation: true,
         author,
         avatar
     });
-    sendFromTelegram({ messenger, message, author, avatar });
+    pierObj.telegram.common.sendFromTelegram({ messenger, message, author, avatar });
 };
 // reconstructs the original raw markdown message
 pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
@@ -460,7 +457,7 @@ pierObj.telegram.common.IsSpam = (message) => {
         .some(Boolean);
     return l;
 };
-async function sendFromTelegram({ messenger, message, quotation, author, avatar }) {
+pierObj.telegram.common.sendFromTelegram = async ({ messenger, message, quotation, author, avatar }) => {
     if (!message)
         return;
     let action;
@@ -593,7 +590,7 @@ async function sendFromTelegram({ messenger, message, quotation, author, avatar 
             avatar
         });
     }
-}
+};
 pierObj.telegram.adaptName = (messenger, name) => config.piers[messenger].userMapping[name] || name;
 pierObj.telegram.GetName = async (messenger, user) => {
     var _a, _b, _c;
@@ -611,9 +608,14 @@ pierObj.telegram.GetName = async (messenger, user) => {
     // get rid of leading and trailing whitespace
     name = name.replace(/(^\s*)|(\s*$)/g, "");
     //now avatar
-    const { photos } = await generic[messenger].client.getUserProfilePhotos(user.id, { limit: 1 });
-    const file_id = (_c = (_b = photos === null || photos === void 0 ? void 0 : photos[0]) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.file_id;
-    const link = await generic[messenger].client.getFileLink(file_id);
+    let link;
+    try {
+        const { photos } = await generic[messenger].client.getUserProfilePhotos(user.id, { limit: 1 });
+        const file_id = (_c = (_b = photos === null || photos === void 0 ? void 0 : photos[0]) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.file_id;
+        link = await generic[messenger].client.getFileLink(file_id);
+    }
+    catch (error) {
+    }
     return { author: name, avatar: link };
 };
 pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
@@ -652,13 +654,13 @@ pierObj.telegram.convertTo = async ({ text, messenger, messengerTo, }) => {
 };
 pierObj.telegram.common.TelegramRemoveSpam = async (messenger, message) => {
     const cloned_message = JSON.parse(JSON.stringify(message));
-    if (pierObj.telegram.common.pierObj.telegram.common.IsSpam(cloned_message)) {
+    if (pierObj.telegram.common.IsSpam(cloned_message)) {
         if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
             const [err, chat] = await to(generic[messenger].client.getChat(message.chat.id));
             if (!err) {
                 const invite_link = chat.invite_link;
                 cloned_message.text = cloned_message.text.replace(invite_link, "");
-                if (pierObj.telegram.common.pierObj.telegram.common.IsSpam(cloned_message))
+                if (pierObj.telegram.common.IsSpam(cloned_message))
                     pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true });
             }
             else {
@@ -692,7 +694,7 @@ pierObj.telegram.common.TelegramRemoveSpam = async (messenger, message) => {
         }
     }
 };
-function TelegramRemoveAddedBots(messenger, message) {
+pierObj.telegram.common.TelegramRemoveAddedBots = (messenger, message) => {
     if (config.piers[messenger].remove_added_bots)
         ((message === null || message === void 0 ? void 0 : message.new_chat_members) || []).map((u) => {
             var _a, _b;
@@ -701,8 +703,8 @@ function TelegramRemoveAddedBots(messenger, message) {
                     .kickChatMember(message.chat.id, u.id)
                     .catch(catchError);
         });
-}
-function TelegramRemoveNewMemberMessage(messenger, message) {
+};
+pierObj.telegram.common.TelegramRemoveNewMemberMessage = (messenger, message) => {
     if ((message === null || message === void 0 ? void 0 : message.left_chat_member) ||
         ((message === null || message === void 0 ? void 0 : message.new_chat_members) || []).filter((u) => (u.username || "").length > 100 ||
             (u.first_name || "").length > 100 ||
@@ -712,8 +714,8 @@ function TelegramRemoveNewMemberMessage(messenger, message) {
     if (message.left_chat_member || message.new_chat_members)
         return true;
     return false;
-}
-async function TelegramLeaveChatIfNotAdmin(messenger, message) {
+};
+pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger, message) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     if (!["group", "supergroup"].includes((_a = message === null || message === void 0 ? void 0 : message.chat) === null || _a === void 0 ? void 0 : _a.type) ||
         !((_b = message === null || message === void 0 ? void 0 : message.chat) === null || _b === void 0 ? void 0 : _b.id) ||
@@ -743,13 +745,13 @@ async function TelegramLeaveChatIfNotAdmin(messenger, message) {
         return true;
     }
     return false;
-}
+};
 pierObj.telegram.common.telegram_DeleteMessage = async ({ messenger, message, log, }) => {
     if (log)
         await to(common.LogMessageToAdmin(messenger, message));
     await to(generic[messenger].client.deleteMessage(message.chat.id, message.message_id));
 };
-NewChannelAppeared.telegram = async ({ messenger, channelName, channelId, }) => {
+pierObj.telegram.common.NewChannelAppeared = async ({ messenger, channelName, channelId, }) => {
     config.cache[messenger][channelName] = channelId;
     let [err, res] = await to(common.writeCache({ channelName, channelId, action: "join" }));
     if (err) {
@@ -766,7 +768,7 @@ NewChannelAppeared.telegram = async ({ messenger, channelName, channelId, }) => 
     }
     return true;
 };
-GetChannels.telegram = async (pier) => {
+pierObj.telegram.getChannels = async (pier) => {
     //read from file
     let res = {};
     try {
@@ -804,7 +806,7 @@ pierObj.webwidget.common = {
 pierObj.vkboard.common = {
     Start: async function ({ messenger }) {
         const callbackService = new vk_io_1.CallbackService();
-        const direct = new authorization_1.DirectAuthorization({
+        const direct = new authorization_1.ImplicitFlowUser({
             callbackService,
             // manually provide app credentials
             // clientId: process.env.CLIENT_ID,
@@ -830,7 +832,7 @@ pierObj.vkboard.common = {
 pierObj.vkwall.common = {
     Start: async function ({ messenger }) {
         const callbackService = new vk_io_1.CallbackService();
-        const direct = new authorization_1.DirectAuthorization({
+        const direct = new authorization_1.ImplicitFlowUser({
             callbackService,
             // manually provide app credentials
             // clientId: process.env.CLIENT_ID,
@@ -1124,19 +1126,13 @@ pierObj.slack.sendTo = async ({ messenger, channelId, author, chunk, action, quo
     });
 };
 pierObj.irc.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    await new Promise((resolve) => {
-        log("irc")({ "sending for irc": chunk });
-        generic[messenger].client.say(channelId, chunk);
-        resolve(null);
-    });
+    log("irc")({ "sending for irc": chunk });
+    generic[messenger].client.say(channelId, chunk);
 };
 async function prepareChunks({ messenger, channelId, text, edited, messengerTo, }) {
-    var _a;
+    var _a, _b, _c, _d, _e;
     const root_messengerTo = common.root_of_messenger(messengerTo);
-    let arrChunks, fallback = "fallback";
-    if (GetChunks[messengerTo])
-        fallback = messengerTo;
-    arrChunks = await GetChunks[fallback](text, messengerTo);
+    const arrChunks = ((_b = (_a = pierObj[messengerTo]) === null || _a === void 0 ? void 0 : _a.common) === null || _b === void 0 ? void 0 : _b.GetChunks) ? await ((_d = (_c = pierObj[messengerTo]) === null || _c === void 0 ? void 0 : _c.common) === null || _d === void 0 ? void 0 : _d.GetChunks(text, messengerTo)) : await common.GetChunks(text, messengerTo);
     for (let i in arrChunks) {
         log("generic")(`converting for messenger ${messengerTo} the text "` + arrChunks[i] + `"`);
         if (edited)
@@ -1146,7 +1142,7 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
                 localized_string_key: `OverlayMessageWithEditedMark.${root_messengerTo}`,
                 arrElemsToInterpolate: [["message", arrChunks[i]]],
             });
-        arrChunks[i] = await ((_a = pierObj[root_messengerTo]) === null || _a === void 0 ? void 0 : _a.convertTo({
+        arrChunks[i] = await ((_e = pierObj[root_messengerTo]) === null || _e === void 0 ? void 0 : _e.convertTo({
             text: arrChunks[i],
             messenger,
             messengerTo,
@@ -1155,7 +1151,7 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
     }
     return arrChunks;
 }
-prepareToWhom.irc = function ({ messenger, text, targetChannel, }) {
+pierObj.irc.common.prepareToWhom = function ({ messenger, text, targetChannel, }) {
     var _a, _b, _c, _d;
     const ColorificationMode = ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[targetChannel]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.nickcolor) || "mood";
     return `${ircolors.MoodifyText({
@@ -1163,10 +1159,10 @@ prepareToWhom.irc = function ({ messenger, text, targetChannel, }) {
         mood: ColorificationMode,
     })}: `;
 };
-prepareToWhom.fallback = function ({ messenger, text, targetChannel, }) {
+common.prepareToWhom = function ({ messenger, text, targetChannel, }) {
     return `${text}: `;
 };
-prepareAuthor.irc = function ({ messenger, text, targetChannel, }) {
+pierObj.irc.common.prepareAuthor = function ({ messenger, text, targetChannel, }) {
     var _a, _b, _c, _d;
     const ColorificationMode = ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[targetChannel]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.nickcolor) || "mood";
     return `${ircolors.MoodifyText({
@@ -1174,7 +1170,7 @@ prepareAuthor.irc = function ({ messenger, text, targetChannel, }) {
         mood: ColorificationMode,
     })}`;
 };
-prepareAuthor.fallback = function ({ messenger, text, targetChannel, }) {
+common.prepareAuthor = function ({ messenger, text, targetChannel, }) {
     return `${text}`;
 };
 async function checkHelpers({ messenger, channelId, author, text, ToWhom, quotation, action, edited, avatar }) {
@@ -1256,7 +1252,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
     });
 }
 async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation, action, file, remote_file, edited, avatar }) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     const ConfigNode = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId];
     if (!ConfigNode)
         return common.LogToAdmin(`error finding assignment to ${messenger} channel with id ${channelId}`);
@@ -1326,30 +1322,30 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
             messenger !== messengerTo) {
             let thisToWhom = "";
             if (ToWhom)
-                if (prepareToWhom[messengerTo]) {
-                    thisToWhom = prepareToWhom[messengerTo]({
+                if ((_e = (_d = pierObj[messengerTo]) === null || _d === void 0 ? void 0 : _d.common) === null || _e === void 0 ? void 0 : _e.prepareToWhom) {
+                    thisToWhom = (_f = pierObj[messengerTo]) === null || _f === void 0 ? void 0 : _f.common.prepareToWhom({
                         messenger: messengerTo,
                         text: ToWhom,
                         targetChannel: ConfigNode[messengerTo],
                     });
                 }
                 else
-                    thisToWhom = prepareToWhom.fallback({
+                    thisToWhom = common.prepareToWhom({
                         messenger: messengerTo,
                         text: ToWhom,
                         targetChannel: ConfigNode[messengerTo],
                     });
             if (!author)
                 author = "";
-            if (prepareAuthor[messengerTo]) {
-                author = prepareAuthor[messengerTo]({
+            if ((_h = (_g = pierObj[messengerTo]) === null || _g === void 0 ? void 0 : _g.common) === null || _h === void 0 ? void 0 : _h.prepareAuthor) {
+                author = (_k = (_j = pierObj[messengerTo]) === null || _j === void 0 ? void 0 : _j.common) === null || _k === void 0 ? void 0 : _k.prepareAuthor({
                     messenger: messengerTo,
                     text: author,
                     targetChannel: ConfigNode[messengerTo],
                 });
             }
             else
-                author = prepareAuthor.fallback({
+                author = common.prepareAuthor({
                     messenger: messengerTo,
                     text: author,
                     targetChannel: ConfigNode[messengerTo],
@@ -1366,7 +1362,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 Chunks[i] = await FormatMessageChunkForSending({
                     messenger: messengerTo,
                     channelId,
-                    title: (_d = config.piers[messenger]) === null || _d === void 0 ? void 0 : _d.group_id,
+                    title: (_l = config.piers[messenger]) === null || _l === void 0 ? void 0 : _l.group_id,
                     author,
                     chunk: thisToWhom + chunk,
                     action,
@@ -2299,7 +2295,6 @@ common.ConfigBeforeStart = () => {
         fs.writeFileSync(configPath, config);
         throw new Error(`Wrote default configuration to ${configPath}, please edit it before re-running`);
     }
-    let config;
     try {
         config = require(`${cache_folder}/config.js`);
     }
@@ -2310,17 +2305,16 @@ common.ConfigBeforeStart = () => {
     }
     const defaultConfig = require(defaults);
     config = R.mergeDeepLeft(config, defaultConfig);
-    const localConfig = require("/home/app/1chat/src/local/dict.json");
-    return [config, localConfig];
+    localizationConfig = require("/home/app/1chat/src/local/dict.json");
 };
 common.getMessengersWithPrefix = async (prefix) => {
     return Object.keys(config.MessengersAvailable).filter((el) => el.indexOf(prefix + "_") === 0 && config.MessengersAvailable[el] === true);
 };
-GetChannels.irc = async (pier) => {
+pierObj.irc.getChannels = async (pier) => {
     const json = config.piers[pier].ircOptions.channels.reduce((json, value) => { json[value] = value; return json; }, {});
     config.cache[pier] = json;
 };
-GetChannels.slack = async (pier) => {
+pierObj.slack.getChannels = async (pier) => {
     let [err, res] = await to(generic[pier].client.web.conversations.list());
     if (err) {
         console.error(err);
@@ -2332,15 +2326,15 @@ GetChannels.slack = async (pier) => {
     });
     config.cache[pier] = json;
 };
-GetChannels.mattermost = async (pier) => {
+pierObj.mattermost.getChannels = async (pier) => {
     let json = {};
     let url = `${config.piers[pier].ProviderUrl}/api/v4/teams/${config.piers[pier].team_id}/channels`;
-    json = await GetChannelsMattermostCore(pier, json, url);
+    json = await pierObj.mattermost.common.GetChannelsMattermostCore(pier, json, url);
     url = `${config.piers[pier].ProviderUrl}/api/v4/users/${config.piers[pier].user_id}/teams/${config.piers[pier].team_id}/channels`;
-    json = await GetChannelsMattermostCore(pier, json, url);
+    json = await pierObj.mattermost.common.GetChannelsMattermostCore(pier, json, url);
     config.cache[pier] = json;
 };
-async function GetChannelsMattermostCore(messenger, json, url) {
+pierObj.mattermost.common.GetChannelsMattermostCore = async (messenger, json, url) => {
     await to(new Promise((resolve) => {
         request({
             method: "GET",
@@ -2364,7 +2358,7 @@ async function GetChannelsMattermostCore(messenger, json, url) {
         });
     }));
     return json;
-}
+};
 async function PopulateChannelMappingCore({ messenger, }) {
     if (!config.MessengersAvailable[messenger])
         return;
@@ -2394,6 +2388,7 @@ async function PopulateChannelMappingCore({ messenger, }) {
     fs.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping, null, 2));
 }
 common.PopulateChannelMapping = async () => {
+    var _a;
     if (!config.channelMapping)
         config.channelMapping = {};
     if (!config.cache)
@@ -2401,8 +2396,8 @@ common.PopulateChannelMapping = async () => {
     const arrAvailableMessengers = Object.keys(config.MessengersAvailable).filter((i) => !!config.MessengersAvailable[i]);
     for (const pier of arrAvailableMessengers) {
         const messenger = common.root_of_messenger(pier);
-        if (GetChannels[messenger])
-            await GetChannels[messenger](pier);
+        if ((_a = pierObj[messenger]) === null || _a === void 0 ? void 0 : _a.getChannels)
+            await pierObj[messenger].getChannels(pier);
     }
     for (const pier of arrAvailableMessengers) {
         await PopulateChannelMappingCore({ messenger: pier });
@@ -2610,17 +2605,16 @@ common.LogToAdmin = (msg_text, repeat = true) => {
         message: JSON.stringify(msg_text),
     });
     const telegram_piers_with_logging_to_admin = Object.keys(config.piers).filter((i) => typeof config.piers[i].admins_userid !== 'undefined');
-    for (const pier of telegram_piers_with_logging_to_admin) {
-        generic[pier].client
-            .sendMessage(config.piers[pier].admins_userid, `\`\`\`\n${msg_text}\n\`\`\``, {
-            parse_mode: "Markdown",
-        })
-            .catch((e) => {
-            console.log(msg_text);
-            if (repeat)
-                common.LogToAdmin(msg_text, false);
-        });
-    }
+    for (const pier of telegram_piers_with_logging_to_admin)
+        if (generic[pier].client)
+            generic[pier].client
+                .sendMessage(config.piers[pier].admins_userid, `\`\`\`\n${msg_text}\n\`\`\``, {
+                parse_mode: "Markdown",
+            })
+                .catch((e) => {
+                if (repeat)
+                    common.LogToAdmin(msg_text, false);
+            });
 };
 common.escapeHTML = (arg) => arg
     .replace(/&/g, "&amp;")
@@ -2707,12 +2701,12 @@ common.unescapeHTML = ({ text, convertHtmlEntities, escapeBackslashes = true, })
 //   }
 //   return text;
 // }
-GetChunks.irc = async (text, messenger) => {
+pierObj.irc.common.GetChunks = async (text, messenger) => {
     const limit = config.piers[messenger].MessageLength || 400;
     // text = await appendPageTitles(text)
     return text.split(/<br>/).flatMap((line) => HTMLSplitter(line, limit));
 };
-GetChunks.webwidget = async (text, messenger) => {
+pierObj.webwidget.common.GetChunks = async (text, messenger) => {
     return [text];
 };
 const diffTwo = (diffMe, diffBy) => {
@@ -2775,7 +2769,7 @@ function HTMLSplitter(text, limit = 400) {
     log("generic")({ message: "html splitter: after", Chunks });
     return Chunks;
 }
-GetChunks.fallback = async (text, messenger) => {
+common.GetChunks = async (text, messenger) => {
     // text = await appendPageTitles(text);
     const limit = config.piers[messenger].MessageLength || 400;
     let arrText = HTMLSplitter(text, limit);
@@ -3019,8 +3013,8 @@ common.LocalizeString = ({ messenger, channelId, localized_string_key, arrElemsT
     try {
         const language = ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.language) ||
             "English";
-        let template = localConfig[language][localized_string_key];
-        const def_template = localConfig["English"][localized_string_key];
+        let template = localizationConfig[language][localized_string_key];
+        const def_template = localizationConfig["English"][localized_string_key];
         if (!def_template) {
             console.log(`no ${localized_string_key} key specified in the dictionary`);
             return;
@@ -3039,7 +3033,7 @@ common.LocalizeString = ({ messenger, channelId, localized_string_key, arrElemsT
 };
 //START
 // get/set config
-const [config, localConfig] = common.ConfigBeforeStart();
+common.ConfigBeforeStart();
 // map channels & start listening
 StartServices();
 // start HTTP server for media files if configured to do so
