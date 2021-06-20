@@ -21,12 +21,12 @@ config.piers = {
     guildId: ""
   },
   //reading messages from an HTTP endpoint:
-  webwidget: {
+  webwidget_1: {
     //websocket dtream of messages into external services
     historyLength: 200 ///how many of them to store
   },
   //Facebook messenger (doesn't work!):
-  facebook: {
+  facebook_1: {
     Actions: ['action'],
     //unstable bridge pier. Create and verifiy a user on Facebok. The user will be used as a bridge. Enter their email and password: 
     email: "",
@@ -34,7 +34,7 @@ config.piers = {
     //then add you user to all your facebook chats
   },
   //Facebook bot (not usable!):
-  fbbot: {
+  fbbot_1: {
     Actions: ['action'],
     //doesn't work yet. Chat using official Facebook API 
     accessToken:
@@ -43,7 +43,7 @@ config.piers = {
     verifyToken: ""
   },
   //Telegram messenger:
-  telegram: {
+  telegram_1: {
     /*
       1. create a bot using https://t.me/botfather
       2. Use the `/setprivacy` command with `BotFather` to allow your bot to see all messages in your group (NOTE on usage: bot name is preceded by symbol `@`)
@@ -72,7 +72,7 @@ config.piers = {
     }
   },
   //Slack messenger:
-  slack: {
+  slack_1: {
     //Slack bot token
     // Create a Slack bot via https://api.slack.com/apps . There in "OAuth & Permissions" section add the following  permission scopes: channels:read, incoming-webhook, mpim:read, files:read, bot. Add your bot to necessary channels of your Slack project.
     // Invite your bot to all the Slack channels you've configured it for
@@ -80,7 +80,7 @@ config.piers = {
     Actions: ['action']
   },
   //Mattermost messenger:
-  mattermost: {
+  mattermost_1: {
     // 1. Add a webhook
     // 2. Add your bot to each channel (otherwise your message won't go from Mattermost anywhere)
     // 3. check if the bot is only in the channels you need (so that the performance of your script would be optimal)
@@ -94,13 +94,13 @@ config.piers = {
   },
 
   //VK discussion board:
-  vkboard: {
+  vkboard_1: {
     token:
-      "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
-    group_id: "123456",
-    appId: "123456",
-    login: "1@example.com",
-    password: "my_password",
+      "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085", //Open your group => Manage => API => Create (token) => provide maximum permissions
+    group_id: "123456",//vk.com group ID
+    appId: "123456", //id of your vk.com app
+    login: "1@example.com", //your vk.com email or phone
+    password: "my_password", //your vk.com password
     Actions: ['action']
   },
   //VK discussion wall:
