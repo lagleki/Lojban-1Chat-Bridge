@@ -104,7 +104,7 @@ config.piers = {
     Actions: ['action']
   },
   //VK discussion wall:
-  vkwall: {
+  vkwall_1: {
     token:
       "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085",
     group_id: "123456",
@@ -114,7 +114,7 @@ config.piers = {
     Actions: ['action']
   },
   // IRC messaging:
-  irc: {
+  irc_1: {
     // send IRC topic changes to other messengers
     sendTopic: true,
     // Colorizes nicks
@@ -165,28 +165,29 @@ config.generic = {
   httpLocation: "https://image.jbotcan.org" // change to your server
 };
 
-config.channels = [
+config.new_channels = [
   // example of a barebones IRC channel:
   // e.g. here 'Example chat' will be bridged to/from Slack "test" and others from this entity
   {
-    facebook: 123456, // facebook chat id
-    telegram: "Example chat", // telegram visiable chat name
-    vkboard: "123456", // the id can be seen in board url
-    vkwall: "7", // the id can be seen in wall url
-    slack: "test", //visible channel name
-    mattermost: "test",//visible or url name
-    discord: "test", // visible name without "#"
-    language: "lojban", // comment out for English
-    irc: "#lojbanme", // IRC channel with "#"
-    webwidget: "#lojbanme", //how theexternal websocket service will tag this relay entity 
-    "irc-nickcolor": "mood", //options: mood / color / none
-    "irc-readonly": true, // if true then the channel can'tbe sent to, can only be read from. Comment out for two-way bridge
-    "irc-dontProcessOtherBridges": true  // if true then messages like "<another_bridge>: <user>: user's message" will be sent as if from another_bridge, not from user
+    facebook_1: 123456, // facebook chat id
+    telegram_1: "Example chat", // telegram visiable chat name
+    vkboard_1: "123456", // the id can be seen in board url
+    vkwall_1: "7", // the id can be seen in wall url
+    slack_1: "test", //visible channel name
+    mattermost_1: "test",//visible or url name
+    discord_1: "test", // visible name without "#"
+    language_1: "lojban", // comment out for English
+    irc_1: "#lojbanme", // IRC channel with "#"
+    webwidget_1: "#lojbanme", //how theexternal websocket service will tag this relay entity 
+    "irc_1-nickcolor": "mood", //options: mood / color / none
+    "irc_1-readonly": true, // if true then the channel can'tbe sent to, can only be read from. Comment out for two-way bridge
+    "irc_1-dontProcessOtherBridges": true,  // if true then messages like "<another_bridge>: <user>: user's message" will be sent as if from another_bridge, not from user
+    "nsfw_analysis": true // if true will analyse every message for NSFW/ text in it and if anything is detected will send the result back as if sent from the same username
   },
   {
     // another relay entity
-    facebook: "...",
-    telegram: "..."
+    facebook_1: "...",
+    telegram_1: "..."
   }
 ];
 

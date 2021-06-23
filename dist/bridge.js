@@ -118,7 +118,7 @@ const discordParser = require("discord-markdown");
 pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, avatar }) => {
     const channel = generic[messenger].client.channels.cache.get(channelId);
     const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.first();
+    let webhook = webhooks.last();
     const authorTemp = author
         .replace(/[0-9_\.-]+$/, " ")
         .replace(/\[.*/, "")
@@ -147,23 +147,41 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
             },
         ];
     }
-    const [error] = await to(webhook.send(chunk, {
+    if (chunk === file)
+        chunk = "";
+    let [error] = await to(webhook.send(chunk, {
         username: author || "-",
         files,
         // avatarURL: generic.discord.avatar.path,
     }));
     if (error) {
+        //try to create a new webhook and send again
+        webhook = await channel.createWebhook(author || "-", avatar);
+        [error] = await to(webhook.send(chunk, {
+            username: author || "-",
+            files,
+            // avatarURL: generic.discord.avatar.path,
+        }));
+    }
+    if (error) {
+        //now we have a real problem with sending. try to send without attachments. useful when the attachments are too large for Discord to handle
         logger.log({
             level: "error",
             function: "discord.sendTo",
             message: error.toString(),
             chunk, author
-        });
-        //try to send without the attachment. useful when the file is too large for Discord to handle
-        await to(webhook.send(chunk, {
+        })[error] = await to(webhook.send(chunk, {
             username: author || "-",
             // avatarURL: generic.discord.avatar.path,
         }));
+        //now this fails anyway so just log that we failed to send a message to Discord
+        if (error)
+            logger.log({
+                level: "error",
+                function: "discord.sendTo",
+                message: error.toString(),
+                chunk, author
+            });
     }
     // await new Promise((resolve: any) => {
     //   generic.discord.client.channels.cache
@@ -808,15 +826,13 @@ pierObj.vkboard.common = {
         const callbackService = new vk_io_1.CallbackService();
         const direct = new authorization_1.ImplicitFlowUser({
             callbackService,
-            // manually provide app credentials
-            // clientId: process.env.CLIENT_ID,
-            // clientSecret: process.env.CLIENT_SECRET,
-            clientId: config.piers[messenger].appId,
-            clientSecret: config.piers[messenger].appSecret,
+            scope: "offline,wall,groups",
+            apiVersion: config.piers[messenger].apiVersion,
             login: config.piers[messenger].login,
             password: config.piers[messenger].password,
-            scope: "offline,wall,messages,groups",
-            apiVersion: config.piers[messenger].apiVersion
+            // manually provide app credentials
+            clientId: config.piers[messenger].appId,
+            clientSecret: config.piers[messenger].appSecret
         });
         const [err, vkapp] = await to(direct.run());
         if (err) {
@@ -834,15 +850,13 @@ pierObj.vkwall.common = {
         const callbackService = new vk_io_1.CallbackService();
         const direct = new authorization_1.ImplicitFlowUser({
             callbackService,
-            // manually provide app credentials
-            // clientId: process.env.CLIENT_ID,
-            // clientSecret: process.env.CLIENT_SECRET,
-            clientId: config.piers[messenger].appId,
-            clientSecret: config.piers[messenger].appSecret,
+            scope: "offline,wall,groups",
+            apiVersion: config.piers[messenger].apiVersion,
             login: config.piers[messenger].login,
             password: config.piers[messenger].password,
-            scope: "offline,wall,messages,groups",
-            apiVersion: config.piers[messenger].apiVersion
+            // manually provide app credentials
+            clientId: config.piers[messenger].appId,
+            clientSecret: config.piers[messenger].appSecret
         });
         const [err, vkapp] = await to(direct.run());
         if (err) {
@@ -1252,7 +1266,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
     });
 }
 async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation, action, file, remote_file, edited, avatar }) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
     const ConfigNode = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId];
     if (!ConfigNode)
         return common.LogToAdmin(`error finding assignment to ${messenger} channel with id ${channelId}`);
@@ -1263,17 +1277,17 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
     text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
     text = text.replace(/^(<br\/>)+/, "");
     //zbalermorna etc.
-    await checkHelpers({
-        messenger,
-        channelId: ConfigNode[messenger],
-        author,
-        text,
-        quotation,
-        action,
-        edited,
-        avatar
-    });
-    const nsfw = file ? (await to(getNSFWString(remote_file)))[1] : null;
+    // await checkHelpers({
+    //   messenger,
+    //   channelId: ConfigNode[messenger],
+    //   author,
+    //   text,
+    //   quotation,
+    //   action,
+    //   edited,
+    //   avatar
+    // })
+    const nsfw = ((_g = (_f = (_e = (_d = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _d === void 0 ? void 0 : _d[messenger]) === null || _e === void 0 ? void 0 : _e[channelId]) === null || _f === void 0 ? void 0 : _f.settings) === null || _g === void 0 ? void 0 : _g.nsfw_analysis) && file ? (await to(getNSFWString(remote_file)))[1] : null;
     if (nsfw) {
         for (const nsfw_result of nsfw) {
             const translated_text = common.LocalizeString({
@@ -1322,8 +1336,8 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
             messenger !== messengerTo) {
             let thisToWhom = "";
             if (ToWhom)
-                if ((_e = (_d = pierObj[messengerTo]) === null || _d === void 0 ? void 0 : _d.common) === null || _e === void 0 ? void 0 : _e.prepareToWhom) {
-                    thisToWhom = (_f = pierObj[messengerTo]) === null || _f === void 0 ? void 0 : _f.common.prepareToWhom({
+                if ((_j = (_h = pierObj[messengerTo]) === null || _h === void 0 ? void 0 : _h.common) === null || _j === void 0 ? void 0 : _j.prepareToWhom) {
+                    thisToWhom = (_k = pierObj[messengerTo]) === null || _k === void 0 ? void 0 : _k.common.prepareToWhom({
                         messenger: messengerTo,
                         text: ToWhom,
                         targetChannel: ConfigNode[messengerTo],
@@ -1337,8 +1351,8 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                     });
             if (!author)
                 author = "";
-            if ((_h = (_g = pierObj[messengerTo]) === null || _g === void 0 ? void 0 : _g.common) === null || _h === void 0 ? void 0 : _h.prepareAuthor) {
-                author = (_k = (_j = pierObj[messengerTo]) === null || _j === void 0 ? void 0 : _j.common) === null || _k === void 0 ? void 0 : _k.prepareAuthor({
+            if ((_m = (_l = pierObj[messengerTo]) === null || _l === void 0 ? void 0 : _l.common) === null || _m === void 0 ? void 0 : _m.prepareAuthor) {
+                author = (_p = (_o = pierObj[messengerTo]) === null || _o === void 0 ? void 0 : _o.common) === null || _p === void 0 ? void 0 : _p.prepareAuthor({
                     messenger: messengerTo,
                     text: author,
                     targetChannel: ConfigNode[messengerTo],
@@ -1362,7 +1376,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
                 Chunks[i] = await FormatMessageChunkForSending({
                     messenger: messengerTo,
                     channelId,
-                    title: (_l = config.piers[messenger]) === null || _l === void 0 ? void 0 : _l.group_id,
+                    title: (_q = config.piers[messenger]) === null || _q === void 0 ? void 0 : _q.group_id,
                     author,
                     chunk: thisToWhom + chunk,
                     action,
@@ -2485,7 +2499,16 @@ pierObj.vkboard.StartService = async ({ messenger }) => {
     generic[messenger].client.bot.event("board_post_edit", async ({ message }) => {
         pierObj.vkboard.receivedFrom(messenger, { ...message, edited: true });
     });
-    generic[messenger].client.bot.startPolling();
+    generic[messenger].client.bot.startPolling((error) => {
+        if (error) {
+            logger.log({
+                level: "error",
+                function: "vkboard long polling",
+                type: "data",
+                message: error.toString(),
+            });
+        }
+    });
 };
 pierObj.slack.StartService = async ({ messenger }) => {
     //slack

@@ -261,6 +261,7 @@ pierObj.discord.sendTo = async ({
       },
     ]
   }
+  if (chunk === file) chunk = ""
   let [error] = await to(
     webhook.send(chunk, {
       username: author || "-",
@@ -1781,17 +1782,18 @@ async function sendFrom({
   text = text.replace(/^(<br\/>)+/, "")
 
   //zbalermorna etc.
-  await checkHelpers({
-    messenger,
-    channelId: ConfigNode[messenger],
-    author,
-    text,
-    quotation,
-    action,
-    edited,
-    avatar
-  })
-  const nsfw: any = file ? (await to(getNSFWString(remote_file)))[1] : null
+  // await checkHelpers({
+  //   messenger,
+  //   channelId: ConfigNode[messenger],
+  //   author,
+  //   text,
+  //   quotation,
+  //   action,
+  //   edited,
+  //   avatar
+  // })
+
+  const nsfw: any = (config?.channelMapping?.[messenger]?.[channelId]?.settings?.nsfw_analysis) && file ? (await to(getNSFWString(remote_file)))[1] : null
   if (nsfw) {
     for (const nsfw_result of nsfw) {
       const translated_text = common.LocalizeString({
@@ -3141,6 +3143,7 @@ async function PopulateChannelMappingCore({
       settings: {
         readonly: i[`${messenger}-readonly`],
         dontProcessOtherBridges: i[`${messenger}-dontProcessOtherBridges`],
+        nsfw_analysis: i[`nsfw_analysis`],
         language: i["language"],
         nickcolor: i[`${messenger}-nickcolor`],
         name: i[messenger],
