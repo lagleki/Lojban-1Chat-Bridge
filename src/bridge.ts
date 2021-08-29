@@ -14,7 +14,11 @@ process.env.NTBA_FIX_319 = 1
 const fs = require("fs-extra")
 const path = require("path")
 const mkdir = require("mkdirp-sync")
+import axios, { AxiosResponse } from 'axios'
 import * as request from "request"
+
+const Timeout = require('await-timeout');
+import to from 'await-to-js';
 
 // process.on('warning', (e: any) => console.warn(e.stack));
 
@@ -22,7 +26,7 @@ const cache_folder = path.join(__dirname, "../data")
 const defaults = path.join(__dirname, `../default-config/defaults.js`)
 
 // messengers' libs
-const { login } = require("libfb")
+// const { login } = require("libfb")
 
 import * as Telegram from "node-telegram-bot-api"
 const sanitizeHtml = require("sanitize-html")
@@ -50,7 +54,8 @@ lexer.rules.list = { exec: () => { } }
 lexer.rules.listitem = { exec: () => { } }
 const markedRenderer = new marked.Renderer()
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
-const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
+import { fillMarkdownEntitiesMarkup } from './formatting-converters/telegram-utils'
+// const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
 
 const Avatar = require("../src/animalicons/index.js")
@@ -125,7 +130,6 @@ const log = (messenger: String) => (message: any) =>
 const R = require("ramda")
 const { default: PQueue } = require("p-queue")
 
-const { to } = require("await-to-js")
 const blalalavla = require("./sugar/blalalavla")
 const modzi = require("./sugar/modzi")
 
@@ -142,6 +146,8 @@ const lojban = require("lojban")
 interface Json {
   [index: string]: string | boolean | RegExp
 }
+
+type Chunk = { [x: string]: string } | string
 
 interface IMessengerInfo {
   [x: string]: any
@@ -187,7 +193,7 @@ interface IsendToArgs {
   messenger: string
   channelId: string
   author: string
-  chunk: string
+  chunk: Chunk
   action: string
   quotation: boolean
   file?: string
@@ -211,6 +217,10 @@ Object.keys(pierObj).forEach((key: any) => {
   pierObj[key].common = {}
 })
 
+async function tot(arg: Promise<any>, timeout = 1000, rejectResponse = true) {
+  return to(Timeout.wrap(arg, timeout, rejectResponse))
+}
+
 //discord
 const Discord = require("discord.js")
 const discordParser = require("discord-markdown")
@@ -226,6 +236,18 @@ pierObj.discord.sendTo = async ({
   edited,
   avatar
 }: IsendToArgs) => {
+  let files = undefined
+  if (file) {
+    files = [
+      {
+        attachment: file,
+      },
+    ]
+  }
+  let chunk_: Chunk = chunk
+  if (typeof chunk_ !== 'string' && chunk_.main) chunk_ = chunk_.main
+  if (chunk_ === file) chunk_ = "";
+
   const channel = generic[messenger].client.channels.cache.get(channelId)
   const webhooks = await channel.fetchWebhooks()
   let webhook = webhooks.last()
@@ -234,7 +256,18 @@ pierObj.discord.sendTo = async ({
     .replace(/\[.*/, "")
     .replace(/[^0-9A-Za-z].*$/, "")
     .trim()
+
   const parsedName = modzi.modzi(author)
+  try {
+    const response: AxiosResponse = await axios
+      .get(avatar, {
+        responseType: 'arraybuffer'
+      });
+    const prefix = "data:" + response.headers["content-type"] + ";base64,";
+    avatar = prefix + Buffer.from(response.data, 'binary').toString('base64');
+  } catch (error) {
+    avatar = undefined
+  }
   if (!avatar) {
     const animava = new Avatar(
       authorTemp,
@@ -244,73 +277,94 @@ pierObj.discord.sendTo = async ({
     await animava.draw()
     avatar = await animava.toDataURL()
   }
-  if (!webhook) {
-    webhook = await channel.createWebhook(author || "-", avatar)
-  } else {
-    webhook = await webhook.edit({
+
+  let error
+
+  //reuse a webhook
+  if (webhook) {
+    [error, webhook] = await tot(webhook.edit({
       name: author || "-",
       avatar,
-    })
+    }))
+    if (error) {
+      logger.log({
+        level: "error",
+        function: "discord.sendTo",
+        event: "error editing an existing webhook",
+        message: error.toString(),
+        chunk: chunk_, author
+      });
+    }
   }
+  //couldn't reuse the webhook so create a new one
+  if (error || !webhook) [error, webhook] = await tot(channel.createWebhook(author || "-", avatar))
 
-  let files = undefined
-  if (file) {
-    files = [
-      {
-        attachment: file,
-      },
-    ]
-  }
-  if (chunk === file) chunk = ""
-  let [error] = await to(
-    webhook.send(chunk, {
-      username: author || "-",
-      files,
-      // avatarURL: generic.discord.avatar.path,
-    })
-  )
-  if (error) {
-    //try to create a new webhook and send again
-    webhook = await channel.createWebhook(author || "-", avatar);
-    [error] = await to(
-      webhook.send(chunk, {
+  if (!error) {
+    //ok, we have a webhook so send a message with it 
+    [error] = await tot(
+      webhook.send(chunk_, {
         username: author || "-",
         files,
         // avatarURL: generic.discord.avatar.path,
       })
     )
+    if (error) {
+      logger.log({
+        level: "error",
+        function: "discord.sendTo",
+        event: "error sending a message via a webhook",
+        message: error.toString(),
+        chunk: chunk_, author
+      });
+    } else return
   }
+
+  //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
+  [error] = await tot(
+    webhook.send(chunk_, {
+      username: author || "-",
+      // avatarURL: generic.discord.avatar.path,
+    })
+  )
   if (error) {
-    //now we have a real problem with sending. try to send without attachments. useful when the attachments are too large for Discord to handle
     logger.log({
       level: "error",
       function: "discord.sendTo",
+      event: "error sending a message without attachments via a webhook",
       message: error.toString(),
-      chunk, author
-    })
-    [error] = await to(
-      webhook.send(chunk, {
-        username: author || "-",
-        // avatarURL: generic.discord.avatar.path,
-      })
-    )
-    //now this fails anyway so just log that we failed to send a message to Discord
-    if (error) logger.log({
+      chunk: chunk_, author
+    });
+  } else return
+
+  // now we failed all the ways to use webhooks so send the message with attachments via an older method using a bot user
+  [error] = await to(generic[messenger].client.channels.cache
+    .get(channelId)
+    .send({content: (chunk as any).fallback_solution, files}))
+
+  if (error) {
+    logger.log({
       level: "error",
       function: "discord.sendTo",
+      event: "error sending a message using a webhookless method",
       message: error.toString(),
-      chunk, author
-    })
+      chunk: (chunk as any).fallback_solution, author
+    });
   }
 
+  // now we failed to send the message with attachments via an older method so remove the attachments and try once again
+  [error] = await to(generic[messenger].client.channels.cache
+    .get(channelId)
+    .send({content: (chunk as any).fallback_solution,}))
 
-  // await new Promise((resolve: any) => {
-  //   generic.discord.client.channels.cache
-  //     .get(channelId)
-  //     .send(chunk)
-  //     .catch(catchError)
-  //   resolve(null)
-  // })
+  if (error) {
+    logger.log({
+      level: "error",
+      function: "discord.sendTo",
+      event: "error sending a message without attachments using a webhookless method",
+      message: error.toString(),
+      chunk: (chunk as any).fallback_solution, author
+    });
+  }
 }
 
 pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
@@ -323,7 +377,7 @@ pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
   for (let value of message.attachments.values()) {
     //media of attachment
     //todo: height,width,common.LocalizeString
-    let [, res] = await to(
+    let [, res]: [any, any] = await to(
       common.downloadFile({
         type: "simple",
         remote_path: value.url,
@@ -332,7 +386,7 @@ pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
     let file: string, localfile: string
 
     if (res?.[1]) {
-      ;[file, localfile] = res
+      [file, localfile] = res
     } else {
       file = value.url
       localfile = value.url
@@ -368,7 +422,6 @@ pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
       message_.content
     )
     log("discord")(`sending reconstructed text: ${text}`)
-    // console.log(message_, pierObj.discord.adaptName(message_))
     sendFrom({
       messenger,
       channelId: message_.channel.id,
@@ -853,12 +906,16 @@ pierObj.telegram.convertFrom = async ({
   text: string
   messenger: string
 }) => {
-  const res = markedParse({
-    text: common.escapeHTML(text).replace(
-      /<p><code>([\s\S]*?)<\/code><\/p>/gim,
-      "<p><pre>$1</pre></p>"
-    ),
-    messenger: "telegram",
+  const res = common.unescapeHTML({
+    text: markedParse({
+      text: text.replace(
+        /<p><code>([\s\S]*?)<\/code><\/p>/gim,
+        "<p><pre>$1</pre></p>"
+      ),
+      messenger: "telegram",
+      unescapeCodeBlocks: true
+    }),
+    convertHtmlEntities: true,
   })
   return res
 }
@@ -909,7 +966,7 @@ pierObj.telegram.common.TelegramRemoveSpam = async (messenger: string, message: 
   const cloned_message = JSON.parse(JSON.stringify(message))
   if (pierObj.telegram.common.IsSpam(cloned_message)) {
     if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
-      const [err, chat] = await to(
+      const [err, chat]: [any, any] = await to(
         generic[messenger].client.getChat(message.chat.id)
       )
       if (!err) {
@@ -992,7 +1049,7 @@ pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger: string, 
   )
     return
 
-  let [err, res] = await to(
+  let [err, res]: [any, any] = await to(
     generic[messenger].client.getChatMember(
       message.chat.id,
       config.piers[messenger]?.myUser?.id
@@ -1176,7 +1233,7 @@ pierObj.slack.common = {
 }
 pierObj.mattermost.common = {
   Start: async function ({ messenger }: { messenger: string }) {
-    let [err, res] = await to(
+    let [err, res]: [any, any] = await to(
       new Promise((resolve) => {
         const credentials = {
           login_id: config.piers[messenger].login,
@@ -1266,12 +1323,13 @@ async function FormatMessageChunkForSending({
   messenger: string
   channelId: number | string
   author: string
-  chunk: string
+  chunk: Chunk
   action: string
   title?: string
   quotation: boolean
 }) {
   const root_messenger = common.root_of_messenger(messenger)
+  let resultingChunk = chunk
   if (quotation) {
     if (!author || author === "") author = "-"
     chunk = common.LocalizeString({
@@ -1284,10 +1342,20 @@ async function FormatMessageChunkForSending({
         ["title", title],
       ],
     })
+
+    logger.log({
+      level: "info",
+      function: "OverlayMessageWithQuotedMark",
+      messenger,
+      channelId,
+      author,
+      chunk,
+      title
+    })
+
   } else if ((author || "") !== "") {
-    // console.log(config.piers[messenger], action,chunk)
     if ((config.piers[messenger].Actions || []).includes(action)) {
-      chunk = common.LocalizeString({
+      chunk = common.LocalizeStringWrapper({
         messenger,
         channelId,
         localized_string_key: `sendTo.${root_messenger}.action`,
@@ -1298,7 +1366,7 @@ async function FormatMessageChunkForSending({
         ],
       })
     } else {
-      chunk = common.LocalizeString({
+      chunk = common.LocalizeStringWrapper({
         messenger,
         channelId,
         localized_string_key: `sendTo.${root_messenger}.normal`,
@@ -1310,7 +1378,7 @@ async function FormatMessageChunkForSending({
       })
     }
   } else {
-    chunk = common.LocalizeString({
+    chunk = common.LocalizeStringWrapper({
       messenger,
       channelId,
       localized_string_key: `sendTo.${root_messenger}.ChunkOnly`,
@@ -1355,27 +1423,27 @@ pierObj.webwidget.sendTo = async ({
   })
 }
 
-pierObj.facebook.sendTo = async ({
-  messenger,
-  channelId,
-  author,
-  chunk,
-  action,
-  quotation,
-  file,
-  edited,
-}: IsendToArgs) => {
-  await new Promise((resolve: any) => {
-    setTimeout(() => {
-      const jsonMessage: Json = {
-        body: chunk,
-      }
-      if (file) jsonMessage.attachment = fs.createReadStream(file)
-      generic[messenger].client.sendMessage(channelId, chunk).catch(catchError)
-      resolve(null)
-    }, 500)
-  })
-}
+// pierObj.facebook.sendTo = async ({
+//   messenger,
+//   channelId,
+//   author,
+//   chunk,
+//   action,
+//   quotation,
+//   file,
+//   edited,
+// }: IsendToArgs) => {
+//   await new Promise((resolve: any) => {
+//     setTimeout(() => {
+//       const jsonMessage: Json = {
+//         body: chunk,
+//       }
+//       if (file) jsonMessage.attachment = fs.createReadStream(file)
+//       generic[messenger].client.sendMessage(channelId, chunk).catch(catchError)
+//       resolve(null)
+//     }, 500)
+//   })
+// }
 
 
 pierObj.mattermost.sendTo = async ({
@@ -1542,7 +1610,7 @@ async function prepareChunks({
   edited?: boolean
 }) {
   const root_messengerTo = common.root_of_messenger(messengerTo)
-  const arrChunks: string[] = (pierObj[messengerTo]?.common?.GetChunks) ? await pierObj[messengerTo]?.common?.GetChunks(text, messengerTo) : await common.GetChunks(text, messengerTo)
+  const arrChunks: Chunk[] = (pierObj[messengerTo]?.common?.GetChunks) ? await pierObj[messengerTo]?.common?.GetChunks(text, messengerTo) : await common.GetChunks(text, messengerTo)
 
   for (let i in arrChunks) {
     log("generic")(
@@ -1721,7 +1789,7 @@ async function universalSendTo({ messenger, channelId, author,
     messenger: string
     channelId: string | number
     author: string
-    chunk: string
+    chunk: Chunk
     quotation?: boolean
     action?: string
     file?: string
@@ -1912,8 +1980,6 @@ async function sendFrom({
 
 async function getNSFWString(file: string) {
   // if (file.substr(-4) !== ".jpg") return
-
-  const axios = require("axios") //you can use any http client
   const tf = require("@tensorflow/tfjs-node")
   const nsfw = require("nsfwjs")
   const pic = await axios.get(file, {
@@ -2000,7 +2066,7 @@ pierObj.vkwall.receivedFrom = async (messenger: string, message: any) => {
     return
   }
   let { text, from_id: fromwhomId } = message
-  let [err, res] = await to(
+  let [err, res]: [any, any] = await to(
     generic[messenger].client.bot.api("users.get", {
       user_ids: fromwhomId,
       access_token: config.piers[messenger].token,
@@ -2120,7 +2186,7 @@ pierObj.vkboard.receivedFrom = async (messenger: string, message: any) => {
   }
   let text = message.text
   const fromwhomId = message.from_id
-  let [err, res] = await to(
+  let [err, res]: [any, any] = await to(
     generic[messenger].client.bot.api("users.get", {
       user_ids: fromwhomId,
       access_token: config.piers[messenger].token,
@@ -3075,7 +3141,7 @@ pierObj.irc.getChannels = async (pier: string): Promise<void> => {
 }
 
 pierObj.slack.getChannels = async (pier: string): Promise<void> => {
-  let [err, res] = await to(generic[pier].client.web.conversations.list())
+  let [err, res]: [any, any] = await to(generic[pier].client.web.conversations.list())
   if (err) {
     console.error(err)
   }
@@ -3176,10 +3242,6 @@ common.PopulateChannelMapping = async () => {
   for (const pier of arrAvailableMessengers) {
     await PopulateChannelMappingCore({ messenger: pier })
   }
-  // console.log(
-  //   "started services with these channel mapping:\n",
-  //   JSON.stringify(config.channelMapping, null, 2)
-  // );
 }
 
 common.root_of_messenger = (messenger_with_index: string) => messenger_with_index.replace(/_.*/g, '').replace(/_.*/g, '')
@@ -3210,32 +3272,39 @@ common.MessengersAvailable = () => {
   Object.keys(config.MessengersAvailable).forEach((messenger: string) => generic[messenger] = {})
 }
 
-pierObj.facebook.StartService = async ({ force, messenger = "facebook" }: { force: boolean, messenger?: string }) => {
-  //facebook
-  if (!force && !config.MessengersAvailable[messenger]) return
-  try {
-    generic[messenger].client = await login(
-      config.piers[messenger].email,
-      config.piers[messenger].password
-    )
-    console.log(generic[messenger].client)
-    console.log(JSON.stringify(generic[messenger].client.getSession()))
+// pierObj.facebook.StartService = async ({ force, messenger = "facebook" }: { force: boolean, messenger?: string }) => {
+//   //facebook
+//   if (!force && !config.MessengersAvailable[messenger]) return
+//   try {
+//     generic[messenger].client = await login(
+//       config.piers[messenger].email,
+//       config.piers[messenger].password
+//     )
+//     console.log(generic[messenger].client)
+//     console.log(JSON.stringify(generic[messenger].client.getSession()))
 
-    generic[messenger].client.on("message", (message: any) => {
-      pierObj.facebook.receivedFrom(messenger, message)
-    })
-    config.MessengersAvailable[messenger] = true
-  } catch (e) {
-    console.log(e.toString())
-    // config.MessengersAvailable[messenger] = false;
-    // StartService[messenger]({force: true});
-  }
-}
+//     generic[messenger].client.on("message", (message: any) => {
+//       pierObj.facebook.receivedFrom(messenger, message)
+//     })
+//     config.MessengersAvailable[messenger] = true
+//   } catch (e) {
+//     console.log(e.toString())
+//     // config.MessengersAvailable[messenger] = false;
+//     // StartService[messenger]({force: true});
+//   }
+// }
 
 pierObj.webwidget.StartService = async ({ messenger }: { messenger: string }) => {
   generic[messenger] = {
     Lojban1ChatHistory: [],
-    client: require("socket.io")(server)
+    client: require("socket.io")(server, {
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        // allowedHeaders: ["my-custom-header"],
+        credentials: true
+      }
+    })
   }
   generic[messenger].client.sockets.on("connection", (socket: any) => {
     socket.emit("history", generic[messenger].Lojban1ChatHistory)
@@ -3893,6 +3962,43 @@ common.sanitizeHtml = (
   })
 }
 
+common.LocalizeStringWrapper = ({
+  messenger,
+  channelId,
+  localized_string_key,
+  arrElemsToInterpolate,
+}: {
+  messenger: string
+  channelId: string | number
+  localized_string_key: string
+  arrElemsToInterpolate: Array<Array<string>>
+}) => {
+  const language =
+    config?.channelMapping?.[messenger]?.[channelId]?.settings?.language ||
+    "English"
+  const localized_string_key_additional = localized_string_key + ".fallback_solution"
+  if (localizationConfig[language][localized_string_key_additional])
+    return {
+      main: common.LocalizeString({
+        messenger,
+        channelId,
+        localized_string_key,
+        arrElemsToInterpolate,
+      }), fallback_solution: common.LocalizeString({
+        messenger,
+        channelId,
+        localized_string_key: localized_string_key_additional,
+        arrElemsToInterpolate,
+      })
+    }
+  else return common.LocalizeString({
+    messenger,
+    channelId,
+    localized_string_key,
+    arrElemsToInterpolate,
+  })
+}
+
 common.LocalizeString = ({
   messenger,
   channelId,
@@ -3920,8 +4026,15 @@ common.LocalizeString = ({
         .replace(new RegExp(`%${value[0]}%`, "gu"), value[1])
         .replace(/%%/g, "%")
     return template
-  } catch (err) {
-    console.error(err)
+  } catch (error) {
+    logger.log({
+      level: "error",
+      function: "LocalizeString",
+      messenger,
+      channelId,
+      localized_string_key,
+      arrElemsToInterpolate,
+    })
   }
 }
 

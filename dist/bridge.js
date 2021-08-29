@@ -640,6 +640,7 @@ pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
     const res = markedParse({
         text: common.escapeHTML(text).replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
         messenger: "telegram",
+        unescapeCodeBlocks: true
     });
     return res;
 };
@@ -2390,6 +2391,7 @@ async function PopulateChannelMappingCore({ messenger, }) {
             settings: {
                 readonly: i[`${messenger}-readonly`],
                 dontProcessOtherBridges: i[`${messenger}-dontProcessOtherBridges`],
+                nsfw_analysis: i[`nsfw_analysis`],
                 language: i["language"],
                 nickcolor: i[`${messenger}-nickcolor`],
                 name: i[messenger],
@@ -2469,7 +2471,14 @@ pierObj.facebook.StartService = async ({ force, messenger = "facebook" }) => {
 pierObj.webwidget.StartService = async ({ messenger }) => {
     generic[messenger] = {
         Lojban1ChatHistory: [],
-        client: require("socket.io")(server)
+        client: require("socket.io")(server, {
+            cors: {
+                origin: "*",
+                methods: ["GET", "POST"],
+                // allowedHeaders: ["my-custom-header"],
+                credentials: true
+            }
+        })
     };
     generic[messenger].client.sockets.on("connection", (socket) => {
         socket.emit("history", generic[messenger].Lojban1ChatHistory);
