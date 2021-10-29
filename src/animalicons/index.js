@@ -177,7 +177,11 @@ class Avatar {
 				ctx.textBaseline = "middle";
 				ctx.font = (size / 2) + 'px "Emoji"'
 				ctx.fillStyle = "black";
-				fillTextWithTwemoji(ctx, this.modzi, size / 2, size / 2).then(() => { resolve() })
+				try {
+					fillTextWithTwemoji(ctx, this.modzi, size / 2, size / 2).then(() => { resolve() })
+				} catch (error) {
+					
+				}
 			} else {
 				ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
 				ctx.shadowBlur = size / 8;

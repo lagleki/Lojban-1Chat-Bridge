@@ -217,7 +217,7 @@ Object.keys(pierObj).forEach((key: any) => {
   pierObj[key].common = {}
 })
 
-async function tot(arg: Promise<any>, timeout = 1000, rejectResponse = true) {
+async function tot(arg: Promise<any>, timeout = 3000, rejectResponse = true) {
   return to(Timeout.wrap(arg, timeout, rejectResponse))
 }
 
@@ -318,28 +318,29 @@ pierObj.discord.sendTo = async ({
       });
     } else return
   }
-
-  //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
-  [error] = await tot(
-    webhook.send(chunk_, {
-      username: author || "-",
-      // avatarURL: generic.discord.avatar.path,
-    })
-  )
-  if (error) {
-    logger.log({
-      level: "error",
-      function: "discord.sendTo",
-      event: "error sending a message without attachments via a webhook",
-      message: error.toString(),
-      chunk: chunk_, author
-    });
-  } else return
+  if (webhook) {
+    //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
+    [error] = await tot(
+      webhook.send(chunk_, {
+        username: author || "-",
+        // avatarURL: generic.discord.avatar.path,
+      })
+    )
+    if (error) {
+      logger.log({
+        level: "error",
+        function: "discord.sendTo",
+        event: "error sending a message without attachments via a webhook",
+        message: error.toString(),
+        chunk: chunk_, author
+      });
+    } else return
+  }
 
   // now we failed all the ways to use webhooks so send the message with attachments via an older method using a bot user
   [error] = await to(generic[messenger].client.channels.cache
     .get(channelId)
-    .send({content: (chunk as any).fallback_solution, files}))
+    .send({ content: (chunk as any).fallback_solution, files }))
 
   if (error) {
     logger.log({
@@ -354,7 +355,7 @@ pierObj.discord.sendTo = async ({
   // now we failed to send the message with attachments via an older method so remove the attachments and try once again
   [error] = await to(generic[messenger].client.channels.cache
     .get(channelId)
-    .send({content: (chunk as any).fallback_solution,}))
+    .send({ content: (chunk as any).fallback_solution, }))
 
   if (error) {
     logger.log({

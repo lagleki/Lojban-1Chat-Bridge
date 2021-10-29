@@ -14,5 +14,4 @@ docker run \
   -v $(pwd)/src:/home/app/1chat/src/:Z \
   -v $(pwd)/data:/home/app/1chat/data/:Z \
   -v $(pwd)/default-config:/home/app/1chat/default-config/:Z \
-  -v $(pwd)/node_modules:/home/app/1chat/node_modules/:Z \
   1chat

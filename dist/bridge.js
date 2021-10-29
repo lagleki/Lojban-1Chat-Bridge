@@ -5,12 +5,15 @@ process.env.NTBA_FIX_319 = 1;
 const fs = require("fs-extra");
 const path = require("path");
 const mkdir = require("mkdirp-sync");
+const axios_1 = require("axios");
 const request = require("request");
+const Timeout = require('await-timeout');
+const await_to_js_1 = require("await-to-js");
 // process.on('warning', (e: any) => console.warn(e.stack));
 const cache_folder = path.join(__dirname, "../data");
 const defaults = path.join(__dirname, `../default-config/defaults.js`);
 // messengers' libs
-const { login } = require("libfb");
+// const { login } = require("libfb")
 const Telegram = require("node-telegram-bot-api");
 const sanitizeHtml = require("sanitize-html");
 const createDOMPurify = require("dompurify");
@@ -31,7 +34,8 @@ lexer.rules.list = { exec: () => { } };
 lexer.rules.listitem = { exec: () => { } };
 const markedRenderer = new marked.Renderer();
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
-const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler");
+const telegram_utils_1 = require("./formatting-converters/telegram-utils");
+// const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
 const Avatar = require("../src/animalicons/index.js");
 let server;
@@ -87,7 +91,6 @@ const logger = winston.createLogger({
 const log = (messenger) => (message) => logger.log({ level: "info", message: { message, messenger } });
 const R = require("ramda");
 const { default: PQueue } = require("p-queue");
-const { to } = require("await-to-js");
 const blalalavla = require("./sugar/blalalavla");
 const modzi = require("./sugar/modzi");
 // NLP & spam libs
@@ -112,10 +115,26 @@ const pierObj = {
 Object.keys(pierObj).forEach((key) => {
     pierObj[key].common = {};
 });
+async function tot(arg, timeout = 3000, rejectResponse = true) {
+    return await_to_js_1.default(Timeout.wrap(arg, timeout, rejectResponse));
+}
 //discord
 const Discord = require("discord.js");
 const discordParser = require("discord-markdown");
 pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, avatar }) => {
+    let files = undefined;
+    if (file) {
+        files = [
+            {
+                attachment: file,
+            },
+        ];
+    }
+    let chunk_ = chunk;
+    if (typeof chunk_ !== 'string' && chunk_.main)
+        chunk_ = chunk_.main;
+    if (chunk_ === file)
+        chunk_ = "";
     const channel = generic[messenger].client.channels.cache.get(channelId);
     const webhooks = await channel.fetchWebhooks();
     let webhook = webhooks.last();
@@ -125,71 +144,105 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
         .replace(/[^0-9A-Za-z].*$/, "")
         .trim();
     const parsedName = modzi.modzi(author);
+    try {
+        const response = await axios_1.default
+            .get(avatar, {
+            responseType: 'arraybuffer'
+        });
+        const prefix = "data:" + response.headers["content-type"] + ";base64,";
+        avatar = prefix + Buffer.from(response.data, 'binary').toString('base64');
+    }
+    catch (error) {
+        avatar = undefined;
+    }
     if (!avatar) {
         const animava = new Avatar(authorTemp, 512, parsedName.snada ? parsedName.output : undefined);
         await animava.draw();
         avatar = await animava.toDataURL();
     }
-    if (!webhook) {
-        webhook = await channel.createWebhook(author || "-", avatar);
-    }
-    else {
-        webhook = await webhook.edit({
+    let error;
+    //reuse a webhook
+    if (webhook) {
+        [error, webhook] = await tot(webhook.edit({
             name: author || "-",
             avatar,
-        });
+        }));
+        if (error) {
+            logger.log({
+                level: "error",
+                function: "discord.sendTo",
+                event: "error editing an existing webhook",
+                message: error.toString(),
+                chunk: chunk_, author
+            });
+        }
     }
-    let files = undefined;
-    if (file) {
-        files = [
-            {
-                attachment: file,
-            },
-        ];
-    }
-    if (chunk === file)
-        chunk = "";
-    let [error] = await to(webhook.send(chunk, {
-        username: author || "-",
-        files,
-        // avatarURL: generic.discord.avatar.path,
-    }));
-    if (error) {
-        //try to create a new webhook and send again
-        webhook = await channel.createWebhook(author || "-", avatar);
-        [error] = await to(webhook.send(chunk, {
+    //couldn't reuse the webhook so create a new one
+    if (error || !webhook)
+        [error, webhook] = await tot(channel.createWebhook(author || "-", avatar));
+    if (!error) {
+        //ok, we have a webhook so send a message with it 
+        [error] = await tot(webhook.send(chunk_, {
             username: author || "-",
             files,
             // avatarURL: generic.discord.avatar.path,
         }));
-    }
-    if (error) {
-        //now we have a real problem with sending. try to send without attachments. useful when the attachments are too large for Discord to handle
-        logger.log({
-            level: "error",
-            function: "discord.sendTo",
-            message: error.toString(),
-            chunk, author
-        })[error] = await to(webhook.send(chunk, {
-            username: author || "-",
-            // avatarURL: generic.discord.avatar.path,
-        }));
-        //now this fails anyway so just log that we failed to send a message to Discord
-        if (error)
+        if (error) {
             logger.log({
                 level: "error",
                 function: "discord.sendTo",
+                event: "error sending a message via a webhook",
                 message: error.toString(),
-                chunk, author
+                chunk: chunk_, author
             });
+        }
+        else
+            return;
     }
-    // await new Promise((resolve: any) => {
-    //   generic.discord.client.channels.cache
-    //     .get(channelId)
-    //     .send(chunk)
-    //     .catch(catchError)
-    //   resolve(null)
-    // })
+    if (webhook) {
+        //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
+        [error] = await tot(webhook.send(chunk_, {
+            username: author || "-",
+            // avatarURL: generic.discord.avatar.path,
+        }));
+        if (error) {
+            logger.log({
+                level: "error",
+                function: "discord.sendTo",
+                event: "error sending a message without attachments via a webhook",
+                message: error.toString(),
+                chunk: chunk_, author
+            });
+        }
+        else
+            return;
+    }
+    // now we failed all the ways to use webhooks so send the message with attachments via an older method using a bot user
+    [error] = await await_to_js_1.default(generic[messenger].client.channels.cache
+        .get(channelId)
+        .send({ content: chunk.fallback_solution, files }));
+    if (error) {
+        logger.log({
+            level: "error",
+            function: "discord.sendTo",
+            event: "error sending a message using a webhookless method",
+            message: error.toString(),
+            chunk: chunk.fallback_solution, author
+        });
+    }
+    // now we failed to send the message with attachments via an older method so remove the attachments and try once again
+    [error] = await await_to_js_1.default(generic[messenger].client.channels.cache
+        .get(channelId)
+        .send({ content: chunk.fallback_solution, }));
+    if (error) {
+        logger.log({
+            level: "error",
+            function: "discord.sendTo",
+            event: "error sending a message without attachments using a webhookless method",
+            message: error.toString(),
+            chunk: chunk.fallback_solution, author
+        });
+    }
 };
 pierObj.discord.receivedFrom = async (messenger, message) => {
     var _a, _b, _c;
@@ -201,13 +254,12 @@ pierObj.discord.receivedFrom = async (messenger, message) => {
     for (let value of message.attachments.values()) {
         //media of attachment
         //todo: height,width,common.LocalizeString
-        let [, res] = await to(common.downloadFile({
+        let [, res] = await await_to_js_1.default(common.downloadFile({
             type: "simple",
             remote_path: value.url,
         }));
         let file, localfile;
         if (res === null || res === void 0 ? void 0 : res[1]) {
-            ;
             [file, localfile] = res;
         }
         else {
@@ -239,7 +291,6 @@ pierObj.discord.receivedFrom = async (messenger, message) => {
         const message_ = await message.channel.messages.fetch(message.reference.messageID);
         const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message_, message_.content);
         log("discord")(`sending reconstructed text: ${text}`);
-        // console.log(message_, pierObj.discord.adaptName(message_))
         sendFrom({
             messenger,
             channelId: message_.channel.id,
@@ -423,7 +474,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
         if (config.cache[messenger][message.chat.title] &&
             config.cache[messenger][message.chat.title] === message.chat.id)
             return; //cached but unmapped channel so ignore it and exit the function
-        await to(pierObj.telegram.common.NewChannelAppeared({
+        await await_to_js_1.default(pierObj.telegram.common.NewChannelAppeared({
             messenger,
             channelName: message.chat.title,
             channelId: message.chat.id,
@@ -456,7 +507,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
 pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
     if (!msg.entities)
         return msg;
-    return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) };
+    return { ...msg, text: telegram_utils_1.fillMarkdownEntitiesMarkup(msg.text, msg.entities) };
 };
 pierObj.telegram.common.IsSpam = (message) => {
     const l = config.spamremover.telegram
@@ -637,10 +688,13 @@ pierObj.telegram.GetName = async (messenger, user) => {
     return { author: name, avatar: link };
 };
 pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
-    const res = markedParse({
-        text: common.escapeHTML(text).replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
-        messenger: "telegram",
-        unescapeCodeBlocks: true
+    const res = common.unescapeHTML({
+        text: markedParse({
+            text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
+            messenger: "telegram",
+            unescapeCodeBlocks: true
+        }),
+        convertHtmlEntities: true,
     });
     return res;
 };
@@ -675,7 +729,7 @@ pierObj.telegram.common.TelegramRemoveSpam = async (messenger, message) => {
     const cloned_message = JSON.parse(JSON.stringify(message));
     if (pierObj.telegram.common.IsSpam(cloned_message)) {
         if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
-            const [err, chat] = await to(generic[messenger].client.getChat(message.chat.id));
+            const [err, chat] = await await_to_js_1.default(generic[messenger].client.getChat(message.chat.id));
             if (!err) {
                 const invite_link = chat.invite_link;
                 cloned_message.text = cloned_message.text.replace(invite_link, "");
@@ -687,7 +741,7 @@ pierObj.telegram.common.TelegramRemoveSpam = async (messenger, message) => {
             }
         }
         else {
-            const [err, chat] = await to(generic[messenger].client.getChat(cloned_message.chat.id));
+            const [err, chat] = await await_to_js_1.default(generic[messenger].client.getChat(cloned_message.chat.id));
             if (!err) {
                 pierObj.telegram.common.telegram_DeleteMessage({ messenger, message, log: true });
             }
@@ -740,12 +794,12 @@ pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger, message)
         !((_b = message === null || message === void 0 ? void 0 : message.chat) === null || _b === void 0 ? void 0 : _b.id) ||
         !((_d = (_c = config.piers[messenger]) === null || _c === void 0 ? void 0 : _c.myUser) === null || _d === void 0 ? void 0 : _d.id))
         return;
-    let [err, res] = await to(generic[messenger].client.getChatMember(message.chat.id, (_f = (_e = config.piers[messenger]) === null || _e === void 0 ? void 0 : _e.myUser) === null || _f === void 0 ? void 0 : _f.id));
+    let [err, res] = await await_to_js_1.default(generic[messenger].client.getChatMember(message.chat.id, (_f = (_e = config.piers[messenger]) === null || _e === void 0 ? void 0 : _e.myUser) === null || _f === void 0 ? void 0 : _f.id));
     if (!res)
         return true;
     if (!res.can_delete_messages) {
         ;
-        [err, res] = await to(generic[messenger].client.leaveChat(message.chat.id));
+        [err, res] = await await_to_js_1.default(generic[messenger].client.leaveChat(message.chat.id));
         const jsonMessage = {
             id: ((_g = message === null || message === void 0 ? void 0 : message.chat) === null || _g === void 0 ? void 0 : _g.id) || ((_h = message === null || message === void 0 ? void 0 : message.from) === null || _h === void 0 ? void 0 : _h.id),
             title: (_j = message === null || message === void 0 ? void 0 : message.chat) === null || _j === void 0 ? void 0 : _j.title,
@@ -756,7 +810,7 @@ pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger, message)
         };
         common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`);
         config.cache[messenger][message.chat.title] = undefined;
-        await to(common.writeCache({
+        await await_to_js_1.default(common.writeCache({
             channelName: message.chat.title,
             channelId: message.chat.id,
             action: "leave",
@@ -767,18 +821,18 @@ pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger, message)
 };
 pierObj.telegram.common.telegram_DeleteMessage = async ({ messenger, message, log, }) => {
     if (log)
-        await to(common.LogMessageToAdmin(messenger, message));
-    await to(generic[messenger].client.deleteMessage(message.chat.id, message.message_id));
+        await await_to_js_1.default(common.LogMessageToAdmin(messenger, message));
+    await await_to_js_1.default(generic[messenger].client.deleteMessage(message.chat.id, message.message_id));
 };
 pierObj.telegram.common.NewChannelAppeared = async ({ messenger, channelName, channelId, }) => {
     config.cache[messenger][channelName] = channelId;
-    let [err, res] = await to(common.writeCache({ channelName, channelId, action: "join" }));
+    let [err, res] = await await_to_js_1.default(common.writeCache({ channelName, channelId, action: "join" }));
     if (err) {
         console.error(err);
         return;
     }
     ;
-    [err, res] = await to(common.PopulateChannelMapping());
+    [err, res] = await await_to_js_1.default(common.PopulateChannelMapping());
     if (err)
         common.LogToAdmin(`got problem in the new telegram chat ${channelName}, ${channelId}`);
     if (err) {
@@ -813,7 +867,7 @@ pierObj.telegram.StartService = async ({ messenger }) => {
             generic[messenger].client.stopPolling();
         }
     });
-    const [err, res] = await to(generic[messenger].client.getMe());
+    const [err, res] = await await_to_js_1.default(generic[messenger].client.getMe());
     if (!err)
         config.piers[messenger].myUser = res;
 };
@@ -835,7 +889,7 @@ pierObj.vkboard.common = {
             clientId: config.piers[messenger].appId,
             clientSecret: config.piers[messenger].appSecret
         });
-        const [err, vkapp] = await to(direct.run());
+        const [err, vkapp] = await await_to_js_1.default(direct.run());
         if (err) {
             console.error("vkboard", err.toString());
         }
@@ -859,7 +913,7 @@ pierObj.vkwall.common = {
             clientId: config.piers[messenger].appId,
             clientSecret: config.piers[messenger].appSecret
         });
-        const [err, vkapp] = await to(direct.run());
+        const [err, vkapp] = await await_to_js_1.default(direct.run());
         if (err) {
             console.error("vkwall", err.toString());
         }
@@ -890,7 +944,7 @@ pierObj.slack.common = {
 };
 pierObj.mattermost.common = {
     Start: async function ({ messenger }) {
-        let [err, res] = await to(new Promise((resolve) => {
+        let [err, res] = await await_to_js_1.default(new Promise((resolve) => {
             const credentials = {
                 login_id: config.piers[messenger].login,
                 password: config.piers[messenger].password,
@@ -923,7 +977,7 @@ pierObj.mattermost.common = {
             config.piers[messenger].user_id = res.id;
         }
         ;
-        [err, res] = await to(new Promise((resolve) => {
+        [err, res] = await await_to_js_1.default(new Promise((resolve) => {
             const user_id = config.piers[messenger].user_id;
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${user_id}/teams`;
             request({
@@ -960,6 +1014,7 @@ pierObj.mattermost.common = {
 // sendTo
 async function FormatMessageChunkForSending({ messenger, channelId, author, chunk, action, title, quotation, }) {
     const root_messenger = common.root_of_messenger(messenger);
+    let resultingChunk = chunk;
     if (quotation) {
         if (!author || author === "")
             author = "-";
@@ -973,11 +1028,19 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
                 ["title", title],
             ],
         });
+        logger.log({
+            level: "info",
+            function: "OverlayMessageWithQuotedMark",
+            messenger,
+            channelId,
+            author,
+            chunk,
+            title
+        });
     }
     else if ((author || "") !== "") {
-        // console.log(config.piers[messenger], action,chunk)
         if ((config.piers[messenger].Actions || []).includes(action)) {
-            chunk = common.LocalizeString({
+            chunk = common.LocalizeStringWrapper({
                 messenger,
                 channelId,
                 localized_string_key: `sendTo.${root_messenger}.action`,
@@ -989,7 +1052,7 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
             });
         }
         else {
-            chunk = common.LocalizeString({
+            chunk = common.LocalizeStringWrapper({
                 messenger,
                 channelId,
                 localized_string_key: `sendTo.${root_messenger}.normal`,
@@ -1002,7 +1065,7 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
         }
     }
     else {
-        chunk = common.LocalizeString({
+        chunk = common.LocalizeStringWrapper({
             messenger,
             channelId,
             localized_string_key: `sendTo.${root_messenger}.ChunkOnly`,
@@ -1034,19 +1097,27 @@ pierObj.webwidget.sendTo = async ({ messenger, channelId, author, chunk, action,
         resolve(null);
     });
 };
-pierObj.facebook.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    await new Promise((resolve) => {
-        setTimeout(() => {
-            const jsonMessage = {
-                body: chunk,
-            };
-            if (file)
-                jsonMessage.attachment = fs.createReadStream(file);
-            generic[messenger].client.sendMessage(channelId, chunk).catch(catchError);
-            resolve(null);
-        }, 500);
-    });
-};
+// pierObj.facebook.sendTo = async ({
+//   messenger,
+//   channelId,
+//   author,
+//   chunk,
+//   action,
+//   quotation,
+//   file,
+//   edited,
+// }: IsendToArgs) => {
+//   await new Promise((resolve: any) => {
+//     setTimeout(() => {
+//       const jsonMessage: Json = {
+//         body: chunk,
+//       }
+//       if (file) jsonMessage.attachment = fs.createReadStream(file)
+//       generic[messenger].client.sendMessage(channelId, chunk).catch(catchError)
+//       resolve(null)
+//     }, 500)
+//   })
+// }
 pierObj.mattermost.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
     await new Promise((resolve) => {
         const option = {
@@ -1288,7 +1359,7 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
     //   edited,
     //   avatar
     // })
-    const nsfw = ((_g = (_f = (_e = (_d = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _d === void 0 ? void 0 : _d[messenger]) === null || _e === void 0 ? void 0 : _e[channelId]) === null || _f === void 0 ? void 0 : _f.settings) === null || _g === void 0 ? void 0 : _g.nsfw_analysis) && file ? (await to(getNSFWString(remote_file)))[1] : null;
+    const nsfw = ((_g = (_f = (_e = (_d = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _d === void 0 ? void 0 : _d[messenger]) === null || _e === void 0 ? void 0 : _e[channelId]) === null || _f === void 0 ? void 0 : _f.settings) === null || _g === void 0 ? void 0 : _g.nsfw_analysis) && file ? (await await_to_js_1.default(getNSFWString(remote_file)))[1] : null;
     if (nsfw) {
         for (const nsfw_result of nsfw) {
             const translated_text = common.LocalizeString({
@@ -1402,10 +1473,9 @@ async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation,
 }
 async function getNSFWString(file) {
     // if (file.substr(-4) !== ".jpg") return
-    const axios = require("axios"); //you can use any http client
     const tf = require("@tensorflow/tfjs-node");
     const nsfw = require("nsfwjs");
-    const pic = await axios.get(file, {
+    const pic = await axios_1.default.get(file, {
         responseType: "arraybuffer",
     });
     const model = await nsfw.load(); // To load a local model, nsfw.load('file://./path/to/model/')
@@ -1433,7 +1503,7 @@ pierObj.facebook.receivedFrom = async (messenger, message) => {
     if (!((_a = config === null || config === void 0 ? void 0 : config.channelMapping[messenger]) === null || _a === void 0 ? void 0 : _a[((message === null || message === void 0 ? void 0 : message.threadId) || "").toString()]))
         return;
     let err, res;
-    [err, res] = await to(generic[messenger].client.getUserInfo(message.authorId));
+    [err, res] = await await_to_js_1.default(generic[messenger].client.getUserInfo(message.authorId));
     if (err)
         return;
     let author;
@@ -1445,11 +1515,11 @@ pierObj.facebook.receivedFrom = async (messenger, message) => {
     for (const attachment of message.attachments) {
         if (attachment.type === "sticker") {
             ;
-            [err, res] = await to(generic[messenger].client.getStickerURL(attachment.id));
+            [err, res] = await await_to_js_1.default(generic[messenger].client.getStickerURL(attachment.id));
         }
         else {
             ;
-            [err, res] = await to(generic[messenger].client.getAttachmentURL(message.id, attachment.id));
+            [err, res] = await await_to_js_1.default(generic[messenger].client.getAttachmentURL(message.id, attachment.id));
         }
         if (err)
             return;
@@ -1490,7 +1560,7 @@ pierObj.vkwall.receivedFrom = async (messenger, message) => {
         return;
     }
     let { text, from_id: fromwhomId } = message;
-    let [err, res] = await to(generic[messenger].client.bot.api("users.get", {
+    let [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("users.get", {
         user_ids: fromwhomId,
         access_token: config.piers[messenger].token,
         fields: "nickname,screen_name",
@@ -1514,7 +1584,7 @@ pierObj.vkwall.receivedFrom = async (messenger, message) => {
                 count: 1,
                 v: "5.84",
             };
-            [err, res] = await to(generic[messenger].client.bot.api("board.getComments", opts));
+            [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("board.getComments", opts));
             let text = (_d = (_c = (_b = res === null || res === void 0 ? void 0 : res.response) === null || _b === void 0 ? void 0 : _b.items) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.text;
             if (!text)
                 continue;
@@ -1526,7 +1596,7 @@ pierObj.vkwall.receivedFrom = async (messenger, message) => {
             }
             else {
                 let authorId = (_h = (_g = (_f = res === null || res === void 0 ? void 0 : res.response) === null || _f === void 0 ? void 0 : _f.items) === null || _g === void 0 ? void 0 : _g[0]) === null || _h === void 0 ? void 0 : _h.from_id;
-                [err, res] = await to(generic[messenger].client.bot.api("users.get", {
+                [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("users.get", {
                     user_ids: authorId,
                     access_token: config.piers[messenger].token,
                     fields: "nickname,screen_name",
@@ -1602,7 +1672,7 @@ pierObj.vkboard.receivedFrom = async (messenger, message) => {
     }
     let text = message.text;
     const fromwhomId = message.from_id;
-    let [err, res] = await to(generic[messenger].client.bot.api("users.get", {
+    let [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("users.get", {
         user_ids: fromwhomId,
         access_token: config.piers[messenger].token,
         fields: "nickname,screen_name",
@@ -1626,7 +1696,7 @@ pierObj.vkboard.receivedFrom = async (messenger, message) => {
                 count: 1,
                 v: "5.84",
             };
-            [err, res] = await to(generic[messenger].client.bot.api("board.getComments", opts));
+            [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("board.getComments", opts));
             let text = (_d = (_c = (_b = res === null || res === void 0 ? void 0 : res.response) === null || _b === void 0 ? void 0 : _b.items) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.text;
             if (!text)
                 continue;
@@ -1638,7 +1708,7 @@ pierObj.vkboard.receivedFrom = async (messenger, message) => {
             }
             else {
                 let authorId = (_g = (_f = (_e = res === null || res === void 0 ? void 0 : res.response) === null || _e === void 0 ? void 0 : _e.items) === null || _f === void 0 ? void 0 : _f[0]) === null || _g === void 0 ? void 0 : _g.from_id;
-                [err, res] = await to(generic[messenger].client.bot.api("users.get", {
+                [err, res] = await await_to_js_1.default(generic[messenger].client.bot.api("users.get", {
                     user_ids: authorId,
                     access_token: (_h = config.piers[messenger]) === null || _h === void 0 ? void 0 : _h.token,
                     fields: "nickname,screen_name",
@@ -1731,13 +1801,13 @@ pierObj.slack.receivedFrom = async (messenger, message) => {
         remote_path: file.url_private,
     }));
     let err, user, chan, files;
-    [err, user] = await to(promUser);
+    [err, user] = await await_to_js_1.default(promUser);
     if (err)
         user = message.user;
-    [err, chan] = await to(promChannel);
+    [err, chan] = await await_to_js_1.default(promChannel);
     if (err)
         chan = message.channel;
-    [err, files] = await to(Promise.all(promFiles));
+    [err, files] = await await_to_js_1.default(Promise.all(promFiles));
     if (err)
         files = [];
     const author = pierObj.slack.adaptName(messenger, user);
@@ -1797,7 +1867,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         message.event = "posted";
         message.edited = true;
         let err;
-        [err] = await to(new Promise((resolve) => {
+        [err] = await await_to_js_1.default(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/posts/${post.id}`;
             request({
                 method: "GET",
@@ -1818,7 +1888,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         }));
         if (err)
             console.error(err.toString());
-        [err] = await to(new Promise((resolve) => {
+        [err] = await await_to_js_1.default(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${post.user_id}`;
             request({
                 method: "GET",
@@ -1839,7 +1909,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         }));
         if (err)
             console.error(err.toString());
-        [err] = await to(new Promise((resolve) => {
+        [err] = await await_to_js_1.default(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/channels/${post.channel_id}`;
             request({
                 method: "GET",
@@ -1880,7 +1950,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
             file_ids = (postParsed === null || postParsed === void 0 ? void 0 : postParsed.file_ids) || [];
         let files = [];
         for (const file of file_ids) {
-            const [err, promfile] = await to(new Promise((resolve) => {
+            const [err, promfile] = await await_to_js_1.default(new Promise((resolve) => {
                 const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/link`;
                 request({
                     method: "GET",
@@ -1901,7 +1971,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
             }));
             if (err)
                 console.error(err.toString());
-            const [err2, promfile2] = await to(new Promise((resolve) => {
+            const [err2, promfile2] = await await_to_js_1.default(new Promise((resolve) => {
                 const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/info`;
                 request({
                     method: "GET",
@@ -2123,7 +2193,7 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
             return userId;
         });
         for (const channelId of Object.keys(jsonChannels)) {
-            const [err, { channel }] = await to(generic[messenger].client.web.conversations.info({ channel: channelId }));
+            const [err, { channel }] = await await_to_js_1.default(generic[messenger].client.web.conversations.info({ channel: channelId }));
             if (!err) {
                 jsonChannels[channelId] = channel.name;
             }
@@ -2134,7 +2204,7 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
             }
         }
         for (const userId of Object.keys(jsonUsers)) {
-            const [err, user] = await to(generic[messenger].client.web.users.info({ user: userId }));
+            const [err, user] = await await_to_js_1.default(generic[messenger].client.web.users.info({ user: userId }));
             if (err) {
                 log("slack")({
                     error: err,
@@ -2184,7 +2254,7 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
         return text;
     };
     // text = common.escapeHTML(text);
-    const [error, result] = await to(publicParse(text));
+    const [error, result] = await await_to_js_1.default(publicParse(text));
     log("slack")({
         "converting source text": source,
         result: result || text,
@@ -2330,7 +2400,7 @@ pierObj.irc.getChannels = async (pier) => {
     config.cache[pier] = json;
 };
 pierObj.slack.getChannels = async (pier) => {
-    let [err, res] = await to(generic[pier].client.web.conversations.list());
+    let [err, res] = await await_to_js_1.default(generic[pier].client.web.conversations.list());
     if (err) {
         console.error(err);
     }
@@ -2350,7 +2420,7 @@ pierObj.mattermost.getChannels = async (pier) => {
     config.cache[pier] = json;
 };
 pierObj.mattermost.common.GetChannelsMattermostCore = async (messenger, json, url) => {
-    await to(new Promise((resolve) => {
+    await await_to_js_1.default(new Promise((resolve) => {
         request({
             method: "GET",
             url,
@@ -2418,10 +2488,6 @@ common.PopulateChannelMapping = async () => {
     for (const pier of arrAvailableMessengers) {
         await PopulateChannelMappingCore({ messenger: pier });
     }
-    // console.log(
-    //   "started services with these channel mapping:\n",
-    //   JSON.stringify(config.channelMapping, null, 2)
-    // );
 };
 common.root_of_messenger = (messenger_with_index) => messenger_with_index.replace(/_.*/g, '').replace(/_.*/g, '');
 common.MessengersAvailable = () => {
@@ -2449,25 +2515,26 @@ common.MessengersAvailable = () => {
     });
     Object.keys(config.MessengersAvailable).forEach((messenger) => generic[messenger] = {});
 };
-pierObj.facebook.StartService = async ({ force, messenger = "facebook" }) => {
-    //facebook
-    if (!force && !config.MessengersAvailable[messenger])
-        return;
-    try {
-        generic[messenger].client = await login(config.piers[messenger].email, config.piers[messenger].password);
-        console.log(generic[messenger].client);
-        console.log(JSON.stringify(generic[messenger].client.getSession()));
-        generic[messenger].client.on("message", (message) => {
-            pierObj.facebook.receivedFrom(messenger, message);
-        });
-        config.MessengersAvailable[messenger] = true;
-    }
-    catch (e) {
-        console.log(e.toString());
-        // config.MessengersAvailable[messenger] = false;
-        // StartService[messenger]({force: true});
-    }
-};
+// pierObj.facebook.StartService = async ({ force, messenger = "facebook" }: { force: boolean, messenger?: string }) => {
+//   //facebook
+//   if (!force && !config.MessengersAvailable[messenger]) return
+//   try {
+//     generic[messenger].client = await login(
+//       config.piers[messenger].email,
+//       config.piers[messenger].password
+//     )
+//     console.log(generic[messenger].client)
+//     console.log(JSON.stringify(generic[messenger].client.getSession()))
+//     generic[messenger].client.on("message", (message: any) => {
+//       pierObj.facebook.receivedFrom(messenger, message)
+//     })
+//     config.MessengersAvailable[messenger] = true
+//   } catch (e) {
+//     console.log(e.toString())
+//     // config.MessengersAvailable[messenger] = false;
+//     // StartService[messenger]({force: true});
+//   }
+// }
 pierObj.webwidget.StartService = async ({ messenger }) => {
     generic[messenger] = {
         Lojban1ChatHistory: [],
@@ -2624,7 +2691,7 @@ async function StartServices() {
 // helper functions
 common.LogMessageToAdmin = async (messenger, message) => {
     if (config.piers[messenger].admins_userid)
-        await to(generic[messenger].client.forwardMessage(config.piers[messenger].admins_userid, message.chat.id, message.message_id));
+        await await_to_js_1.default(generic[messenger].client.forwardMessage(config.piers[messenger].admins_userid, message.chat.id, message.message_id));
 };
 function catchError(err) {
     const error = JSON.stringify(err);
@@ -2840,7 +2907,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     let local_fullname = "";
     if (type === "slack") {
         local_fullname = `${local_path}/${path.basename(remote_path)}`;
-        [err, res] = await to(new Promise((resolve) => {
+        [err, res] = await await_to_js_1.default(new Promise((resolve) => {
             try {
                 let file = fs.createWriteStream(local_fullname);
                 file
@@ -2954,7 +3021,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     }
     else if (type === "telegram") {
         ;
-        [err, local_fullname] = await to(generic[messenger].client.downloadFile(fileId, local_path));
+        [err, local_fullname] = await await_to_js_1.default(generic[messenger].client.downloadFile(fileId, local_path));
         if (!err)
             rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
     }
@@ -2963,7 +3030,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
         return [remote_path || fileId, remote_path || fileId];
     }
     ;
-    [err, res] = await to(new Promise((resolve) => {
+    [err, res] = await await_to_js_1.default(new Promise((resolve) => {
         const new_name = `${local_path}/${randomStringName}${path.extname(local_fullname)}`;
         fs.rename(local_fullname, new_name, (err) => {
             if (err) {
@@ -2993,7 +3060,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
         const sharp = require("sharp");
         const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`;
-        [err, res] = await to(new Promise((resolve) => {
+        [err, res] = await await_to_js_1.default(new Promise((resolve) => {
             sharp(local_fullname).toFile(jpgname, (err, info) => {
                 if (err) {
                     console.error({
@@ -3040,6 +3107,33 @@ common.sanitizeHtml = (text, allowedTags = [
         },
     });
 };
+common.LocalizeStringWrapper = ({ messenger, channelId, localized_string_key, arrElemsToInterpolate, }) => {
+    var _a, _b, _c, _d;
+    const language = ((_d = (_c = (_b = (_a = config === null || config === void 0 ? void 0 : config.channelMapping) === null || _a === void 0 ? void 0 : _a[messenger]) === null || _b === void 0 ? void 0 : _b[channelId]) === null || _c === void 0 ? void 0 : _c.settings) === null || _d === void 0 ? void 0 : _d.language) ||
+        "English";
+    const localized_string_key_additional = localized_string_key + ".fallback_solution";
+    if (localizationConfig[language][localized_string_key_additional])
+        return {
+            main: common.LocalizeString({
+                messenger,
+                channelId,
+                localized_string_key,
+                arrElemsToInterpolate,
+            }), fallback_solution: common.LocalizeString({
+                messenger,
+                channelId,
+                localized_string_key: localized_string_key_additional,
+                arrElemsToInterpolate,
+            })
+        };
+    else
+        return common.LocalizeString({
+            messenger,
+            channelId,
+            localized_string_key,
+            arrElemsToInterpolate,
+        });
+};
 common.LocalizeString = ({ messenger, channelId, localized_string_key, arrElemsToInterpolate, }) => {
     var _a, _b, _c, _d;
     try {
@@ -3059,8 +3153,15 @@ common.LocalizeString = ({ messenger, channelId, localized_string_key, arrElemsT
                 .replace(/%%/g, "%");
         return template;
     }
-    catch (err) {
-        console.error(err);
+    catch (error) {
+        logger.log({
+            level: "error",
+            function: "LocalizeString",
+            messenger,
+            channelId,
+            localized_string_key,
+            arrElemsToInterpolate,
+        });
     }
 };
 //START
