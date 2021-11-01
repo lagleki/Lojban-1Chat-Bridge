@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fillMarkdownEntitiesMarkup = void 0;
+const generic_1 = require("./generic");
 const R = require("ramda");
 const rewriteTextAtPosition = (text, position, rewriteText, rewriteLength = rewriteText.length) => text.substr(0, position) +
     rewriteText +
@@ -35,8 +36,11 @@ const escapeCommonChars = (text) => escapeChars(text, [
 const escapeCodeChars = (text) => escapeChars(text, ['`', '\\']);
 const escapeLinkChars = (text) => escapeCommonChars(escapeChars(text, [')', '\\']));
 const escapeMarkdownTextByEntity = (text, entity) => {
-    return text;
-    if (entity.type === 'bold') {
+    // return text;
+    if (entity.type === 'symbol') {
+        return generic_1.escapeHTML(text);
+    }
+    else if (entity.type === 'bold') {
         return escapeCommonChars(text);
     }
     else if (entity.type === 'italic') {
@@ -111,7 +115,21 @@ const wrapTextWithMarkdownEntity = (text, entity) => {
         }
     }
 };
-const fillMarkdownEntitiesMarkup = (text, entities) => {
+const findIndices = (str, char) => str.split('').reduce((indices, letter, index) => { letter === char && indices.push(index); return indices; }, []);
+function addBracketEntities(text) {
+    let indices = [];
+    for (const char of ["<", ">"]) {
+        indices = indices.concat(findIndices(text, char));
+    }
+    return indices.map(index => ({
+        type: 'symbol',
+        offset: index,
+        length: 1
+    }));
+}
+const fillMarkdownEntitiesMarkup = (text, entities, logger) => {
+    const bracketedIndices = addBracketEntities(text);
+    entities = entities.concat(bracketedIndices);
     const entitiesChunks = R.groupBy((entity) => entity.offset)(entities);
     const topLevelEntities = R.reverse(Object.values(entitiesChunks).map((entitiesList) => entitiesList[0]));
     for (const entity of topLevelEntities) {
@@ -153,6 +171,12 @@ const fillMarkdownEntitiesMarkup = (text, entities) => {
         }
         text = processEntity(modifiedText, entity);
     }
+    logger.log({
+        level: "info",
+        function: "tg filler",
+        array: bracketedIndices,
+        text
+    });
     return text;
 };
 exports.fillMarkdownEntitiesMarkup = fillMarkdownEntitiesMarkup;

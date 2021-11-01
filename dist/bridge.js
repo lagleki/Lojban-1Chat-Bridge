@@ -34,6 +34,10 @@ lexer.rules.list = { exec: () => { } };
 lexer.rules.listitem = { exec: () => { } };
 const markedRenderer = new marked.Renderer();
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+// markedRenderer.text = (string: string) => escapeHTML(string)
+// markedRenderer.paragraph = (string: string) => escapeHTML(string)
+// markedRenderer.inlineText = (string: string) => escapeHTML(string)
+const generic_1 = require("./formatting-converters/generic");
 const telegram_utils_1 = require("./formatting-converters/telegram-utils");
 // const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
@@ -62,10 +66,7 @@ function markedParse({ text, messenger, dontEscapeBackslash, unescapeCodeBlocks,
             });
         return `<pre><code>${text}</code></pre>\n`;
     };
-    const result = marked.parser(lexer.lex(text), {
-        gfm: true,
-        renderer: markedRenderer,
-    });
+    const result = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer, });
     log(messenger)({ "converting source text": text, result });
     return result;
 }
@@ -443,7 +444,7 @@ Error sending a chunk:
 
 Channel: ${channelId}.
 
-Chunk: ${common.escapeHTML(chunk)}
+Chunk: ${generic_1.escapeHTML(chunk)}
 
 Error message: ${err}
             `);
@@ -505,9 +506,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
 };
 // reconstructs the original raw markdown message
 pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
-    if (!msg.entities)
-        return msg;
-    return { ...msg, text: telegram_utils_1.fillMarkdownEntitiesMarkup(msg.text, msg.entities) };
+    return { ...msg, text: telegram_utils_1.fillMarkdownEntitiesMarkup(msg.text, msg.entities || [], logger) };
 };
 pierObj.telegram.common.IsSpam = (message) => {
     const l = config.spamremover.telegram
@@ -688,13 +687,10 @@ pierObj.telegram.GetName = async (messenger, user) => {
     return { author: name, avatar: link };
 };
 pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
-    const res = common.unescapeHTML({
-        text: markedParse({
-            text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
-            messenger: "telegram",
-            unescapeCodeBlocks: true
-        }),
-        convertHtmlEntities: true,
+    const res = markedParse({
+        text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
+        messenger: "telegram",
+        unescapeCodeBlocks: true
     });
     return res;
 };
@@ -2253,7 +2249,7 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
         }
         return text;
     };
-    // text = common.escapeHTML(text);
+    // text = escapeHTML(text);
     const [error, result] = await await_to_js_1.default(publicParse(text));
     log("slack")({
         "converting source text": source,
@@ -2262,11 +2258,11 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
     });
     return result || text;
 };
-pierObj.facebook.convertFrom = async ({ text, messenger, }) => common.escapeHTML(text);
-pierObj.vkboard.convertFrom = async ({ text, messenger, }) => common.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
+pierObj.facebook.convertFrom = async ({ text, messenger, }) => generic_1.escapeHTML(text);
+pierObj.vkboard.convertFrom = async ({ text, messenger, }) => generic_1.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "");
 pierObj.vkwall.convertFrom = pierObj.vkboard.convertFrom;
 pierObj.mattermost.convertFrom = async ({ text, messenger, }) => markedParse({
-    text: common.escapeHTML(text),
+    text: generic_1.escapeHTML(text),
     messenger: "mattermost",
     unescapeCodeBlocks: true,
 });
@@ -2277,7 +2273,7 @@ pierObj.mattermost.convertFrom = async ({ text, messenger, }) => markedParse({
 // });
 pierObj.webwidget.convertFrom = async ({ text, messenger, }) => text;
 pierObj.irc.convertFrom = async ({ text, messenger, }) => {
-    const result = common.escapeHTML(text)
+    const result = generic_1.escapeHTML(text)
         .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
         .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
         .replace(/\*/g, "&#42;")
@@ -2715,12 +2711,6 @@ common.LogToAdmin = (msg_text, repeat = true) => {
                     common.LogToAdmin(msg_text, false);
             });
 };
-common.escapeHTML = (arg) => arg
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 const htmlEntities = {
     nbsp: " ",
     cent: "¢",

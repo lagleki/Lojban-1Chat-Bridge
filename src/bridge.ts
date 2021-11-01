@@ -54,6 +54,10 @@ lexer.rules.list = { exec: () => { } }
 lexer.rules.listitem = { exec: () => { } }
 const markedRenderer = new marked.Renderer()
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+// markedRenderer.text = (string: string) => escapeHTML(string)
+// markedRenderer.paragraph = (string: string) => escapeHTML(string)
+// markedRenderer.inlineText = (string: string) => escapeHTML(string)
+import { escapeHTML } from './formatting-converters/generic'
 import { fillMarkdownEntitiesMarkup } from './formatting-converters/telegram-utils'
 // const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
 //fillMarkdownEntitiesMarkup(message.text, message.entities)
@@ -92,10 +96,7 @@ function markedParse({
       })
     return `<pre><code>${text}</code></pre>\n`
   }
-  const result = marked.parser(lexer.lex(text), {
-    gfm: true,
-    renderer: markedRenderer,
-  })
+  const result = marked.parser(lexer.lex(text), { gfm: true, renderer: markedRenderer, })
   log(messenger)({ "converting source text": text, result })
   return result
 }
@@ -619,7 +620,7 @@ Error sending a chunk:
 
 Channel: ${channelId}.
 
-Chunk: ${common.escapeHTML(chunk)}
+Chunk: ${escapeHTML(chunk as string)}
 
 Error message: ${err}
             `
@@ -691,8 +692,7 @@ pierObj.telegram.receivedFrom = async (messenger: string, message: Telegram.Mess
 
 // reconstructs the original raw markdown message
 pierObj.telegram.common.telegram_reconstructMarkdown = (msg: Telegram.Message) => {
-  if (!msg.entities) return msg
-  return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities) }
+  return { ...msg, text: fillMarkdownEntitiesMarkup(msg.text, msg.entities || [], logger) }
 }
 
 pierObj.telegram.common.IsSpam = (message: any): boolean => {
@@ -907,16 +907,13 @@ pierObj.telegram.convertFrom = async ({
   text: string
   messenger: string
 }) => {
-  const res = common.unescapeHTML({
-    text: markedParse({
-      text: text.replace(
-        /<p><code>([\s\S]*?)<\/code><\/p>/gim,
-        "<p><pre>$1</pre></p>"
-      ),
-      messenger: "telegram",
-      unescapeCodeBlocks: true
-    }),
-    convertHtmlEntities: true,
+  const res = markedParse({
+    text: text.replace(
+      /<p><code>([\s\S]*?)<\/code><\/p>/gim,
+      "<p><pre>$1</pre></p>"
+    ),
+    messenger: "telegram",
+    unescapeCodeBlocks: true
   })
   return res
 }
@@ -2877,7 +2874,7 @@ pierObj.slack.convertFrom = async ({
 
     return text
   }
-  // text = common.escapeHTML(text);
+  // text = escapeHTML(text);
   const [error, result] = await to(publicParse(text))
   log("slack")({
     "converting source text": source,
@@ -2893,7 +2890,7 @@ pierObj.facebook.convertFrom = async ({
 }: {
   text: string
   messenger: string
-}) => common.escapeHTML(text)
+}) => escapeHTML(text)
 
 pierObj.vkboard.convertFrom = async ({
   text,
@@ -2901,7 +2898,7 @@ pierObj.vkboard.convertFrom = async ({
 }: {
   text: string
   messenger: string
-}) => common.escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "")
+}) => escapeHTML(text).replace(/\[[^\]]*\|(.*?)\](, ?)?/g, "")
 pierObj.vkwall.convertFrom = pierObj.vkboard.convertFrom
 pierObj.mattermost.convertFrom = async ({
   text,
@@ -2911,7 +2908,7 @@ pierObj.mattermost.convertFrom = async ({
   messenger: string
 }) =>
   markedParse({
-    text: common.escapeHTML(text),
+    text: escapeHTML(text),
     messenger: "mattermost",
     unescapeCodeBlocks: true,
   })
@@ -2935,7 +2932,7 @@ pierObj.irc.convertFrom = async ({
   text: string
   messenger: string
 }) => {
-  const result = common.escapeHTML(text)
+  const result = escapeHTML(text)
     .replace(/\*\b(\w+)\b\*/g, "<b>$1</b>")
     .replace(/_\b(\w+)\b_/g, "<i>$1</i>")
     .replace(/\*/g, "&#42;")
@@ -3511,14 +3508,6 @@ common.LogToAdmin = (msg_text: string, repeat = true) => {
           if (repeat) common.LogToAdmin(msg_text, false)
         })
 }
-
-common.escapeHTML = (arg: string) =>
-  arg
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
 
 const htmlEntities: any = {
   nbsp: " ",

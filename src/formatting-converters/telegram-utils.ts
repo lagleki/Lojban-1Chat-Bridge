@@ -1,5 +1,7 @@
 import * as Telegram from "node-telegram-bot-api"
-type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention';
+import { escapeHTML } from './generic'
+
+type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention' | 'symbol';
 interface MessageEntity {
 	type: MessageEntityType;
 	offset: number;
@@ -24,12 +26,10 @@ const rewriteTextAtPosition = (
 const insertTextAtPosition = (text: string, position: number, insertText: string) =>
 	rewriteTextAtPosition(text, position, insertText, 0);
 
-
 const escapeChars = (text: string, charsToEscape: string[]) => {
 	for (const char of charsToEscape) {
 		text = text.split(char).join(`\\${char}`);
 	}
-
 	return text;
 };
 
@@ -58,8 +58,10 @@ const escapeCodeChars = (text: string) => escapeChars(text, ['`', '\\']);
 const escapeLinkChars = (text: string) => escapeCommonChars(escapeChars(text, [')', '\\']));
 
 const escapeMarkdownTextByEntity = (text: string, entity: MessageEntity) => {
-	return text;
-	if (entity.type === 'bold') {
+	// return text;
+	if (entity.type === 'symbol') {
+		return escapeHTML(text);
+	} else if (entity.type === 'bold') {
 		return escapeCommonChars(text);
 	} else if (entity.type === 'italic') {
 		return escapeCommonChars(text);
@@ -121,7 +123,23 @@ const wrapTextWithMarkdownEntity = (text: string, entity: MessageEntity): string
 	}
 };
 
-export const fillMarkdownEntitiesMarkup = (text: string, entities: MessageEntity[]) => {
+const findIndices = (str: string, char: string) => str.split('').reduce( (indices, letter, index) => { letter === char && indices.push(index); return indices }, [] );
+
+function addBracketEntities(text: string){
+	let indices: number[] = []
+	for (const char of ["<",">"]){
+		indices=indices.concat(findIndices(text, char))
+	}
+	return indices.map(index=>({
+		type: 'symbol',
+		offset: index,
+		length: 1
+	}) as MessageEntity)
+}
+export const fillMarkdownEntitiesMarkup = (text: string, entities: MessageEntity[], logger: any) => {
+	const bracketedIndices = addBracketEntities(text)
+	
+	entities = entities.concat(bracketedIndices)
 	const entitiesChunks = R.groupBy((entity: MessageEntity) => entity.offset)(entities);
 	const topLevelEntities = R.reverse(
 		Object.values(entitiesChunks).map((entitiesList: any) => entitiesList[0])
@@ -201,6 +219,13 @@ export const fillMarkdownEntitiesMarkup = (text: string, entities: MessageEntity
 		text = processEntity(modifiedText, entity);
 	}
 
+	logger.log({
+		level: "info",
+		function: "tg filler",
+		array: bracketedIndices,
+		text	
+	  });
+	
 	return text;
 };
 
