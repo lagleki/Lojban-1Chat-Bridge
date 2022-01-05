@@ -170,19 +170,21 @@ class Avatar {
 	async drawEmoji(ctx, hash) {
 		const { size } = this;
 		const { emojis } = this.theme;
+		if (this.modzi) {
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.font = (size / 2) + 'px "Emoji"'
+			ctx.fillStyle = "black";
+			try {
+				await fillTextWithTwemoji(ctx, this.modzi, size / 2, size / 2);
+				return null
+			} catch (error) {
+				this.modzi = null
+			}
+		}
 
-		return new Promise(resolve => {
-			if (this.modzi) {
-				ctx.textAlign = "center";
-				ctx.textBaseline = "middle";
-				ctx.font = (size / 2) + 'px "Emoji"'
-				ctx.fillStyle = "black";
-				try {
-					fillTextWithTwemoji(ctx, this.modzi, size / 2, size / 2).then(() => { resolve() })
-				} catch (error) {
-					
-				}
-			} else {
+		if (!this.modzi) {
+			return new Promise(resolve => {
 				ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
 				ctx.shadowBlur = size / 8;
 				ctx.shadowOffsetX = 0;
@@ -198,12 +200,12 @@ class Avatar {
 						(size * 5) / 8,
 						(size * 5) / 8
 					)
-					resolve()
+					resolve(null)
 				}
-				img.onerror = err => { console.log`${err}` }
+				img.onerror = err => { console.log`${err}`; resolve(null) }
 				img.src = emoji
-			}
-		})
+			})
+		}
 	}
 
 	async draw() {

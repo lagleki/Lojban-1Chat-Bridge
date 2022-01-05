@@ -218,7 +218,7 @@ Object.keys(pierObj).forEach((key: any) => {
   pierObj[key].common = {}
 })
 
-async function tot(arg: Promise<any>, timeout = 3000, rejectResponse = true) {
+async function tot(arg: Promise<any>, timeout = 5000, rejectResponse = true) {
   return to(Timeout.wrap(arg, timeout, rejectResponse))
 }
 
@@ -249,11 +249,8 @@ pierObj.discord.sendTo = async ({
   if (typeof chunk_ !== 'string' && chunk_.main) chunk_ = chunk_.main
   if (chunk_ === file) chunk_ = "";
 
-  const channel = generic[messenger].client.channels.cache.get(channelId)
-  const webhooks = await channel.fetchWebhooks()
-  let webhook = webhooks.last()
   const authorTemp = author
-    .replace(/[0-9_\.-]+$/, " ")
+    .replace(/[0-9_\.-]+$/, "")
     .replace(/\[.*/, "")
     .replace(/[^0-9A-Za-z].*$/, "")
     .trim()
@@ -281,6 +278,11 @@ pierObj.discord.sendTo = async ({
 
   let error
 
+  const channel = generic[messenger].client.channels.cache.get(channelId)
+  let webhook = null
+  try {
+    webhook = (await channel.fetchWebhooks()).last()
+  } catch (error) { }
   //reuse a webhook
   if (webhook) {
     [error, webhook] = await tot(webhook.edit({
@@ -299,7 +301,6 @@ pierObj.discord.sendTo = async ({
   }
   //couldn't reuse the webhook so create a new one
   if (error || !webhook) [error, webhook] = await tot(channel.createWebhook(author || "-", avatar))
-
   if (!error) {
     //ok, we have a webhook so send a message with it 
     [error] = await tot(
@@ -351,7 +352,7 @@ pierObj.discord.sendTo = async ({
       message: error.toString(),
       chunk: (chunk as any).fallback_solution, author
     });
-  }
+  } else return
 
   // now we failed to send the message with attachments via an older method so remove the attachments and try once again
   [error] = await to(generic[messenger].client.channels.cache
@@ -496,7 +497,8 @@ pierObj.discord.convertFrom = async ({
   text: string
   messenger: string
 }) => {
-  const result = discordParser.toHTML(text)
+  const result = discordParser.toHTML(text).replace(/<span class="d-spoiler">/g, '<span class="spoiler">')
+
   log(messenger)({
     messenger,
     "converting text": text,
@@ -911,7 +913,9 @@ pierObj.telegram.convertFrom = async ({
     text: text.replace(
       /<p><code>([\s\S]*?)<\/code><\/p>/gim,
       "<p><pre>$1</pre></p>"
-    ),
+    )
+      .replace(/<span class="tg-spoiler">/g, '<span class="spoiler">')
+    ,
     messenger: "telegram",
     unescapeCodeBlocks: true
   })
@@ -3610,10 +3614,12 @@ const diffTwo = (diffMe: string, diffBy: string) => {
     .replace(/[\n\r]/g, "")
     .replace(/<br \/>/gim, "<br>")
     .replace(/<a_href=/g, "<a href=")
+    .replace(/<span_class=/g, "<span class=")
   diffBy = diffBy
     .replace(/[\n\r]/g, "")
     .replace(/<br \/>/gim, "<br>")
     .replace(/<a_href=/g, "<a href=")
+    .replace(/<span_class=/g, "<span class=")
   return diffMe.split(diffBy).join("")
 }
 
@@ -3627,7 +3633,7 @@ function HTMLSplitter(text: string, limit = 400) {
       "<blockquote>$1</blockquote>"
     )
   )
-  text = text.replace(/<a href=/g, "<a_href=")
+  text = text.replace(/<a href=/g, "<a_href=").replace(/<span class=/g, "<span_class=")
   let thisChunk
   let stop = false
   let Chunks = []
@@ -3652,8 +3658,12 @@ function HTMLSplitter(text: string, limit = 400) {
       stop = true
     }
     const thisChunkUntruncated = DOMPurify.sanitize(
-      thisChunk.replace(/<a_href=/g, "<a href=")
-    ).replace(/<a href=/g, "<a_href=")
+      thisChunk
+        .replace(/<a_href=/g, "<a href=")
+        .replace(/<span_class=/g, "<span class=")
+    )
+      .replace(/<a href=/g, "<a_href=")
+      .replace(/<span class=/g, "<span_class=")
     Chunks.push(thisChunkUntruncated)
     if (stop) break
     let diff = diffTwo(thisChunkUntruncated, thisChunk)
@@ -3667,7 +3677,7 @@ function HTMLSplitter(text: string, limit = 400) {
       text = DOMPurify.sanitize(diff + text)
     }
   }
-  Chunks = Chunks.map((chunk) => chunk.replace(/<a_href=/g, "<a href="))
+  Chunks = Chunks.map((chunk) => chunk.replace(/<a_href=/g, "<a href=").replace(/<span_class=/g, "<span class="))
   log("generic")({ message: "html splitter: after", Chunks })
 
   return Chunks
@@ -3942,12 +3952,13 @@ common.sanitizeHtml = (
     "s",
     "br",
     "del",
+    "span"
   ]
 ) => {
   return sanitizeHtml(text, {
     allowedTags,
     allowedAttributes: {
-      a: ["href"],
+      a: ["href", "class"],
     },
   })
 }

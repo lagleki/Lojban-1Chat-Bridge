@@ -40,6 +40,9 @@ const escapeMarkdownTextByEntity = (text, entity) => {
     if (entity.type === 'symbol') {
         return generic_1.escapeHTML(text);
     }
+    else if (entity.type === 'spoiler') {
+        return escapeCommonChars(text);
+    }
     else if (entity.type === 'bold') {
         return escapeCommonChars(text);
     }
@@ -79,6 +82,9 @@ const wrapTextWithMarkdownEntity = (text, entity) => {
     else {
         if (entity.type === 'bold') {
             openTag = closeTag = '**';
+        }
+        else if (entity.type === 'spoiler') {
+            openTag = closeTag = '||';
         }
         else if (entity.type === 'italic') {
             openTag = closeTag = '*';
@@ -128,7 +134,7 @@ function addBracketEntities(text) {
     }));
 }
 const fillMarkdownEntitiesMarkup = (text, entities, logger) => {
-    const bracketedIndices = addBracketEntities(text);
+    const bracketedIndices = addBracketEntities(text || '');
     entities = entities.concat(bracketedIndices);
     const entitiesChunks = R.groupBy((entity) => entity.offset)(entities);
     const topLevelEntities = R.reverse(Object.values(entitiesChunks).map((entitiesList) => entitiesList[0]));

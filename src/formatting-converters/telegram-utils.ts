@@ -1,7 +1,7 @@
 import * as Telegram from "node-telegram-bot-api"
 import { escapeHTML } from './generic'
 
-type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention' | 'symbol';
+type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention' | 'symbol' | 'spoiler';
 interface MessageEntity {
 	type: MessageEntityType;
 	offset: number;
@@ -61,6 +61,8 @@ const escapeMarkdownTextByEntity = (text: string, entity: MessageEntity) => {
 	// return text;
 	if (entity.type === 'symbol') {
 		return escapeHTML(text);
+	} else if (entity.type === 'spoiler') {
+		return escapeCommonChars(text);
 	} else if (entity.type === 'bold') {
 		return escapeCommonChars(text);
 	} else if (entity.type === 'italic') {
@@ -93,6 +95,8 @@ const wrapTextWithMarkdownEntity = (text: string, entity: MessageEntity): string
 	} else {
 		if (entity.type === 'bold') {
 			openTag = closeTag = '**';
+		} else if (entity.type === 'spoiler') {
+			openTag = closeTag = '||';
 		} else if (entity.type === 'italic') {
 			openTag = closeTag = '*';
 		} else if (entity.type === 'underline') {
@@ -137,7 +141,7 @@ function addBracketEntities(text: string){
 	}) as MessageEntity)
 }
 export const fillMarkdownEntitiesMarkup = (text: string, entities: MessageEntity[], logger: any) => {
-	const bracketedIndices = addBracketEntities(text)
+	const bracketedIndices = addBracketEntities(text||'')
 	
 	entities = entities.concat(bracketedIndices)
 	const entitiesChunks = R.groupBy((entity: MessageEntity) => entity.offset)(entities);

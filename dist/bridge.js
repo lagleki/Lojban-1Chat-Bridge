@@ -116,7 +116,7 @@ const pierObj = {
 Object.keys(pierObj).forEach((key) => {
     pierObj[key].common = {};
 });
-async function tot(arg, timeout = 3000, rejectResponse = true) {
+async function tot(arg, timeout = 5000, rejectResponse = true) {
     return await_to_js_1.default(Timeout.wrap(arg, timeout, rejectResponse));
 }
 //discord
@@ -136,11 +136,8 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
         chunk_ = chunk_.main;
     if (chunk_ === file)
         chunk_ = "";
-    const channel = generic[messenger].client.channels.cache.get(channelId);
-    const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.last();
     const authorTemp = author
-        .replace(/[0-9_\.-]+$/, " ")
+        .replace(/[0-9_\.-]+$/, "")
         .replace(/\[.*/, "")
         .replace(/[^0-9A-Za-z].*$/, "")
         .trim();
@@ -162,6 +159,12 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
         avatar = await animava.toDataURL();
     }
     let error;
+    const channel = generic[messenger].client.channels.cache.get(channelId);
+    let webhook = null;
+    try {
+        webhook = (await channel.fetchWebhooks()).last();
+    }
+    catch (error) { }
     //reuse a webhook
     if (webhook) {
         [error, webhook] = await tot(webhook.edit({
@@ -231,6 +234,8 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
             chunk: chunk.fallback_solution, author
         });
     }
+    else
+        return;
     // now we failed to send the message with attachments via an older method so remove the attachments and try once again
     [error] = await await_to_js_1.default(generic[messenger].client.channels.cache
         .get(channelId)
@@ -352,7 +357,7 @@ pierObj.discord.adaptName = (messenger, message) => {
     return ((_a = message.member) === null || _a === void 0 ? void 0 : _a.nickname) || ((_b = message.author) === null || _b === void 0 ? void 0 : _b.username);
 };
 pierObj.discord.convertFrom = async ({ text, messenger, }) => {
-    const result = discordParser.toHTML(text);
+    const result = discordParser.toHTML(text).replace(/<span class="d-spoiler">/g, '<span class="spoiler">');
     log(messenger)({
         messenger,
         "converting text": text,
@@ -688,7 +693,8 @@ pierObj.telegram.GetName = async (messenger, user) => {
 };
 pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
     const res = markedParse({
-        text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>"),
+        text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>")
+            .replace(/<span class="tg-spoiler">/g, '<span class="spoiler">'),
         messenger: "telegram",
         unescapeCodeBlocks: true
     });
@@ -2802,18 +2808,20 @@ const diffTwo = (diffMe, diffBy) => {
     diffMe = diffMe
         .replace(/[\n\r]/g, "")
         .replace(/<br \/>/gim, "<br>")
-        .replace(/<a_href=/g, "<a href=");
+        .replace(/<a_href=/g, "<a href=")
+        .replace(/<span_class=/g, "<span class=");
     diffBy = diffBy
         .replace(/[\n\r]/g, "")
         .replace(/<br \/>/gim, "<br>")
-        .replace(/<a_href=/g, "<a href=");
+        .replace(/<a_href=/g, "<a href=")
+        .replace(/<span_class=/g, "<span class=");
     return diffMe.split(diffBy).join("");
 };
 function HTMLSplitter(text, limit = 400) {
     log("generic")({ message: "html splitter: pre", text });
     const r = new RegExp(`(?<=.{${limit / 2},})[^<>](?![^<>]*>)`, "g");
     text = common.sanitizeHtml(text.replace(/<blockquote>([\s\S]*?)(<br>)*<\/blockquote>/gim, "<blockquote>$1</blockquote>"));
-    text = text.replace(/<a href=/g, "<a_href=");
+    text = text.replace(/<a href=/g, "<a_href=").replace(/<span class=/g, "<span_class=");
     let thisChunk;
     let stop = false;
     let Chunks = [];
@@ -2839,7 +2847,11 @@ function HTMLSplitter(text, limit = 400) {
             thisChunk = text;
             stop = true;
         }
-        const thisChunkUntruncated = DOMPurify.sanitize(thisChunk.replace(/<a_href=/g, "<a href=")).replace(/<a href=/g, "<a_href=");
+        const thisChunkUntruncated = DOMPurify.sanitize(thisChunk
+            .replace(/<a_href=/g, "<a href=")
+            .replace(/<span_class=/g, "<span class="))
+            .replace(/<a href=/g, "<a_href=")
+            .replace(/<span class=/g, "<span_class=");
         Chunks.push(thisChunkUntruncated);
         if (stop)
             break;
@@ -2854,7 +2866,7 @@ function HTMLSplitter(text, limit = 400) {
             text = DOMPurify.sanitize(diff + text);
         }
     }
-    Chunks = Chunks.map((chunk) => chunk.replace(/<a_href=/g, "<a href="));
+    Chunks = Chunks.map((chunk) => chunk.replace(/<a_href=/g, "<a href=").replace(/<span_class=/g, "<span class="));
     log("generic")({ message: "html splitter: after", Chunks });
     return Chunks;
 }
@@ -3089,11 +3101,12 @@ common.sanitizeHtml = (text, allowedTags = [
     "s",
     "br",
     "del",
+    "span"
 ]) => {
     return sanitizeHtml(text, {
         allowedTags,
         allowedAttributes: {
-            a: ["href"],
+            a: ["href", "class"],
         },
     });
 };

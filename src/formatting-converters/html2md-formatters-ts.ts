@@ -14,6 +14,7 @@ const preRegex = /<pre>([\s\S]*?)<\/pre>/gim;
 const codeRegex = /<code>([\s\S]*?)<\/code>/gim;
 const blockQuoteRegex = /<blockquote>([\s\S]*?)<\/blockquote>/gim;
 const boldRegex = /<(?:b|strong)>([\s\S]*?)<\/\w*>/gim;
+const spoilerRegex = /<span class="spoiler">([\s\S]*?)<\/span>/gim;
 const underlineRegex = /<(?:u)>([\s\S]*?)<\/\w*>/gim;
 const italicRegex = /<(?:i|em)>([\s\S]*?)<\/\w*>/gim;
 
@@ -258,7 +259,25 @@ function replaceBold({
 }): string {
   return makeRegex({ regex: boldRegex, doc, before: "**", after: "**" });
 }
-1;
+
+/**
+ * @description replaces spoiler section with equalent markdown
+ * syntax
+ * @method replaceSpoiler
+ * @param  {String}       doc [description]
+ * @return {String}           [description]
+ */
+function replaceSpoiler({
+  doc,
+  dialect
+}: {
+  doc: string;
+  dialect?: string;
+}): string {
+  if (["discord","telegram"].includes(dialect))
+  return makeRegex({ regex: spoilerRegex, doc, before: "||", after: "||" });
+}
+
 /**
  * @description replaces г section with equalent markdown
  * syntax
