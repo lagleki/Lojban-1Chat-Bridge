@@ -49,7 +49,7 @@
     "jsdom": "^16.6.0",
     "libfb": "^2.3.5",
     "lojban": "^2.0.7",
-    "marked": "^2.1.1",
+    "marked": "^4.0.10",
     "middleware-io": "2.8.0",
     "mkdirp-sync": "0.0.3",
     "ncu": "^0.2.1",
