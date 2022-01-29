@@ -1198,20 +1198,22 @@ pierObj.vkboard.sendTo = async ({ messenger, channelId, author, chunk, action, q
 };
 // async function myAwesomeCaptchaHandler() {}
 pierObj.slack.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    await new Promise((resolve) => {
+    try {
         chunk = emoji.unemojify(chunk);
         generic[messenger].client.web.chat
             .postMessage({
             channel: channelId,
             username: (author || "").replace(/(^.{21}).*$/, "$1"),
             text: chunk,
-        })
-            .then(() => resolve(null))
-            .catch((err) => {
-            console.error(err);
-            resolve(null);
         });
-    });
+    }
+    catch (error) {
+        logger.log({
+            level: "error",
+            function: "slack.sendTo",
+            message: error.toString(),
+        });
+    }
 };
 pierObj.irc.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
     log("irc")({ "sending for irc": chunk });

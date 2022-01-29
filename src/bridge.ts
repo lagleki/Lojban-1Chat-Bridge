@@ -1568,7 +1568,7 @@ pierObj.slack.sendTo = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  await new Promise((resolve: any) => {
+  try {
     chunk = emoji.unemojify(chunk)
     generic[messenger].client.web.chat
       .postMessage({
@@ -1576,12 +1576,14 @@ pierObj.slack.sendTo = async ({
         username: (author || "").replace(/(^.{21}).*$/, "$1"),
         text: chunk,
       })
-      .then(() => resolve(null))
-      .catch((err: any) => {
-        console.error(err)
-        resolve(null)
-      })
-  })
+  } catch (error) {
+    logger.log({
+      level: "error",
+      function: "slack.sendTo",
+      message: error.toString(),
+    })
+  }
+
 }
 
 pierObj.irc.sendTo = async ({

@@ -8,15 +8,19 @@ config.piers = {
     /*
     create a Discord bot,
     add it to your server (group of channels)
-    only one server is supported
-    Add a new role "webhooks" and add switch the ability to manage webhooks to this role. Add the role "webhooks" to the bot you just created. 
-    Open your bot credentials and fill them in:
+    only one server per pier is supported, if you want to bridge several Discord servers create a pier for each server
+    * open https://discord.com/developers/applications
+    * create a new bot
+    * open 'OAuth2' -> 'URL Generator' -> select 'bot' -> select 'Manage webhooks', 'Send messages', 'Attach files', 
+    * use the resulting invite link and send it to the admin of the Discord server to invite the bot
+    * open 'Oauth2' -> 'General' and fill the credentials:
     */
-    client: "",
-    token: "",
-    /* this is the id of the server:
+    client: "", // Client ID
+    token: "", // Client secret
+    /* 
+    fill in the ID of the server.
     E.g. if your groups look like https://discordapp.com/channels/123498134853750762/1230785752112867346
-    then your guildId = 123498134853750762 (the first of the two numbers)
+    then your guildId is 123498134853750762 (the first of the two numbers) 
     */
     guildId: ""
   },
