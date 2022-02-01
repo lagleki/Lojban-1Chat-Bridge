@@ -79,6 +79,7 @@ const serveStatic = require("serve-static");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
 const logger = winston.createLogger({
+    format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
     transports: [
         new DailyRotateFile({
             filename: path.join(cache_folder, "info-%DATE%.log"),
@@ -116,7 +117,7 @@ const pierObj = {
 Object.keys(pierObj).forEach((key) => {
     pierObj[key].common = {};
 });
-async function tot(arg, timeout = 5000, rejectResponse = true) {
+async function tot(arg, timeout = 3000, rejectResponse = true) {
     return await_to_js_1.default(Timeout.wrap(arg, timeout, rejectResponse));
 }
 //discord
@@ -160,11 +161,21 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
     }
     let error;
     const channel = generic[messenger].client.channels.cache.get(channelId);
-    let webhook = null;
+    let webhooks = [], webhook = null;
     try {
-        webhook = (await channel.fetchWebhooks()).last();
+        webhooks = (await channel.fetchWebhooks());
+        webhook = webhooks.last();
     }
-    catch (error) { }
+    catch (error) {
+        logger.log({
+            level: "error",
+            function: "discord.sendTo",
+            event: "couldn't find webhooks for the channel",
+            channelId,
+            message: error.toString(),
+            chunk: chunk_, author
+        });
+    }
     //reuse a webhook
     if (webhook) {
         [error, webhook] = await tot(webhook.edit({
@@ -181,9 +192,27 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
             });
         }
     }
-    //couldn't reuse the webhook so create a new one
-    if (error || !webhook)
+    //couldnt reuse the webhook so delete all my webhooks for this Discord channel and then create a new one
+    if (error || !webhook) {
+        // //deleting
+        const arrayedWebhooks = Array.from(Object.values(webhooks.filter((hook) => { var _a, _b, _c; return ((_a = hook === null || hook === void 0 ? void 0 : hook.owner) === null || _a === void 0 ? void 0 : _a.id) === ((_c = (_b = config === null || config === void 0 ? void 0 : config.piers) === null || _b === void 0 ? void 0 : _b[messenger]) === null || _c === void 0 ? void 0 : _c.client); })));
+        for (const hook of arrayedWebhooks) {
+            await hook.delete();
+        }
+        // webhooks.filter((hook: any) => hook?.owner?.id === config?.piers?.[messenger]?.client).each((hook: any) => hook.delete())
+        //creating
+        ;
         [error, webhook] = await tot(channel.createWebhook(author || "-", avatar));
+        if (error) {
+            logger.log({
+                level: "error",
+                function: "discord.sendTo",
+                event: "error creating a webhook",
+                message: error.toString(),
+                chunk: chunk_, author
+            });
+        }
+    }
     if (!error) {
         //ok, we have a webhook so send a message with it 
         [error] = await tot(webhook.send(chunk_, {
@@ -696,11 +725,12 @@ pierObj.telegram.convertFrom = async ({ text, messenger, }) => {
         text: text.replace(/<p><code>([\s\S]*?)<\/code><\/p>/gim, "<p><pre>$1</pre></p>")
             .replace(/<span class="tg-spoiler">/g, '<span class="spoiler">'),
         messenger: "telegram",
+        dontEscapeBackslash: true,
         unescapeCodeBlocks: true
     });
     return res;
 };
-pierObj.telegram.convertTo = async ({ text, messenger, messengerTo, }) => {
+pierObj.telegram.convertTo = async ({ text = "", messenger, messengerTo, }) => {
     const result = common
         .sanitizeHtml(text
         .replace(/<blockquote>\n<p>([\s\S]*?)<\/p>\n<\/blockquote>/gim, "<pre>$1</pre>")
@@ -1237,7 +1267,7 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
             messenger,
             messengerTo,
         }));
-        log("generic")(`converted for messenger ${messengerTo} to text "` + arrChunks[i] + `"`);
+        log("generic")(`converted for messenger ${messengerTo} to the text "` + arrChunks[i] + `"`);
     }
     return arrChunks;
 }

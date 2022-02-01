@@ -112,9 +112,11 @@ const serveStatic = require("serve-static")
 const winston = require("winston")
 
 import DailyRotateFile = require("winston-daily-rotate-file");
-import { resolve } from "path"
-
 const logger = winston.createLogger({
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
   transports: [
     new DailyRotateFile({
       filename: path.join(cache_folder, "info-%DATE%.log"),
@@ -223,7 +225,7 @@ async function tot(arg: Promise<any>, timeout = 5000, rejectResponse = true) {
 }
 
 //discord
-const Discord = require("discord.js")
+import * as Discord from "discord.js";
 const discordParser = require("discord-markdown")
 
 pierObj.discord.sendTo = async ({
@@ -279,10 +281,20 @@ pierObj.discord.sendTo = async ({
   let error
 
   const channel = generic[messenger].client.channels.cache.get(channelId)
-  let webhook = null
+  let webhooks = [], webhook = null
   try {
-    webhook = (await channel.fetchWebhooks()).last()
-  } catch (error) { }
+    webhooks = (await channel.fetchWebhooks())
+    webhook = webhooks.last()
+  } catch (error) {
+    logger.log({
+      level: "error",
+      function: "discord.sendTo",
+      event: "couldn't find webhooks for the channel",
+      channelId,
+      message: error.toString(),
+      chunk: chunk_, author
+    });
+   }
   //reuse a webhook
   if (webhook) {
     [error, webhook] = await tot(webhook.edit({
@@ -299,8 +311,26 @@ pierObj.discord.sendTo = async ({
       });
     }
   }
-  //couldn't reuse the webhook so create a new one
-  if (error || !webhook) [error, webhook] = await tot(channel.createWebhook(author || "-", avatar))
+  //couldnt reuse the webhook so delete all my webhooks for this Discord channel and then create a new one
+  if (error || !webhook) {
+    // //deleting
+    const arrayedWebhooks: Discord.Webhook[] = Array.from(Object.values(webhooks.filter((hook: any) => hook?.owner?.id === config?.piers?.[messenger]?.client)));
+    for (const hook of arrayedWebhooks) {
+      await hook.delete()
+    }
+    // webhooks.filter((hook: any) => hook?.owner?.id === config?.piers?.[messenger]?.client).each((hook: any) => hook.delete())
+    //creating
+    ;[error, webhook] = await tot(channel.createWebhook(author || "-", avatar))
+    if (error) {
+      logger.log({
+        level: "error",
+        function: "discord.sendTo",
+        event: "error creating a webhook",
+        message: error.toString(),
+        chunk: chunk_, author
+      });
+    }
+  }
   if (!error) {
     //ok, we have a webhook so send a message with it 
     [error] = await tot(
@@ -917,13 +947,14 @@ pierObj.telegram.convertFrom = async ({
       .replace(/<span class="tg-spoiler">/g, '<span class="spoiler">')
     ,
     messenger: "telegram",
+    dontEscapeBackslash: true,
     unescapeCodeBlocks: true
   })
   return res
 }
 
 pierObj.telegram.convertTo = async ({
-  text,
+  text = "",
   messenger,
   messengerTo,
 }: {
@@ -1634,7 +1665,7 @@ async function prepareChunks({
       messengerTo,
     })
     log("generic")(
-      `converted for messenger ${messengerTo} to text "` + arrChunks[i] + `"`
+      `converted for messenger ${messengerTo} to the text "` + arrChunks[i] + `"`
     )
   }
   return arrChunks
