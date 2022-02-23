@@ -1,4 +1,10 @@
 "use strict"
+interface ErrorConstructor {
+  stackTraceLimit?: number
+}
+
+(Error as ErrorConstructor).stackTraceLimit = 100;
+
 declare var process: {
   env: {
     NTBA_FIX_319: number
@@ -294,7 +300,7 @@ pierObj.discord.sendTo = async ({
       message: error.toString(),
       chunk: chunk_, author
     });
-   }
+  }
   //reuse a webhook
   if (webhook) {
     [error, webhook] = await tot(webhook.edit({
@@ -1599,22 +1605,19 @@ pierObj.slack.sendTo = async ({
   file,
   edited,
 }: IsendToArgs) => {
-  try {
-    chunk = emoji.unemojify(chunk)
-    generic[messenger].client.web.chat
-      .postMessage({
-        channel: channelId,
-        username: (author || "").replace(/(^.{21}).*$/, "$1"),
-        text: chunk,
+  chunk = emoji.unemojify(chunk)
+  generic[messenger].client.web.chat
+    .postMessage({
+      channel: channelId,
+      username: (author || "").replace(/(^.{21}).*$/, "$1"),
+      text: chunk,
+    }).catch((error: any) => {
+      logger.log({
+        level: "error",
+        function: "slack.sendTo",
+        message: error.toString(),
       })
-  } catch (error) {
-    logger.log({
-      level: "error",
-      function: "slack.sendTo",
-      message: error.toString(),
     })
-  }
-
 }
 
 pierObj.irc.sendTo = async ({
@@ -1660,7 +1663,7 @@ async function prepareChunks({
       })
 
     arrChunks[i] = await pierObj[root_messengerTo]?.convertTo({
-      text: arrChunks[i],
+      text: arrChunks[i] || '',
       messenger,
       messengerTo,
     })
@@ -2687,7 +2690,8 @@ pierObj.irc.receivedFrom = async (messenger: string, {
   } else if (type === "error") {
     console.error`IRC ERROR:`
     console.error(error)
-    //todo: restart irc
+    //todo: restart irc and resend the message:
+    // pierObj.irc.StartService({messenger})
   } else if (type === "registered") {
     config.piers[messenger].ircPerformCmds.forEach((cmd: string) => {
       handler.send.apply(null, cmd.split(" "))
@@ -3443,7 +3447,8 @@ pierObj.irc.StartService = async ({ messenger }: { messenger: string }) => {
       error,
       type: "error",
     })
-    // pierObj.irc();.StartService
+    //todo:
+    // pierObj.irc.StartService({messenger})
   })
 
   generic[messenger].client.on("registered", () => {

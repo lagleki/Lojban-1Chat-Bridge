@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+Error.stackTraceLimit = 100;
 process.env.NTBA_FIX_319 = 1;
 // file system and network libs
 const fs = require("fs-extra");
@@ -117,7 +118,7 @@ const pierObj = {
 Object.keys(pierObj).forEach((key) => {
     pierObj[key].common = {};
 });
-async function tot(arg, timeout = 3000, rejectResponse = true) {
+async function tot(arg, timeout = 5000, rejectResponse = true) {
     return await_to_js_1.default(Timeout.wrap(arg, timeout, rejectResponse));
 }
 //discord
@@ -1228,22 +1229,19 @@ pierObj.vkboard.sendTo = async ({ messenger, channelId, author, chunk, action, q
 };
 // async function myAwesomeCaptchaHandler() {}
 pierObj.slack.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    try {
-        chunk = emoji.unemojify(chunk);
-        generic[messenger].client.web.chat
-            .postMessage({
-            channel: channelId,
-            username: (author || "").replace(/(^.{21}).*$/, "$1"),
-            text: chunk,
-        });
-    }
-    catch (error) {
+    chunk = emoji.unemojify(chunk);
+    generic[messenger].client.web.chat
+        .postMessage({
+        channel: channelId,
+        username: (author || "").replace(/(^.{21}).*$/, "$1"),
+        text: chunk,
+    }).catch((error) => {
         logger.log({
             level: "error",
             function: "slack.sendTo",
             message: error.toString(),
         });
-    }
+    });
 };
 pierObj.irc.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
     log("irc")({ "sending for irc": chunk });
@@ -1263,7 +1261,7 @@ async function prepareChunks({ messenger, channelId, text, edited, messengerTo, 
                 arrElemsToInterpolate: [["message", arrChunks[i]]],
             });
         arrChunks[i] = await ((_e = pierObj[root_messengerTo]) === null || _e === void 0 ? void 0 : _e.convertTo({
-            text: arrChunks[i],
+            text: arrChunks[i] || '',
             messenger,
             messengerTo,
         }));
@@ -2128,7 +2126,8 @@ pierObj.irc.receivedFrom = async (messenger, { author, channelId, text, handler,
     else if (type === "error") {
         console.error `IRC ERROR:`;
         console.error(error);
-        //todo: restart irc
+        //todo: restart irc and resend the message:
+        // pierObj.irc.StartService({messenger})
     }
     else if (type === "registered") {
         config.piers[messenger].ircPerformCmds.forEach((cmd) => {
@@ -2674,7 +2673,7 @@ pierObj.irc.StartService = async ({ messenger }) => {
             error,
             type: "error",
         });
-        // pierObj.irc();.StartService
+        pierObj.irc.StartService({ messenger });
     });
     generic[messenger].client.on("registered", () => {
         pierObj.irc.receivedFrom(messenger, {
