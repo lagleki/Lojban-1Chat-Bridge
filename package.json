@@ -45,7 +45,7 @@
     "html-entities": "2.3.2",
     "htmlparser": "^1.7.7",
     "irc-upd": "^0.11.0",
-    "jpeg-js": "^0.4.3",
+    "jpeg-js": "^0.4.4",
     "jsdom": "^16.6.0",
     "libfb": "^2.3.5",
     "lojban": "^2.0.7",
