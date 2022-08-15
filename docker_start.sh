@@ -9,7 +9,7 @@ docker run \
   --memory 1g \
   --cpus 1 \
   -p 9091:3000 \
-  --log-opt max-size=1m --log-opt max-file=1 \
+  --log-opt max-size=20k --log-opt max-file=1 \
   -v $(pwd)/dist:/home/app/1chat/dist/:Z \
   -v $(pwd)/src:/home/app/1chat/src/:Z \
   -v $(pwd)/data:/home/app/1chat/data/:Z \

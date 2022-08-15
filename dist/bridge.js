@@ -6,24 +6,33 @@ process.env.NTBA_FIX_319 = 1;
 const fs = require("fs-extra");
 const path = require("path");
 const mkdir = require("mkdirp-sync");
-const axios_1 = require("axios");
-const request = require("request");
-const Timeout = require('await-timeout');
+const authorization_1 = require("@vk-io/authorization");
 const await_to_js_1 = require("await-to-js");
-// process.on('warning', (e: any) => console.warn(e.stack));
-const cache_folder = path.join(__dirname, "../data");
-const defaults = path.join(__dirname, `../default-config/defaults.js`);
+const axios_1 = require("axios");
+//discord
+const Discord = require("discord.js");
+const http = require("http");
 // messengers' libs
 // const { login } = require("libfb")
 const Telegram = require("node-telegram-bot-api");
+const request = require("request");
+const vk_io_1 = require("vk-io");
+// markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
+// markedRenderer.text = (string: string) => escapeHTML(string)
+// markedRenderer.paragraph = (string: string) => escapeHTML(string)
+// markedRenderer.inlineText = (string: string) => escapeHTML(string)
+const generic_1 = require("./formatting-converters/generic");
+const telegram_utils_1 = require("./formatting-converters/telegram-utils");
+const Timeout = require('await-timeout');
+// process.on('warning', (e: any) => console.warn(e.stack));
+const cache_folder = path.join(__dirname, "../data");
+const defaults = path.join(__dirname, `../default-config/defaults.js`);
 const sanitizeHtml = require("sanitize-html");
 const createDOMPurify = require("dompurify");
 const { JSDOM } = require("jsdom");
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
 const util = require("util");
-const vk_io_1 = require("vk-io");
-const authorization_1 = require("@vk-io/authorization");
 const VkBot = require("node-vk-bot-api");
 const { RTMClient, WebClient } = require("@slack/client");
 const emoji = require("node-emoji");
@@ -34,14 +43,6 @@ const lexer = marked.Lexer;
 lexer.rules.list = { exec: () => { } };
 lexer.rules.listitem = { exec: () => { } };
 const markedRenderer = new marked.Renderer();
-// markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
-// markedRenderer.text = (string: string) => escapeHTML(string)
-// markedRenderer.paragraph = (string: string) => escapeHTML(string)
-// markedRenderer.inlineText = (string: string) => escapeHTML(string)
-const generic_1 = require("./formatting-converters/generic");
-const telegram_utils_1 = require("./formatting-converters/telegram-utils");
-// const { fillMarkdownEntitiesMarkup } = require("telegram-text-entities-filler")
-//fillMarkdownEntitiesMarkup(message.text, message.entities)
 const Avatar = require("../src/animalicons/index.js");
 let server;
 function markedParse({ text, messenger, dontEscapeBackslash, unescapeCodeBlocks, }) {
@@ -75,7 +76,6 @@ const html2md = require("./formatting-converters/html2md-ts");
 const Irc = require("irc-upd");
 const ircolors = require("./formatting-converters/irc-colors-ts");
 const finalhandler = require("finalhandler");
-const http = require("http");
 const serveStatic = require("serve-static");
 const winston = require("winston");
 const DailyRotateFile = require("winston-daily-rotate-file");
@@ -121,10 +121,9 @@ Object.keys(pierObj).forEach((key) => {
 async function tot(arg, timeout = 5000, rejectResponse = true) {
     return await_to_js_1.default(Timeout.wrap(arg, timeout, rejectResponse));
 }
-//discord
-const Discord = require("discord.js");
 const discordParser = require("discord-markdown");
 pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, avatar }) => {
+    var _a, _b, _c, _d, _e;
     let files = undefined;
     if (file) {
         files = [
@@ -163,105 +162,107 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
     let error;
     const channel = generic[messenger].client.channels.cache.get(channelId);
     let webhooks = [], webhook = null;
-    try {
-        webhooks = (await channel.fetchWebhooks());
-        webhook = webhooks.last();
-    }
-    catch (error) {
-        logger.log({
-            level: "error",
-            function: "discord.sendTo",
-            event: "couldn't find webhooks for the channel",
-            channelId,
-            message: error.toString(),
-            chunk: chunk_, author
-        });
-    }
-    //reuse a webhook
-    if (webhook) {
-        [error, webhook] = await tot(webhook.edit({
-            name: author || "-",
-            avatar,
-        }));
-        if (error) {
+    if (!((_a = config.piers[messenger]) === null || _a === void 0 ? void 0 : _a.noWebhooks)) {
+        try {
+            webhooks = (await channel.fetchWebhooks());
+            webhook = webhooks.last();
+        }
+        catch (error) {
             logger.log({
                 level: "error",
                 function: "discord.sendTo",
-                event: "error editing an existing webhook",
+                event: "couldn't find webhooks for the channel",
+                channelId,
                 message: error.toString(),
                 chunk: chunk_, author
             });
         }
-    }
-    //couldnt reuse the webhook so delete all my webhooks for this Discord channel and then create a new one
-    if (error || !webhook) {
-        // //deleting
-        const arrayedWebhooks = Array.from(Object.values(webhooks.filter((hook) => { var _a, _b, _c; return ((_a = hook === null || hook === void 0 ? void 0 : hook.owner) === null || _a === void 0 ? void 0 : _a.id) === ((_c = (_b = config === null || config === void 0 ? void 0 : config.piers) === null || _b === void 0 ? void 0 : _b[messenger]) === null || _c === void 0 ? void 0 : _c.client); })));
-        for (const hook of arrayedWebhooks) {
-            await hook.delete();
+        //reuse a webhook
+        if (webhook) {
+            [error, webhook] = await tot(webhook.edit({
+                name: author || "-",
+                avatar,
+            }));
+            if (error) {
+                logger.log({
+                    level: "error",
+                    function: "discord.sendTo",
+                    event: "error editing an existing webhook",
+                    message: error.toString(),
+                    chunk: chunk_, author
+                });
+            }
         }
-        // webhooks.filter((hook: any) => hook?.owner?.id === config?.piers?.[messenger]?.client).each((hook: any) => hook.delete())
-        //creating
-        ;
-        [error, webhook] = await tot(channel.createWebhook(author || "-", avatar));
-        if (error) {
-            logger.log({
-                level: "error",
-                function: "discord.sendTo",
-                event: "error creating a webhook",
-                message: error.toString(),
-                chunk: chunk_, author
-            });
+        //couldnt reuse the webhook so delete all my webhooks for this Discord channel and then create a new one
+        if (error || !webhook) {
+            // //deleting
+            const arrayedWebhooks = Array.from(Object.values(webhooks.filter((hook) => { var _a, _b, _c; return ((_a = hook === null || hook === void 0 ? void 0 : hook.owner) === null || _a === void 0 ? void 0 : _a.id) === ((_c = (_b = config === null || config === void 0 ? void 0 : config.piers) === null || _b === void 0 ? void 0 : _b[messenger]) === null || _c === void 0 ? void 0 : _c.client); })));
+            for (const hook of arrayedWebhooks) {
+                await hook.delete();
+            }
+            // webhooks.filter((hook: any) => hook?.owner?.id === config?.piers?.[messenger]?.client).each((hook: any) => hook.delete())
+            //creating
+            ;
+            [error, webhook] = await tot(channel.createWebhook(author || "-", avatar));
+            if (error) {
+                logger.log({
+                    level: "error",
+                    function: "discord.sendTo",
+                    event: "error creating a webhook",
+                    message: error.toString(),
+                    chunk: chunk_, author
+                });
+            }
         }
-    }
-    if (!error) {
-        //ok, we have a webhook so send a message with it 
-        [error] = await tot(webhook.send(chunk_, {
-            username: author || "-",
-            files,
-            // avatarURL: generic.discord.avatar.path,
-        }));
-        if (error) {
-            logger.log({
-                level: "error",
-                function: "discord.sendTo",
-                event: "error sending a message via a webhook",
-                message: error.toString(),
-                chunk: chunk_, author
-            });
+        if (!error) {
+            //ok, we have a webhook so send a message with it 
+            [error] = await tot(webhook.send(chunk_, {
+                username: author || "-",
+                files,
+                // avatarURL: generic.discord.avatar.path,
+            }));
+            if (error) {
+                logger.log({
+                    level: "error",
+                    function: "discord.sendTo",
+                    event: "error sending a message via a webhook",
+                    message: error.toString(),
+                    chunk: chunk_, author
+                });
+            }
+            else
+                return;
         }
-        else
-            return;
-    }
-    if (webhook) {
-        //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
-        [error] = await tot(webhook.send(chunk_, {
-            username: author || "-",
-            // avatarURL: generic.discord.avatar.path,
-        }));
-        if (error) {
-            logger.log({
-                level: "error",
-                function: "discord.sendTo",
-                event: "error sending a message without attachments via a webhook",
-                message: error.toString(),
-                chunk: chunk_, author
-            });
+        if (webhook) {
+            //we failed to send a message. try to send the message without attachments. useful when the attachments are too large for Discord to handle
+            [error] = await tot(webhook.send(chunk_, {
+                username: author || "-",
+                // avatarURL: generic.discord.avatar.path,
+            }));
+            if (error) {
+                logger.log({
+                    level: "error",
+                    function: "discord.sendTo",
+                    event: "error sending a message without attachments via a webhook",
+                    message: error.toString(),
+                    chunk: chunk_, author
+                });
+            }
+            else
+                return;
         }
-        else
-            return;
     }
     // now we failed all the ways to use webhooks so send the message with attachments via an older method using a bot user
     [error] = await await_to_js_1.default(generic[messenger].client.channels.cache
         .get(channelId)
-        .send({ content: chunk.fallback_solution, files }));
+        .send({ content: (_b = chunk.fallback_solution) !== null && _b !== void 0 ? _b : chunk, files }));
     if (error) {
         logger.log({
             level: "error",
             function: "discord.sendTo",
             event: "error sending a message using a webhookless method",
             message: error.toString(),
-            chunk: chunk.fallback_solution, author
+            chunk: (_c = chunk.fallback_solution) !== null && _c !== void 0 ? _c : chunk, author
         });
     }
     else
@@ -269,14 +270,14 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
     // now we failed to send the message with attachments via an older method so remove the attachments and try once again
     [error] = await await_to_js_1.default(generic[messenger].client.channels.cache
         .get(channelId)
-        .send({ content: chunk.fallback_solution, }));
+        .send({ content: (_d = chunk.fallback_solution) !== null && _d !== void 0 ? _d : chunk, }));
     if (error) {
         logger.log({
             level: "error",
             function: "discord.sendTo",
             event: "error sending a message without attachments using a webhookless method",
             message: error.toString(),
-            chunk: chunk.fallback_solution, author
+            chunk: (_e = chunk.fallback_solution) !== null && _e !== void 0 ? _e : chunk, author
         });
     }
 };
@@ -465,27 +466,17 @@ pierObj.telegram.common = {
     }
 };
 pierObj.telegram.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, }) => {
-    await new Promise((resolve) => {
+    try {
         log("telegram")({ "sending text": chunk });
-        generic[messenger].client
+        await generic[messenger].client
             .sendMessage(channelId, chunk, {
             parse_mode: "HTML",
-        })
-            .then(() => resolve(null))
-            .catch((err) => {
-            err = util.inspect(err, { showHidden: false, depth: 4 });
-            common.LogToAdmin(`
-Error sending a chunk:
-
-Channel: ${channelId}.
-
-Chunk: ${generic_1.escapeHTML(chunk)}
-
-Error message: ${err}
-            `);
-            resolve(null);
         });
-    });
+    }
+    catch (error) {
+        error = util.inspect(error, { showHidden: false, depth: 4 });
+        common.LogToAdmin(`Error sending a chunk:\n\nChannel: ${channelId}.\n\nChunk: ${generic_1.escapeHTML(chunk)}\n\nError message: ${error}`);
+    }
 };
 pierObj.telegram.receivedFrom = async (messenger, message) => {
     //spammer
@@ -537,7 +528,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
         author,
         avatar
     });
-    pierObj.telegram.common.sendFromTelegram({ messenger, message, author, avatar });
+    await pierObj.telegram.common.sendFromTelegram({ messenger, message, author, avatar });
 };
 // reconstructs the original raw markdown message
 pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
@@ -646,7 +637,7 @@ pierObj.telegram.common.sendFromTelegram = async ({ messenger, message, quotatio
     // const reply_to_bot =
     //   quotation && message.from.id === config.telegram.myUser.id
     // if (reply_to_bot && jsonMessage["text"] && jsonMessage["text"].text) {
-    //   const arrTxtMsg = jsonMessage["text"].text.split(": ")
+    //   const arrTxtMsg = jsonMesole.logssage["text"].text.split(": ")
     //   author = author ?? arrTxtMsg[0]
     //   jsonMessage["text"].text = arrTxtMsg.slice(1).join(": ")
     // } else if (!reply_to_bot) {
@@ -895,10 +886,19 @@ pierObj.telegram.StartService = async ({ messenger }) => {
         pierObj.telegram.receivedFrom(messenger, message);
     });
     generic[messenger].client.on("polling_error", (error) => {
-        if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
-            config.MessengersAvailable[messenger] = false;
-            generic[messenger].client.stopPolling();
-        }
+        var _a, _b;
+        logger.log({
+            level: "error",
+            function: "pierObj.telegram.StartService",
+            error_code: error === null || error === void 0 ? void 0 : error.code,
+            response_code: (_b = (_a = error === null || error === void 0 ? void 0 : error.response) === null || _a === void 0 ? void 0 : _a.body) === null || _b === void 0 ? void 0 : _b.error_code,
+        });
+        generic[messenger].client.stopPolling().then(() => {
+            generic[messenger].client.startPolling();
+        });
+        // if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
+        //   config.MessengersAvailable[messenger] = false
+        // }
     });
     const [err, res] = await await_to_js_1.default(generic[messenger].client.getMe());
     if (!err)
@@ -1047,7 +1047,6 @@ pierObj.mattermost.common = {
 // sendTo
 async function FormatMessageChunkForSending({ messenger, channelId, author, chunk, action, title, quotation, }) {
     const root_messenger = common.root_of_messenger(messenger);
-    let resultingChunk = chunk;
     if (quotation) {
         if (!author || author === "")
             author = "-";
@@ -1356,7 +1355,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
         return;
     queueOf[messenger].add(async () => {
         var _a;
-        (_a = pierObj[common.root_of_messenger(messenger)]) === null || _a === void 0 ? void 0 : _a.sendTo({
+        await ((_a = pierObj[common.root_of_messenger(messenger)]) === null || _a === void 0 ? void 0 : _a.sendTo({
             messenger: messenger,
             channelId,
             author,
@@ -1366,7 +1365,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
             file,
             edited,
             avatar
-        });
+        }));
     });
 }
 async function sendFrom({ messenger, channelId, author, text, ToWhom, quotation, action, file, remote_file, edited, avatar }) {
@@ -2673,7 +2672,8 @@ pierObj.irc.StartService = async ({ messenger }) => {
             error,
             type: "error",
         });
-        pierObj.irc.StartService({ messenger });
+        //todo:
+        // pierObj.irc.StartService({messenger})
     });
     generic[messenger].client.on("registered", () => {
         pierObj.irc.receivedFrom(messenger, {

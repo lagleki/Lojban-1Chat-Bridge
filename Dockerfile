@@ -1,4 +1,4 @@
-FROM ubuntu:rolling
+FROM ubuntu:jammy
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
@@ -41,6 +41,6 @@ COPY package*.json /home/app/1chat/
 COPY ./tsconfig.json /home/app/1chat/tsconfig.json
 WORKDIR /home/app/1chat
 RUN mkdir /home/app/1chat/dist
-RUN npm i && npm i -g npm-check-updates
+RUN npm i && npm i -g npm-check-updates pm2
 
 CMD npm run tsc && npm run start
