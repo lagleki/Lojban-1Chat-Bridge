@@ -109,7 +109,7 @@
     "sendTo.discord.normal.fallback_solution": "**%author%**: %chunk%",
     "sendTo.discord.ChunkOnly.fallback_solution": "**%author%**: %chunk%",
     "sendTo.discord.action.fallback_solution": "**%author%** _%chunk%_",
-    "OverlayMessageWithQuotedMark.discord.fallback_solution": "> **%author%**: %chunk%",
+    "OverlayMessageWithQuotedMark.discord.fallback_solution": "> %chunk%",
     "OverlayMessageWithEditedMark.discord.fallback_solution": ":pencil2: %message%",
     "sendTo.discord.normal": "%chunk%",
     "sendTo.discord.ChunkOnly": "%chunk%",

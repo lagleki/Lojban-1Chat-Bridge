@@ -126,7 +126,7 @@ const logger = winston.createLogger({
     new DailyRotateFile({
       filename: path.join(cache_folder, "info-%DATE%.log"),
       datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
+      zippedArchive: false,
       maxSize: '20m',
       maxFiles: '14d'
     }),
@@ -271,15 +271,15 @@ pierObj.discord.sendTo = async ({
   } catch (error) {
     avatar = undefined
   }
-  if (!avatar) {
-    const animava = new Avatar(
-      authorTemp,
-      512,
-      parsedName.snada ? parsedName.output : undefined
-    )
-    await animava.draw()
-    avatar = await animava.toDataURL()
-  }
+  // if (!avatar) {
+  //   const animava = new Avatar(
+  //     authorTemp,
+  //     512,
+  //     parsedName.snada ? parsedName.output : undefined
+  //   )
+  //   await animava.draw()
+  //   avatar = await animava.toDataURL()
+  // }
 
   let error
 
@@ -404,12 +404,26 @@ pierObj.discord.sendTo = async ({
   }
 }
 
+pierObj.discord.common.removeSpam = async (messenger: string, message: any, plainText: string) => {
+  if (config.channelMapping[messenger][message?.channel?.id]?.settings?.restrictToLojban && plainText) {
+    // dealing with non-lojban spam
+    const xovahe = xovahelojbo({ text: plainText })
+    if (xovahe < 0.5) return true;
+  }
+  return false;
+}
+
 pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
   if (
     !config?.channelMapping[messenger]?.[(message?.channel?.id || "").toString()]
   )
     return
   if (message.author.bot || message.channel.type !== "text") return
+
+  let plainText = !message?.content ? undefined : pierObj.discord.common.discord_reconstructPlainText(messenger, message, message?.content)
+
+  if (await pierObj.discord.common.removeSpam(messenger, message, plainText)) return
+
   const edited = message.edited ? true : false
   for (let value of message.attachments.values()) {
     //media of attachment
@@ -469,15 +483,16 @@ pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
     })
   }
 
-  const text = pierObj.discord.common.discord_reconstructPlainText(messenger, message, message.content)
-  log("discord")("sending reconstructed text: " + text)
-  sendFrom({
-    messenger,
-    channelId: message.channel.id,
-    author: pierObj.discord.adaptName(messenger, message),
-    text,
-    edited,
-  })
+  if (plainText) {
+    log("discord")("sending reconstructed text: " + plainText)
+    sendFrom({
+      messenger,
+      channelId: message.channel.id,
+      author: pierObj.discord.adaptName(messenger, message),
+      text: plainText,
+      edited,
+    })
+  }
 }
 
 pierObj.discord.common.discord_reconstructPlainText = (messenger: string, message: any, text: string) => {
@@ -508,7 +523,7 @@ pierObj.discord.common.discord_reconstructPlainText = (messenger: string, messag
           .replace(match, "@" + (member.nickname || member.user.username))
     }
   matches = text.match(/<#[^# ]{2,32}>/g)
-  if (matches && matches[0])
+  if (matches?.[0])
     for (let match of matches) {
       const core = match.replace(/[<>#]/g, "")
       const chan = Object.keys(config.cache[messenger]).filter(
@@ -644,12 +659,12 @@ pierObj.telegram.sendTo = async ({
   try {
     log("telegram")({ "sending text": chunk })
     await generic[messenger].client
-    .sendMessage(channelId, chunk, {
-      parse_mode: "HTML",
-    });
+      .sendMessage(channelId, chunk, {
+        parse_mode: "HTML",
+      });
   } catch (error) {
     error = util.inspect(error, { showHidden: false, depth: 4 })
-    common.LogToAdmin(`Error sending a chunk:\n\nChannel: ${channelId}.\n\nChunk: ${escapeHTML(chunk as string)}\n\nError message: ${error}`) 
+    common.LogToAdmin(`Error sending a chunk:\n\nMessenger: ${messenger}.\n\nChannel: ${channelId}.\n\nChunk: ${escapeHTML(chunk as string)}\n\nError message: ${error}`)
   }
 }
 
@@ -660,7 +675,7 @@ pierObj.telegram.receivedFrom = async (messenger: string, message: Telegram.Mess
   //2. check if admin else leave chat and return
   if (await pierObj.telegram.common.TelegramLeaveChatIfNotAdmin(messenger, message)) return
   //3. check for spam
-  if (await pierObj.telegram.common.TelegramRemoveSpam(messenger, message)) return
+  if (await pierObj.telegram.common.removeSpam(messenger, message)) return
   //4. check if new member event
   if (pierObj.telegram.common.TelegramRemoveNewMemberMessage(messenger, message)) return
   //now deal with the message that is fine
@@ -678,13 +693,13 @@ pierObj.telegram.receivedFrom = async (messenger: string, message: Telegram.Mess
       config.cache[messenger][message.chat.title] === message.chat.id
     )
       return //cached but unmapped channel so ignore it and exit the function
-    await to(
+    await
       pierObj.telegram.common.NewChannelAppeared({
         messenger,
         channelName: message.chat.title,
         channelId: message.chat.id,
       })
-    )
+
     if (!config.channelMapping[messenger][message.chat.id]) return
   }
 
@@ -703,7 +718,7 @@ pierObj.telegram.receivedFrom = async (messenger: string, message: Telegram.Mess
     return
 
   const { author, avatar } = await pierObj.telegram.GetName(messenger, message.from)
-    
+
   await pierObj.telegram.common.sendFromTelegram({
     messenger,
     message: message.reply_to_message,
@@ -876,7 +891,7 @@ pierObj.telegram.common.sendFromTelegram = async ({
       arrElemsToInterpolate: arrForLocal,
     })
     const edited = message.edit_date ? true : false
-    
+
     sendFrom({
       messenger,
       channelId: message.chat.id,
@@ -989,7 +1004,7 @@ pierObj.telegram.convertTo = async ({
   return result
 }
 
-pierObj.telegram.common.TelegramRemoveSpam = async (messenger: string, message: Telegram.Message) => {
+pierObj.telegram.common.removeSpam = async (messenger: string, message: Telegram.Message) => {
   const cloned_message = JSON.parse(JSON.stringify(message))
   if (pierObj.telegram.common.IsSpam(cloned_message)) {
     if (message.text && message.text.search(/\bt\.me\b/) >= 0) {
@@ -1019,7 +1034,7 @@ pierObj.telegram.common.TelegramRemoveSpam = async (messenger: string, message: 
       }
     }
     return true
-  } else if (message.chat.title === "jbosnu" && message.text) {
+  } else if (config.channelMapping?.[messenger]?.[message?.chat?.id]?.settings?.restrictToLojban && message?.text) {
     // dealing with non-lojban spam
     const xovahe = xovahelojbo({ text: message.text })
     if (xovahe < 0.5) {
@@ -1095,9 +1110,10 @@ pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (messenger: string, 
       message: message?.text,
     }
     common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`)
-    config.cache[messenger][message.chat.title] = undefined
+    delete config.cache?.[messenger]?.[message?.chat?.title]
     await to(
       common.writeCache({
+        pier: messenger,
         channelName: message.chat.title,
         channelId: message.chat.id,
         action: "leave",
@@ -1132,22 +1148,20 @@ pierObj.telegram.common.NewChannelAppeared = async ({
   channelName: string
   channelId: string
 }) => {
+  // if (!channelName) return;
   config.cache[messenger][channelName] = channelId
-  let [err, res] = await to(
+
+  await to(
     common.writeCache({ channelName, channelId, action: "join" })
-  )
+  );
+  const [err] = await to(common.PopulateChannelMapping())
+
+
   if (err) {
-    console.error(err)
-    return
-  }
-  ;[err, res] = await to(common.PopulateChannelMapping())
-  if (err)
     common.LogToAdmin(
       `got problem in the new telegram chat ${channelName}, ${channelId}`
     )
-  if (err) {
-    console.error(err)
-    return
+    return false;
   }
   return true
 }
@@ -1159,6 +1173,21 @@ pierObj.telegram.getChannels = async (pier: string): Promise<void> => {
     res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`))[pier]
   } catch (error) { }
   config.cache[pier] = res
+
+  //check for changes from config.js
+  // const cachedGroupNames = Object.keys(config.cache[pier]);
+  // let uniqueTelegramGroups: string[] = [];
+  // config.new_channels.map((i: any) => {
+  //   if (i[pier]) uniqueTelegramGroups.push(i[pier]);
+  // });
+
+  // uniqueTelegramGroups = Array.from(new Set(uniqueTelegramGroups));
+
+  // for (let groupName of cachedGroupNames) {
+  //   const groupId = config.cache[pier][groupName];
+  //   if (!uniqueTelegramGroups.includes(groupName)) delete config.cache[pier][groupName]
+  //   await common.writeCache({ pier, channelName: groupName, channelId: groupId, action: "group removed in config" })
+  // }
 }
 
 pierObj.telegram.StartService = async ({ messenger }: { messenger: string }) => {
@@ -1178,8 +1207,15 @@ pierObj.telegram.StartService = async ({ messenger }: { messenger: string }) => 
       error_code: error?.code,
       response_code: error?.response?.body?.error_code,
     })
-    generic[messenger].client.stopPolling().then(()=>{
-      generic[messenger].client.startPolling();
+    generic[messenger].client.stopPolling().then(() => {
+      setTimeout(() => {
+        logger.log({
+          level: "info",
+          function: "pierObj.telegram.StartService",
+          message: "restarting polling",
+        })
+        generic[messenger].client.startPolling();
+      }, 3000)
     })
 
     // if (error.code === "ETELEGRAM" && error.response.body.error_code === 404) {
@@ -1882,7 +1918,7 @@ async function sendFrom({
   text = await pierObj[messenger_core]?.convertFrom({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
-  
+
   //zbalermorna etc.
   // await checkHelpers({
   //   messenger,
@@ -1921,7 +1957,7 @@ async function sendFrom({
           action,
           quotation,
         })
-        
+
       }
 
       Chunks.map((chunk) => {
@@ -1936,7 +1972,7 @@ async function sendFrom({
           edited,
           avatar
         })
-        
+
       })
 
       text = text + "<br/>" + translated_text
@@ -1997,7 +2033,7 @@ async function sendFrom({
         })
       }
 
-      Chunks.map((chunk) => {        
+      Chunks.map((chunk) => {
         universalSendTo({
           messenger: messengerTo,
           channelId: ConfigNode[messengerTo],
@@ -2837,11 +2873,11 @@ pierObj.slack.convertFrom = async ({
       }
     )
     for (const channelId of Object.keys(jsonChannels)) {
-      const [err, { channel }] = await to(
+      const [err, channel] = await to(
         generic[messenger].client.web.conversations.info({ channel: channelId })
       )
       if (!err) {
-        jsonChannels[channelId] = channel.name
+        jsonChannels[channelId] = (channel as any)?.channel?.name
       } else {
         log("slack")({
           error: err,
@@ -3101,27 +3137,26 @@ pierObj.irc.convertTo = async ({
 }
 
 common.writeCache = async ({
+  pier,
   channelName,
   channelId,
   action,
 }: {
+  pier: string
   channelName: string | number
   channelId: string | number
   action: string
 }) => {
   await new Promise((resolve) => {
+    fs.writeFileSync(
+      `${cache_folder}/channelMapping.json`,
+      JSON.stringify(config.channelMapping)
+    );
     fs.writeFile(
       `${cache_folder}/cache.json`,
       JSON.stringify(config.cache),
       (err: any) => {
-        if (err) action = "error " + err.toString()
-        console.log(
-          `
-          action: ${action}\n
-          channel Name: ${channelName}\n
-          channel Id: ${channelId}
-          `
-        )
+        log("generic")({ pier, action, channelName, channelId, error: err })
         resolve(null)
       }
     )
@@ -3164,7 +3199,7 @@ common.ConfigBeforeStart = () => {
   const defaultConfig = require(defaults)
   config = R.mergeDeepLeft(config, defaultConfig)
 
-  localizationConfig = require("/home/app/1chat/src/local/dict.json")
+  localizationConfig = require("../src/local/dict.json")
 }
 
 
@@ -3248,6 +3283,7 @@ async function PopulateChannelMappingCore({
         dontProcessOtherBridges: i[`${messenger}-dontProcessOtherBridges`],
         nsfw_analysis: i[`nsfw_analysis`],
         language: i["language"],
+        restrictToLojban: i["restrictToLojban"],
         nickcolor: i[`${messenger}-nickcolor`],
         name: i[messenger],
       },
@@ -3901,7 +3937,7 @@ common.downloadFile = async ({
     if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`
   }
   if (err) {
-    console.error({ remote_path, error: err, type: "generic" })
+    log("telegram")({ remote_path, error: err, type: "generic" })
     return [remote_path || fileId, remote_path || fileId]
   }
   ;[err, res] = await to(

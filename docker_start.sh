@@ -1,7 +1,7 @@
 #!/bin/bash
 
-docker kill 1chat
-docker rm 1chat
+docker kill 1chat 2> /dev/null
+docker rm 1chat 2> /dev/null
 
 docker run \
   -it \
@@ -10,8 +10,7 @@ docker run \
   --cpus 1 \
   -p 9091:3000 \
   --log-opt max-size=20k --log-opt max-file=1 \
-  -v $(pwd)/dist:/home/app/1chat/dist/:Z \
-  -v $(pwd)/src:/home/app/1chat/src/:Z \
-  -v $(pwd)/data:/home/app/1chat/data/:Z \
-  -v $(pwd)/default-config:/home/app/1chat/default-config/:Z \
+  -v $(pwd)/src:/app/src/:Z \
+  -v $(pwd)/data:/app/data/:Z \
+  -v $(pwd)/default-config:/app/default-config/:Z \
   1chat
