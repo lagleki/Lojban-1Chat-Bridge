@@ -1,14 +1,15 @@
 import * as Telegram from "node-telegram-bot-api"
 import { escapeHTML } from './generic'
 
-type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention' | 'symbol' | 'spoiler';
+type MessageEntityType = 'mention' | 'hashtag' | 'cashtag' | 'bot_command' | 'url' | 'email' | 'phone_number' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' | 'text_link' | 'text_mention' | 'symbol' | 'spoiler' | 'custom_emoji';
 interface MessageEntity {
 	type: MessageEntityType;
 	offset: number;
 	length: number;
 	url?: string | undefined;
 	user?: Telegram.User | undefined;
-	language?: string
+	language?: string | undefined;
+	custom_emoji_id?: string | undefined;
 }
 
 const R = require("ramda")

@@ -56,7 +56,7 @@
     "node-canvas-with-twemoji": "^0.1.8",
     "node-emoji": "^1.11.0",
     "node-gitter": "^2.1.0",
-    "node-telegram-bot-api": "^0.59.0",
+    "node-telegram-bot-api": "^0.60.0",
     "node-vk-bot-api": "^3.5.0",
     "nsfwjs": "^2.4.2",
     "p-queue": "^6.6.2",
