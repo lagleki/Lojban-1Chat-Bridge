@@ -711,22 +711,30 @@ pierObj.telegram.sendTo = async ({
 }: IsendToArgs) => {
   try {
     log("telegram")({ "sending text": chunk })
-    await generic[messenger].client.sendMessage(channelId, chunk, {
-      parse_mode: "HTML",
-    })
+    const [topicId, channel] = channelId.toString().split("@")
+    await generic[messenger].client.sendMessage(
+      channel ?? channelId,
+      chunk,
+      R.reject(R.isNil)({
+        message_thread_id: channel && topicId !== "1" ? topicId : undefined,
+        parse_mode: "HTML",
+      })
+    )
   } catch (error) {
     error = util.inspect(error, { showHidden: false, depth: 4 })
     common.LogToAdmin(
       `Error sending a chunk:\n\nMessenger: ${messenger}.\n\nChannel: ${channelId}.\n\nChunk: ${escapeHTML(
         chunk as string
-      )}\n\nError message: ${error?.message ?? "-"}`
+      )}\n\nError message: ${error?.message ?? error.toString()}`
     )
   }
 }
 
+type TelegramMessage = Telegram.Message & { message_thread_id?: number }
+
 pierObj.telegram.receivedFrom = async (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   //spammer
   //1. remove entered bots
@@ -755,7 +763,22 @@ pierObj.telegram.receivedFrom = async (
       `skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`
     )
 
-  if (!config.channelMapping[messenger][message.chat.id]) {
+  let topicalizedChatId =
+    message.message_thread_id || (message.chat as any).is_forum
+      ? `${
+          message.message_thread_id ??
+          ((message.chat as any).is_forum ? "1" : "")
+        }@${message.chat.id}`
+      : message.chat.id
+
+  if (
+    !config.channelMapping[messenger][topicalizedChatId] &&
+    (message.chat as any).is_forum
+  ) {
+    topicalizedChatId = `1@${message.chat.id}`
+  }
+
+  if (!config.channelMapping[messenger][topicalizedChatId]) {
     if (
       config.cache[messenger][message.chat.title] &&
       config.cache[messenger][message.chat.title] === message.chat.id
@@ -767,7 +790,7 @@ pierObj.telegram.receivedFrom = async (
       channelId: message.chat.id,
     })
 
-    if (!config.channelMapping[messenger][message.chat.id]) return
+    if (!config.channelMapping[messenger][topicalizedChatId]) return
   }
 
   // skip posts containing media if it's configured off
@@ -806,7 +829,7 @@ pierObj.telegram.receivedFrom = async (
 
 // reconstructs the original raw markdown message
 pierObj.telegram.common.telegram_reconstructMarkdown = (
-  msg: Telegram.Message
+  msg: TelegramMessage
 ) => {
   return {
     ...msg,
@@ -970,9 +993,22 @@ pierObj.telegram.common.sendFromTelegram = async ({
     })
     const edited = message.edit_date ? true : false
 
+    let topicId
+
+    if ((message.chat as any).is_forum) {
+      topicId = message.message_thread_id
+      if (
+        !config.channelMapping[messenger][
+          `${message.message_thread_id}@${message.chat.id}`
+        ]
+      )
+        topicId = "1"
+    }
+
     sendFrom({
       messenger,
       channelId: message.chat.id,
+      topicId,
       author,
       text,
       action,
@@ -1083,7 +1119,7 @@ pierObj.telegram.convertTo = async ({
 
 pierObj.telegram.common.removeSpam = async (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   const cloned_message = JSON.parse(JSON.stringify(message))
   if (pierObj.telegram.common.IsSpam(cloned_message)) {
@@ -1151,7 +1187,7 @@ pierObj.telegram.common.removeSpam = async (
 
 pierObj.telegram.common.TelegramRemoveAddedBots = (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   if (config.piers[messenger].remove_added_bots)
     (message?.new_chat_members || []).map((u: Telegram.User) => {
@@ -1164,7 +1200,7 @@ pierObj.telegram.common.TelegramRemoveAddedBots = (
 
 pierObj.telegram.common.TelegramRemoveNewMemberMessage = (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   if (
     message?.left_chat_member ||
@@ -1173,7 +1209,10 @@ pierObj.telegram.common.TelegramRemoveNewMemberMessage = (
         (u.username || "").length > 100 ||
         (u.first_name || "").length > 100 ||
         (u.last_name || "").length > 100
-    ).length > 0
+    ).length > 0 ||
+    (config.channelMapping?.[messenger]?.[message?.chat?.id]?.settings
+      ?.removeJoinMessages === true &&
+      message.new_chat_members)
   ) {
     pierObj.telegram.common.telegram_DeleteMessage({
       messenger,
@@ -1187,7 +1226,7 @@ pierObj.telegram.common.TelegramRemoveNewMemberMessage = (
 
 pierObj.telegram.common.TelegramLeaveChatIfNotAdmin = async (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   if (
     !["group", "supergroup"].includes(message?.chat?.type) ||
@@ -1235,7 +1274,7 @@ pierObj.telegram.common.telegram_DeleteMessage = async ({
   log,
 }: {
   messenger: string
-  message: Telegram.Message
+  message: TelegramMessage
   log: boolean
 }) => {
   if (log) await to(common.LogMessageToAdmin(messenger, message))
@@ -1306,7 +1345,7 @@ pierObj.telegram.StartService = async ({
   generic[messenger].client.on("edited_message", (message: any) => {
     pierObj.telegram.receivedFrom(messenger, message)
   })
-  generic[messenger].client.on("polling_error", (error: any) => {
+  generic[messenger].client.on("polling_error", async (error: any) => {
     logger.log({
       level: "error",
       function: "pierObj.telegram.StartService",
@@ -1314,6 +1353,9 @@ pierObj.telegram.StartService = async ({
       error_message: error?.message,
       response_code: error?.response?.body?.error_code,
     })
+    // generic[messenger].client = await pierObj.telegram.common.Start({
+    //   messenger,
+    // })
     generic[messenger].client.stopPolling().then(() => {
       setTimeout(() => {
         logger.log({
@@ -2013,6 +2055,7 @@ async function universalSendTo({
 async function sendFrom({
   messenger,
   channelId,
+  topicId,
   author,
   text,
   ToWhom,
@@ -2025,6 +2068,7 @@ async function sendFrom({
 }: {
   messenger: string
   channelId: string | number
+  topicId?: string | number | null
   author: string
   text: string
   ToWhom?: string
@@ -2035,7 +2079,10 @@ async function sendFrom({
   edited?: boolean
   avatar?: string
 }) {
-  const ConfigNode = config?.channelMapping?.[messenger]?.[channelId]
+  const ConfigNode =
+    config?.channelMapping?.[messenger]?.[
+      topicId ? `${topicId}@${channelId}` : channelId
+    ]
   if (!ConfigNode)
     return common.LogToAdmin(
       `error finding assignment to ${messenger} channel with id ${channelId}`
@@ -3422,6 +3469,15 @@ pierObj.mattermost.common.GetChannelsMattermostCore = async (
   return json
 }
 
+interface TopicalizedChannel {
+  groupName: string
+  topicId: string
+  removeJoinMessages: boolean
+}
+
+interface NewChannel {
+  [messenger: string]: string | boolean | number | TopicalizedChannel
+}
 async function PopulateChannelMappingCore({
   messenger,
 }: {
@@ -3432,24 +3488,51 @@ async function PopulateChannelMappingCore({
   const arrMappingKeys: string[] = Object.keys(
     config.MessengersAvailable
   ).filter((el: string) => config.MessengersAvailable[el] === true)
-  config.new_channels.map((i: any) => {
-    let i_mapped = i[messenger]
-    if (config.cache[messenger])
-      i_mapped = config.cache?.[messenger]?.[i[messenger]]
+  config.new_channels.map((newChannel: NewChannel) => {
+    let i_mapped = newChannel[messenger] as string
+    let topicalizedChannel: Partial<TopicalizedChannel> = {}
+    if (config.cache[messenger]) {
+      topicalizedChannel = {
+        groupName: (newChannel[messenger] as TopicalizedChannel)?.groupName,
+        topicId: (newChannel[messenger] as TopicalizedChannel)?.topicId,
+        removeJoinMessages: (newChannel[messenger] as TopicalizedChannel)
+          ?.removeJoinMessages,
+      }
+
+      if (topicalizedChannel.groupName && topicalizedChannel.topicId) {
+        i_mapped = `${topicalizedChannel.topicId}@${
+          config.cache?.[messenger]?.[topicalizedChannel.groupName]
+        }`
+      } else if (topicalizedChannel.groupName) {
+        i_mapped = config.cache?.[messenger]?.[topicalizedChannel.groupName]
+      } else {
+        i_mapped = config.cache?.[messenger]?.[newChannel[messenger] as string]
+      }
+    }
     if (!i_mapped) return
-    const mapping: any = {
+    const mapping: { [key: string]: string | NewChannel } = {
       settings: {
-        readonly: i[`${messenger}-readonly`],
-        dontProcessOtherBridges: i[`${messenger}-dontProcessOtherBridges`],
-        nsfw_analysis: i[`nsfw_analysis`],
-        language: i["language"],
-        restrictToLojban: i["restrictToLojban"],
-        nickcolor: i[`${messenger}-nickcolor`],
-        name: i[messenger],
+        readonly: newChannel[`${messenger}-readonly`],
+        dontProcessOtherBridges:
+          newChannel[`${messenger}-dontProcessOtherBridges`],
+        nsfw_analysis: newChannel[`nsfw_analysis`],
+        language: newChannel["language"],
+        restrictToLojban: newChannel["restrictToLojban"],
+        nickcolor: newChannel[`${messenger}-nickcolor`],
+        name: newChannel[messenger],
+        topicId: topicalizedChannel.topicId,
+        removeJoinMessages: topicalizedChannel.removeJoinMessages,
       },
     }
+
     for (const key of arrMappingKeys)
-      mapping[key] = config.cache?.[key]?.[i[key]] || i[key]
+      mapping[key] = (newChannel[key] as TopicalizedChannel)?.groupName
+        ? `${(newChannel[key] as TopicalizedChannel)?.topicId}@${
+            config.cache?.[key]?.[
+              (newChannel[key] as TopicalizedChannel)?.groupName
+            ] || newChannel[key]
+          }`
+        : config.cache?.[key]?.[newChannel[key] as string] || newChannel[key]
 
     config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(
       mapping,
@@ -3747,7 +3830,7 @@ async function StartServices() {
 
 common.LogMessageToAdmin = async (
   messenger: string,
-  message: Telegram.Message
+  message: TelegramMessage
 ) => {
   if (config.piers[messenger].admins_userid)
     await to(
@@ -4049,7 +4132,7 @@ common.downloadFile = async ({
                   },
                   timeout: 3000,
                 },
-                (err) => {
+                (err: any) => {
                   if (err) {
                     console.log(remote_path, err.toString())
                     resolve(null)

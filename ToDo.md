@@ -1,5 +1,6 @@
 # Bugs:
 
+* Telegram stops listening after a while
 * mattermost stops listening after a while
 * reload channelMapping and cache when new channels appear (discord,slack, working for telegram already) on the fly
 
