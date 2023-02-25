@@ -1,7 +1,5 @@
 #!/bin/bash
 
-docker build -t 1chat .
-
 docker kill 1chat
 docker rm 1chat
 

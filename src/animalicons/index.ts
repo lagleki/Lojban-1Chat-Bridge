@@ -1,14 +1,14 @@
-const fs = require('fs');
-const path = require('path');
-const { getHash, getMinimumColorVariance } = require("./utils");
+import fs from 'fs';
+import path from 'path';
+import { getHash, getMinimumColorVariance } from "./utils";
 const getMCV = getMinimumColorVariance
-const { createCanvas, Image, registerFont } = require('canvas')
-const { fillTextWithTwemoji } = require('node-canvas-with-twemoji');
+import { createCanvas, Image, registerFont } from 'canvas';
+import { fillTextWithTwemoji } from 'node-canvas-with-twemoji';
 
 registerFont(path.resolve(__dirname, 'fonts/NotoSans-Regular.ttf'), { family: 'Noto' });
 registerFont(path.resolve(__dirname, 'fonts/NotoColorEmoji.ttf'), { family: 'Emoji' });
 
-const colors = require("./colors.json");
+import colors from "./colors.json";
 const defaultTheme = {
 	colors,
 	emojis: [],

@@ -26,27 +26,7 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 * see logs via `docker logs -f -t 1chat`
 * if necessary stop the process via `docker stop 1chat`
 
-# Quick start without Docker
-
-*Not recommended*
-
-Currently there are only short docs. You need to study yourself how to make users or bots for each messenger and get their credentials.
-
-* `git clone https://github.com/lagleki/Lojban-1Chat-Bridge.git ; cd Lojban-1Chat-Bridge ; npm i`
-* `npm run tsc` to compile.
-* `npm run genconfig` to generate a default config
-* copy `default-config/defaults.js` to `data/defaults.js`
-* read and edit `viconfig/defaults.js`, which has in-place instructions
-* install FFmpeg and make sure it's in your PATH, e.g. on Ubuntu/Debian:
-```
-sudo apt update
-
-sudo apt install ffmpeg
-
-ffmpeg -version
-```
-* `npm run start` to start the process.
-
 ## Debug
 
+* run `./docker_dev.sh` in dev mode
 Run `DEBUG=telegram,mattermost,discord npm run start` to output messages to and from Telegram, Mattermost, Discord. Messengers to be separated with a comma. 

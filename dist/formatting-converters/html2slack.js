@@ -10,7 +10,7 @@ module.exports = function slackify(html) {
     parser.parseComplete(html);
     const dom = handler.dom;
     if (dom)
-        return html_entities_1.decode(walk(dom)
+        return (0, html_entities_1.decode)(walk(dom)
             .replace(/&lt;/g, "&amp;lt;")
             .replace(/&gt;/g, "&amp;gt;"));
     else
@@ -20,13 +20,12 @@ function walk(dom, ignoreCode = false) {
     let out = "";
     if (dom)
         dom.forEach((el) => {
-            var _a;
             if ("text" === el.type)
                 out += el.data;
             if ("tag" === el.type)
                 switch (el.name) {
                     case "a":
-                        if ((_a = el.attribs) === null || _a === void 0 ? void 0 : _a.href)
+                        if (el.attribs?.href)
                             out += `<${el.attribs.href}|${walk(el.children)}>`;
                         break;
                     case "br":

@@ -19,7 +19,7 @@ process.env.NTBA_FIX_319 = 1
 // file system and network libs
 const fs = require("fs-extra")
 const path = require("path")
-const mkdir = require("mkdirp-sync")
+import { mkdirp } from 'mkdirp'
 import { ImplicitFlowUser } from "@vk-io/authorization"
 import to from "await-to-js"
 import axios, { AxiosResponse } from "axios"
@@ -736,6 +736,7 @@ pierObj.telegram.receivedFrom = async (
   messenger: string,
   message: TelegramMessage
 ) => {
+  console.log(message);
   //spammer
   //1. remove entered bots
   pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message)
@@ -3358,7 +3359,7 @@ function xovahelojbo({ text }: { text: string }) {
 // common
 common.ConfigBeforeStart = () => {
   if (process.argv[2] === "--genconfig") {
-    mkdir(cache_folder)
+    mkdirp.sync(cache_folder)
 
     // read default config using readFile to include comments
     const config = fs.readFileSync(defaults)
@@ -4107,7 +4108,7 @@ common.downloadFile = async ({
   const randomStringName = blalalavla.cupra(
     (remote_path || fileId.toString()) + "1"
   )
-  mkdir(`${cache_folder}/files/${randomString}`)
+  mkdirp.sync(`${cache_folder}/files/${randomString}`)
   const rem_path = `${config.generic.httpLocation}/${randomString}`
   const local_path = `${cache_folder}/files/${randomString}`
 
@@ -4425,7 +4426,7 @@ StartServices()
 
 // start HTTP server for media files if configured to do so
 if (config.generic.showMedia) {
-  mkdir(`${cache_folder}/files`)
+  mkdirp.sync(`${cache_folder}/files`)
   const serve = serveStatic(`${cache_folder}/files`, {
     lastModified: false,
     index: false,

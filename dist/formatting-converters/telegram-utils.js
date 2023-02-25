@@ -38,7 +38,7 @@ const escapeLinkChars = (text) => escapeCommonChars(escapeChars(text, [')', '\\'
 const escapeMarkdownTextByEntity = (text, entity) => {
     // return text;
     if (entity.type === 'symbol') {
-        return generic_1.escapeHTML(text);
+        return (0, generic_1.escapeHTML)(text);
     }
     else if (entity.type === 'spoiler') {
         return escapeCommonChars(text);
