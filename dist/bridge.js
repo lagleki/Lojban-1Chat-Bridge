@@ -1,22 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 ;
 Error.stackTraceLimit = 100;
 process.env.NTBA_FIX_319 = 1;
 // file system and network libs
-const fs = require("fs-extra");
-const path = require("path");
+const fs_extra_1 = __importDefault(require("fs-extra"));
+const path_1 = __importDefault(require("path"));
 const mkdirp_1 = require("mkdirp");
 const authorization_1 = require("@vk-io/authorization");
-const await_to_js_1 = require("await-to-js");
-const axios_1 = require("axios");
+const await_to_js_1 = __importDefault(require("await-to-js"));
+const axios_1 = __importDefault(require("axios"));
 //discord
-const Discord = require("discord.js");
-const http = require("http");
+const discord_js_1 = __importDefault(require("discord.js"));
+const http_1 = __importDefault(require("http"));
 // messengers' libs
 // const { login } = require("libfb")
-const Telegram = require("node-telegram-bot-api");
-const request = require("request");
+const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
+const request_1 = __importDefault(require("request"));
 const vk_io_1 = require("vk-io");
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 // markedRenderer.text = (string: string) => escapeHTML(string)
@@ -26,8 +52,8 @@ const generic_1 = require("./formatting-converters/generic");
 const telegram_utils_1 = require("./formatting-converters/telegram-utils");
 const Timeout = require("await-timeout");
 // process.on('warning', (e: any) => console.warn(e.stack));
-const cache_folder = path.join(__dirname, "../data");
-const defaults = path.join(__dirname, `../default-config/defaults.js`);
+const cache_folder = path_1.default.join(__dirname, "../data");
+const defaults = path_1.default.join(__dirname, `../default-config/defaults.js`);
 const sanitizeHtml = require("sanitize-html");
 const createDOMPurify = require("dompurify");
 const { JSDOM } = require("jsdom");
@@ -44,7 +70,6 @@ const lexer = marked.Lexer;
 lexer.rules.list = { exec: () => { } };
 lexer.rules.listitem = { exec: () => { } };
 const markedRenderer = new marked.Renderer();
-const Avatar = require("../src/animalicons/index.js");
 let server;
 function markedParse({ text, messenger, dontEscapeBackslash, unescapeCodeBlocks, }) {
     if (!dontEscapeBackslash)
@@ -81,13 +106,13 @@ const Irc = require("irc-upd");
 const ircolors = require("./formatting-converters/irc-colors-ts");
 const finalhandler = require("finalhandler");
 const serveStatic = require("serve-static");
-const winston = require("winston");
-const DailyRotateFile = require("winston-daily-rotate-file");
+const winston = __importStar(require("winston"));
+const winston_daily_rotate_file_1 = __importDefault(require("winston-daily-rotate-file"));
 const logger = winston.createLogger({
     format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
     transports: [
-        new DailyRotateFile({
-            filename: path.join(cache_folder, "info-%DATE%.log"),
+        new winston_daily_rotate_file_1.default({
+            filename: path_1.default.join(cache_folder, "info-%DATE%.log"),
             datePattern: "YYYY-MM-DD",
             zippedArchive: false,
             maxSize: "20m",
@@ -95,9 +120,9 @@ const logger = winston.createLogger({
         }),
     ],
 });
-const log = (messenger) => (message) => logger.log({ level: "info", message: { message, messenger } });
+const log = (messenger) => (message) => logger.log({ level: "info", message: JSON.stringify({ message, messenger }) });
 const R = require("ramda");
-const { default: PQueue } = require("p-queue");
+const p_queue_1 = __importDefault(require("p-queue"));
 const blalalavla = require("./sugar/blalalavla");
 const modzi = require("./sugar/modzi");
 // NLP & spam libs
@@ -127,7 +152,7 @@ async function tot(arg, timeout = 5000, rejectResponse = true) {
 }
 const discordParser = require("discord-markdown");
 pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, quotation, file, edited, avatar, }) => {
-    let files = undefined;
+    let files = [];
     if (file) {
         files = [
             {
@@ -147,11 +172,13 @@ pierObj.discord.sendTo = async ({ messenger, channelId, author, chunk, action, q
         .trim();
     const parsedName = modzi.modzi(author);
     try {
-        const response = await axios_1.default.get(avatar, {
-            responseType: "arraybuffer",
-        });
-        const prefix = "data:" + response.headers["content-type"] + ";base64,";
-        avatar = prefix + Buffer.from(response.data, "binary").toString("base64");
+        if (avatar) {
+            const response = await axios_1.default.get(avatar, {
+                responseType: "arraybuffer",
+            });
+            const prefix = "data:" + response.headers["content-type"] + ";base64,";
+            avatar = prefix + Buffer.from(response.data, "binary").toString("base64");
+        }
     }
     catch (error) {
         avatar = undefined;
@@ -324,6 +351,7 @@ pierObj.discord.receivedFrom = async (messenger, message) => {
         //media of attachment
         //todo: height,width,common.LocalizeString
         let [, res] = await (0, await_to_js_1.default)(common.downloadFile({
+            messenger,
             type: "simple",
             remote_path: value.url,
         }));
@@ -456,7 +484,7 @@ pierObj.discord.StartService = async ({ messenger }) => {
     if (!config.MessengersAvailable[messenger])
         return;
     await new Promise((resolve) => {
-        const client = new Discord.Client();
+        const client = new discord_js_1.default.Client();
         generic[messenger].client = client;
         generic[messenger].client.once("ready", () => {
             generic[messenger].guilds = client.guilds.cache.array();
@@ -493,7 +521,7 @@ pierObj.discord.StartService = async ({ messenger }) => {
 //telegram
 pierObj.telegram.common = {
     Start: async function ({ messenger }) {
-        return new Telegram(config.piers[messenger].token, {
+        return new node_telegram_bot_api_1.default(config.piers[messenger].token, {
             polling: true,
         });
     },
@@ -934,7 +962,7 @@ pierObj.telegram.getChannels = async (pier) => {
     //read from file
     let res = {};
     try {
-        res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`))[pier];
+        res = JSON.parse(fs_extra_1.default.readFileSync(`${cache_folder}/cache.json`, { encoding: 'utf8' }))[pier];
     }
     catch (error) { }
     config.cache[pier] = res;
@@ -963,7 +991,7 @@ pierObj.telegram.StartService = async ({ messenger, }) => {
         pierObj.telegram.receivedFrom(messenger, message);
     });
     generic[messenger].client.on("polling_error", async (error) => {
-        logger.log({
+        log(messenger)({
             level: "error",
             function: "pierObj.telegram.StartService",
             error_code: error?.code,
@@ -1078,7 +1106,7 @@ pierObj.mattermost.common = {
                 password: config.piers[messenger].password,
             };
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/login`;
-            request({
+            (0, request_1.default)({
                 body: JSON.stringify(credentials),
                 method: "POST",
                 url,
@@ -1107,7 +1135,7 @@ pierObj.mattermost.common = {
         [err, res] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             const user_id = config.piers[messenger].user_id;
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${user_id}/teams`;
-            request({
+            (0, request_1.default)({
                 method: "GET",
                 url,
                 headers: {
@@ -1154,7 +1182,7 @@ async function FormatMessageChunkForSending({ messenger, channelId, author, chun
                 ["title", title],
             ],
         });
-        logger.log({
+        log(messenger)({
             level: "info",
             function: "OverlayMessageWithQuotedMark",
             messenger,
@@ -1254,7 +1282,7 @@ pierObj.mattermost.sendTo = async ({ messenger, channelId, author, chunk, action
                 channel: channelId,
             },
         };
-        request.post(option, (error, response, body) => {
+        request_1.default.post(option, (error, response, body) => {
             resolve(null);
         });
     });
@@ -1388,65 +1416,6 @@ pierObj.irc.common.prepareAuthor = function ({ messenger, text, targetChannel, }
 common.prepareAuthor = function ({ messenger, text, targetChannel, }) {
     return `${text}`;
 };
-async function checkHelpers({ messenger, channelId, author, text, ToWhom, quotation, action, edited, avatar, }) {
-    const tags = ["#zlm", "#modzi"];
-    text = text.replace(/<[^>]*>/g, "");
-    const selected_tags = tags.filter((i) => text.indexOf(i) >= 0);
-    if (selected_tags.length === 0)
-        return;
-    tags.forEach((tag) => {
-        text = text.replace(tag, "");
-    });
-    text = text.trim();
-    if (xovahelojbo({ text }) < 0.5)
-        return;
-    const puppeteer = require("puppeteer-extra");
-    let browser, href;
-    try {
-        browser = await puppeteer.launch({
-            args: ["--no-sandbox"],
-            headless: true,
-        });
-        let page = await browser.newPage();
-        await page.goto(`https://la-lojban.github.io/melbi-zei-lojban/?ceha=${selected_tags[0]}&text=${text}`);
-        await page.waitForFunction("document.querySelector('#myImage') && document.querySelector('#myImage').getAttribute('data:fonts-loaded')=='true'");
-        href = (await page.evaluate(() => Array.from(document.querySelectorAll("#myImage"), (a) => a.getAttribute("src"))))[0];
-    }
-    catch (error) {
-        logger.log({
-            level: "error",
-            function: "checkHelpers",
-            message: error.toString(),
-        });
-    }
-    try {
-        await browser.close();
-    }
-    catch (error) {
-        logger.log({
-            level: "error",
-            function: "checkHelpers",
-            message: error.toString(),
-        });
-    }
-    if (!href)
-        return;
-    const [file, localfile] = await common.downloadFile({
-        type: "data",
-        remote_path: href,
-    });
-    universalSendTo({
-        messenger,
-        channelId,
-        author,
-        chunk: file,
-        quotation,
-        action,
-        file: localfile,
-        edited,
-        avatar,
-    });
-}
 async function universalSendTo({ messenger, channelId, author, chunk, quotation, action, file, edited, avatar, }) {
     if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly)
         return;
@@ -1474,17 +1443,6 @@ async function sendFrom({ messenger, channelId, topicId, author, text, ToWhom, q
     text = await pierObj[messenger_core]?.convertFrom({ text, messenger });
     text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
     text = text.replace(/^(<br\/>)+/, "");
-    //zbalermorna etc.
-    // await checkHelpers({
-    //   messenger,
-    //   channelId: ConfigNode[messenger],
-    //   author,
-    //   text,
-    //   quotation,
-    //   action,
-    //   edited,
-    //   avatar
-    // })
     const nsfw = config?.channelMapping?.[messenger]?.[channelId]?.settings?.nsfw_analysis &&
         file
         ? (await (0, await_to_js_1.default)(getNSFWString(remote_file)))[1]
@@ -1601,6 +1559,8 @@ async function sendFrom({ messenger, channelId, topicId, author, text, ToWhom, q
     }
 }
 async function getNSFWString(file) {
+    if (file === undefined)
+        return null;
     // if (file.substr(-4) !== ".jpg") return
     const tf = require("@tensorflow/tfjs-node");
     const nsfw = require("nsfwjs");
@@ -1654,6 +1614,7 @@ pierObj.facebook.receivedFrom = async (messenger, message) => {
         //todo: add type="photo","width","height","size"
         common
             .downloadFile({
+            messenger,
             type: "simple",
             remote_path: res,
         })
@@ -1720,7 +1681,7 @@ pierObj.vkwall.receivedFrom = async (messenger, message) => {
             const rg = new RegExp(`^\\[club${config.piers[messenger]?.group_id}\\|(.*?)\\]: (.*)$`);
             if (rg.test(text)) {
                 ;
-                [, replyuser, text] = text.match(rg);
+                [, replyuser, text] = Array.from(text.match(rg) ?? []);
             }
             else {
                 let authorId = res?.response?.items?.[0]?.from_id;
@@ -1748,23 +1709,20 @@ pierObj.vkwall.receivedFrom = async (messenger, message) => {
             switch (a.type) {
                 case "photo":
                 case "posted_photo":
-                    try {
-                        const sizes = a.photo.sizes
-                            .map((i) => {
-                            i.square = i.width * i.height;
-                            return i;
-                        })
-                            .sort((d, c) => parseFloat(c.size) - parseFloat(d.size));
+                    const sizes = (a.photo?.sizes ?? [])
+                        .map((i) => {
+                        i.square = i.width * i.height;
+                        return i;
+                    })
+                        .sort((d, c) => parseFloat(c.size) - parseFloat(d.size));
+                    if (sizes[0].url)
                         texts.push(sizes[0].url);
-                        texts.push(a.photo.text);
-                    }
-                    catch (e) { }
+                    if (a?.photo?.text)
+                        texts.push(a?.photo?.text);
                     break;
                 case "doc":
-                    try {
+                    if (a?.doc?.url)
                         texts.push(a.doc.url);
-                    }
-                    catch (e) { }
                     break;
             }
         }
@@ -1831,7 +1789,7 @@ pierObj.vkboard.receivedFrom = async (messenger, message) => {
             const rg = new RegExp(`^\\[club${config.piers[messenger].group_id}\\|(.*?)\\]: (.*)$`);
             if (rg.test(text)) {
                 ;
-                [, replyuser, text] = text.match(rg);
+                [, replyuser, text] = Array.from(text.match(rg) ?? []);
             }
             else {
                 let authorId = res?.response?.items?.[0]?.from_id;
@@ -1859,23 +1817,20 @@ pierObj.vkboard.receivedFrom = async (messenger, message) => {
             switch (a.type) {
                 case "photo":
                 case "posted_photo":
-                    try {
-                        const sizes = a.photo.sizes
-                            .map((i) => {
-                            i.square = i.width * i.height;
-                            return i;
-                        })
-                            .sort((d, c) => parseFloat(c.size) - parseFloat(d.size));
+                    const sizes = (a?.photo?.sizes ?? [])
+                        .map((i) => {
+                        i.square = i.width * i.height;
+                        return i;
+                    })
+                        .sort((d, c) => parseFloat(c.size) - parseFloat(d.size));
+                    if (sizes[0].url)
                         texts.push(sizes[0].url);
-                        texts.push(a.photo.text);
-                    }
-                    catch (e) { }
+                    if (a?.photo?.text)
+                        texts.push(a?.photo?.text);
                     break;
                 case "doc":
-                    try {
+                    if (a?.doc?.url)
                         texts.push(a.doc.url);
-                    }
-                    catch (e) { }
                     break;
             }
         }
@@ -1933,12 +1888,13 @@ pierObj.slack.receivedFrom = async (messenger, message) => {
     [err, chan] = await (0, await_to_js_1.default)(promChannel);
     if (err)
         chan = message.channel;
-    [err, files] = await (0, await_to_js_1.default)(Promise.all(promFiles));
+    const resolveFiles = await (0, await_to_js_1.default)(Promise.all(promFiles));
+    [err, files] = resolveFiles;
     if (err)
         files = [];
     const author = pierObj.slack.adaptName(messenger, user);
     const channelId = chan.channel.name || message.channel;
-    let action;
+    let action = undefined;
     if (message.subtype === "me_message")
         action = "action";
     if (message.subtype === "channel_topic" &&
@@ -1952,7 +1908,7 @@ pierObj.slack.receivedFrom = async (messenger, message) => {
             arrElemsToInterpolate: [["topic", message.topic]],
         });
     }
-    if (files.length > 0)
+    if (files && files.length > 0)
         files.map(([file, localfile]) => {
             sendFrom({
                 messenger,
@@ -1994,7 +1950,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         let err;
         [err] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/posts/${post.id}`;
-            request({
+            (0, request_1.default)({
                 method: "GET",
                 url,
                 headers: {
@@ -2015,7 +1971,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
             console.error(err.toString());
         [err] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/users/${post.user_id}`;
-            request({
+            (0, request_1.default)({
                 method: "GET",
                 url,
                 headers: {
@@ -2036,7 +1992,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
             console.error(err.toString());
         [err] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             const url = `${config.piers[messenger].ProviderUrl}/api/v4/channels/${post.channel_id}`;
-            request({
+            (0, request_1.default)({
                 method: "GET",
                 url,
                 headers: {
@@ -2077,7 +2033,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         for (const file of file_ids) {
             const [err, promfile] = await (0, await_to_js_1.default)(new Promise((resolve) => {
                 const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/link`;
-                request({
+                (0, request_1.default)({
                     method: "GET",
                     url,
                     headers: {
@@ -2098,7 +2054,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
                 console.error(err.toString());
             const [err2, promfile2] = await (0, await_to_js_1.default)(new Promise((resolve) => {
                 const url = `${config.piers[messenger].ProviderUrl}/api/v4/files/${file}/info`;
-                request({
+                (0, request_1.default)({
                     method: "GET",
                     url,
                     headers: {
@@ -2116,7 +2072,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
                 });
             }));
             if (err2)
-                console.error(err.toString());
+                console.error(err?.toString());
             if (promfile && promfile2)
                 files.push([promfile2, promfile]);
         }
@@ -2125,6 +2081,7 @@ pierObj.mattermost.receivedFrom = async (messenger, message) => {
         if (files.length > 0) {
             for (const [extension, file] of files) {
                 const [file_, localfile] = await common.downloadFile({
+                    messenger,
                     type: "simple",
                     remote_path: file,
                     extension,
@@ -2171,7 +2128,7 @@ pierObj.irc.receivedFrom = async (messenger, { author, channelId, text, handler,
         text = text
             .replace(/^<([^<>]+?)>: /, "*$1*: ")
             .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ");
-        [, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/);
+        [, author, text] = Array.from(text.match(/^<b>(.+?)<\/b>: (.*)/) ?? []);
         if (text && text !== "") {
             sendFrom({
                 messenger,
@@ -2268,43 +2225,45 @@ pierObj.slack.convertFrom = async ({ text, messenger, }) => {
         return html.concat(">", payload, "</", tag, ">");
     };
     const matchTag = (match) => {
-        const action = match[1].substr(0, 1);
+        const action = match?.[1]?.substr(0, 1);
         let p;
         switch (action) {
             case "!":
-                return tag("span", { class: "slack-cmd" }, payloads(match[1], 1)[0]);
+                return tag("span", { class: "slack-cmd" }, payloads(match?.[1], 1)[0]);
             case "#":
-                p = payloads(match[1], 2);
+                p = payloads(match?.[1], 2);
                 return tag("span", { class: "slack-channel" }, p.length === 1 ? p[0] : p[1]);
             case "@":
-                p = payloads(match[1], 2);
+                p = payloads(match?.[1], 2);
                 return tag("span", { class: "slack-user" }, p.length === 1 ? p[0] : p[1]);
             default:
-                p = payloads(match[1]);
+                p = payloads(match?.[1]);
                 return tag("a", { href: p[0] }, p.length === 1 ? p[0] : p[1]);
         }
     };
     const safeMatch = (match, tag, trigger) => {
-        let prefix_ok = match.index === 0;
-        let postfix_ok = match.index === match.input.length - match[0].length;
+        let prefix_ok = match?.index === 0;
+        let postfix_ok = match?.index === (match?.input?.length ?? 0) - (match?.[0]?.length ?? 0);
         if (!prefix_ok) {
-            const charAtLeft = match.input.substr(match.index - 1, 1);
+            const charAtLeft = match?.input?.substr(match.index - 1, 1);
             prefix_ok =
-                notAlphanumeric(charAtLeft) && notRepeatedChar(trigger, charAtLeft);
+                notAlphanumeric(charAtLeft || "") &&
+                    notRepeatedChar(trigger || "", charAtLeft || "");
         }
         if (!postfix_ok) {
-            const charAtRight = match.input.substr(match.index + match[0].length, 1);
+            const charAtRight = match?.input?.substr(match.index + match[0].length, 1);
             postfix_ok =
-                notAlphanumeric(charAtRight) && notRepeatedChar(trigger, charAtRight);
+                notAlphanumeric(charAtRight || "") &&
+                    notRepeatedChar(trigger || "", charAtRight || "");
         }
         if (prefix_ok && postfix_ok)
             return tag;
         return false;
     };
-    const matchBold = (match) => safeMatch(match, tag("strong", payloads(match[1])), "*");
-    const matchItalic = (match) => safeMatch(match, tag("em", payloads(match[1])), "_");
-    const matchFixed = (match) => safeMatch(match, tag("code", payloads(match[1])));
-    const matchPre = (match) => safeMatch(match, tag("pre", payloads(match[1])));
+    const matchBold = (match) => safeMatch(match, tag("strong", payloads(match?.[1])), "*");
+    const matchItalic = (match) => safeMatch(match, tag("em", payloads(match?.[1])), "_");
+    const matchFixed = (match) => safeMatch(match, tag("code", payloads(match?.[1])));
+    const matchPre = (match) => safeMatch(match, tag("pre", payloads(match?.[1])));
     const notAlphanumeric = (input) => !RE_ALPHANUMERIC.test(input);
     const notRepeatedChar = (trigger, input) => !trigger || trigger !== input;
     async function parseSlackText(text) {
@@ -2479,8 +2438,8 @@ pierObj.irc.convertTo = async ({ text, messenger, messengerTo, }) => {
 };
 common.writeCache = async ({ pier, channelName, channelId, action, }) => {
     await new Promise((resolve) => {
-        fs.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping));
-        fs.writeFile(`${cache_folder}/cache.json`, JSON.stringify(config.cache), (err) => {
+        fs_extra_1.default.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping));
+        fs_extra_1.default.writeFile(`${cache_folder}/cache.json`, JSON.stringify(config.cache), (err) => {
             log("generic")({ pier, action, channelName, channelId, error: err });
             resolve(null);
         });
@@ -2496,9 +2455,9 @@ common.ConfigBeforeStart = () => {
     if (process.argv[2] === "--genconfig") {
         mkdirp_1.mkdirp.sync(cache_folder);
         // read default config using readFile to include comments
-        const config = fs.readFileSync(defaults);
+        const config = fs_extra_1.default.readFileSync(defaults);
         const configPath = `${cache_folder}/config.js`;
-        fs.writeFileSync(configPath, config);
+        fs_extra_1.default.writeFileSync(configPath, config);
         throw new Error(`Wrote default configuration to ${configPath}, please edit it before re-running`);
     }
     try {
@@ -2545,7 +2504,7 @@ pierObj.mattermost.getChannels = async (pier) => {
 };
 pierObj.mattermost.common.GetChannelsMattermostCore = async (messenger, json, url) => {
     await (0, await_to_js_1.default)(new Promise((resolve) => {
-        request({
+        (0, request_1.default)({
             method: "GET",
             url,
             headers: {
@@ -2605,8 +2564,8 @@ async function PopulateChannelMappingCore({ messenger, }) {
                 restrictToLojban: newChannel["restrictToLojban"],
                 nickcolor: newChannel[`${messenger}-nickcolor`],
                 name: newChannel[messenger],
-                topicId: topicalizedChannel.topicId,
-                removeJoinMessages: topicalizedChannel.removeJoinMessages,
+                topicId: (topicalizedChannel.topicId || ""),
+                removeJoinMessages: (topicalizedChannel.removeJoinMessages ?? false),
             },
         };
         for (const key of arrMappingKeys)
@@ -2615,7 +2574,7 @@ async function PopulateChannelMappingCore({ messenger, }) {
                 : config.cache?.[key]?.[newChannel[key]] || newChannel[key];
         config.channelMapping[messenger][i_mapped] = R.mergeDeepLeft(mapping, config.channelMapping[messenger][i_mapped] || {});
     });
-    fs.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping, null, 2));
+    fs_extra_1.default.writeFileSync(`${cache_folder}/channelMapping.json`, JSON.stringify(config.channelMapping, null, 2));
 }
 common.PopulateChannelMapping = async () => {
     if (!config.channelMapping)
@@ -2833,7 +2792,7 @@ async function StartServices() {
     for (const messenger_with_index of Object.keys(config.MessengersAvailable)) {
         const messenger = messenger_with_index.replace(/_.*/g, "");
         if (pierObj[messenger]?.StartService) {
-            queueOf[messenger_with_index] = new PQueue({ concurrency: 1 });
+            queueOf[messenger_with_index] = new p_queue_1.default({ concurrency: 1 });
             await pierObj[messenger]?.StartService({
                 messenger: messenger_with_index,
             });
@@ -3034,7 +2993,7 @@ common.GetChunks = async (text, messenger) => {
 };
 function saveDataToFile({ data, local_fullname, }) {
     function decodeBase64Image(dataString) {
-        const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        const matches = Array.from(dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/) ?? []);
         const response = {};
         if (matches.length !== 3) {
             return new Error("Invalid input string");
@@ -3052,7 +3011,7 @@ function saveDataToFile({ data, local_fullname, }) {
     const type = imageBuffer.type.match(imageTypeRegularExpression);
     return { type: type[1], data: imageBuffer.data };
 }
-common.downloadFile = async ({ messenger, type, fileId, remote_path, extension = "", }) => {
+common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extension = "", }) => {
     const randomString = blalalavla.cupra(remote_path || fileId.toString());
     const randomStringName = blalalavla.cupra((remote_path || fileId.toString()) + "1");
     mkdirp_1.mkdirp.sync(`${cache_folder}/files/${randomString}`);
@@ -3062,15 +3021,15 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     let rem_fullname = "";
     let local_fullname = "";
     if (type === "slack") {
-        local_fullname = `${local_path}/${path.basename(remote_path)}`;
+        local_fullname = `${local_path}/${path_1.default.basename(remote_path)}`;
         [err, res] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             try {
-                let file = fs.createWriteStream(local_fullname);
+                let file = fs_extra_1.default.createWriteStream(local_fullname);
                 file
                     .on("open", () => {
-                    request({
+                    (0, request_1.default)({
                         method: "GET",
-                        url: remote_path,
+                        url: remote_path || '',
                         headers: {
                             Authorization: `Bearer ${config.piers[messenger]?.token}`,
                         },
@@ -3083,7 +3042,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
                     })
                         .pipe(file)
                         .on("finish", () => {
-                        const rem_fullname = `${rem_path}/${path.basename(remote_path)}`;
+                        const rem_fullname = `${rem_path}/${path_1.default.basename(remote_path)}`;
                         resolve([rem_fullname, local_fullname]);
                     })
                         .on("error", (error) => {
@@ -3112,12 +3071,12 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     else if (type === "data") {
         try {
             const { type, data } = saveDataToFile({
-                data: remote_path,
+                data: remote_path ?? '',
                 local_fullname,
             });
             const basename = randomStringName + "." + (type ?? extension);
             local_fullname = `${local_path}/${basename}`;
-            fs.writeFileSync(local_fullname, data);
+            fs_extra_1.default.writeFileSync(local_fullname, data);
             rem_fullname = `${rem_path}/${basename}`;
         }
         catch (error) {
@@ -3133,16 +3092,16 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     else if (type === "simple") {
         if (extension)
             extension = `.${extension}`;
-        const basename = path.basename(remote_path).split(/[\?#]/)[0] + (extension || "");
+        const basename = path_1.default.basename(remote_path).split(/[\?#]/)[0] + (extension || "");
         local_fullname = `${local_path}/${basename}`;
         await new Promise((resolve, reject) => {
             try {
-                let file = fs.createWriteStream(local_fullname);
+                let file = fs_extra_1.default.createWriteStream(local_fullname);
                 file
                     .on("open", () => {
-                    let stream = request({
+                    let stream = (0, request_1.default)({
                         method: "GET",
-                        url: remote_path,
+                        url: remote_path ?? '',
                         timeout: 3000,
                     })
                         .pipe(file)
@@ -3181,7 +3140,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
         ;
         [err, local_fullname] = await (0, await_to_js_1.default)(generic[messenger].client.downloadFile(fileId, local_path));
         if (!err)
-            rem_fullname = `${rem_path}/${path.basename(local_fullname)}`;
+            rem_fullname = `${rem_path}/${path_1.default.basename(local_fullname)}`;
     }
     if (err) {
         log("telegram")({ remote_path, error: err, type: "generic" });
@@ -3189,14 +3148,14 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     }
     ;
     [err, res] = await (0, await_to_js_1.default)(new Promise((resolve) => {
-        const new_name = `${local_path}/${randomStringName}${path.extname(local_fullname)}`;
-        fs.rename(local_fullname, new_name, (err) => {
+        const new_name = `${local_path}/${randomStringName}${path_1.default.extname(local_fullname)}`;
+        fs_extra_1.default.rename(local_fullname, new_name, (err) => {
             if (err) {
                 console.error({ remote_path, error: err, type: "renaming" });
                 resolve(null);
             }
             else {
-                rem_fullname = `${rem_path}/${path.basename(new_name)}`;
+                rem_fullname = `${rem_path}/${path_1.default.basename(new_name)}`;
                 resolve([rem_fullname, new_name]);
             }
         });
@@ -3204,20 +3163,20 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
     if (!err)
         [rem_fullname, local_fullname] = res;
     //check if it's audio:
-    if ([".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(path.extname(local_fullname))) {
+    if ([".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(path_1.default.extname(local_fullname))) {
         const local_mp3_file = local_fullname + ".mp3";
         const cp = require("child_process");
         cp.spawnSync("ffmpeg", ["-i", local_fullname, local_mp3_file], {
             encoding: "utf8",
         });
-        if (fs.existsSync(local_mp3_file))
+        if (fs_extra_1.default.existsSync(local_mp3_file))
             return [rem_fullname + ".mp3", local_mp3_file];
         return [rem_fullname, local_fullname];
     }
     //check if it's webp/tiff:
-    if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
+    if ([".webp", ".tiff"].includes(path_1.default.extname(local_fullname))) {
         const sharp = require("sharp");
-        const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`;
+        const jpgname = `${(local_fullname ?? '').split(".").slice(0, -1).join(".")}.jpg`;
         [err, res] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             sharp(local_fullname).toFile(jpgname, (err, info) => {
                 if (err) {
@@ -3229,7 +3188,7 @@ common.downloadFile = async ({ messenger, type, fileId, remote_path, extension =
                     resolve([rem_fullname, local_fullname]);
                 }
                 else {
-                    fs.unlink(local_fullname);
+                    fs_extra_1.default.unlink(local_fullname);
                     resolve([
                         `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
                         jpgname,
@@ -3312,7 +3271,7 @@ common.LocalizeString = ({ messenger, channelId, localized_string_key, arrElemsT
         return template;
     }
     catch (error) {
-        logger.log({
+        log(messenger)({
             level: "error",
             function: "LocalizeString",
             messenger,
@@ -3335,7 +3294,7 @@ if (config.generic.showMedia) {
         index: false,
         maxAge: 86400000,
     });
-    server = http.createServer((req, res) => {
+    server = http_1.default.createServer((req, res) => {
         // if ((request.url || "").indexOf("/emailing/templates") === 0) {
         serve(req, res, finalhandler(req, res));
     });

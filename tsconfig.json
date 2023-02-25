@@ -1,9 +1,11 @@
 {
   "compilerOptions": {
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "allowJs": false,
     "outDir": "./dist",
     "target": "ES2020",
+    "esModuleInterop": true,
     "module": "commonjs",
     "noImplicitAny": true,
     "lib": [
@@ -20,6 +22,9 @@
     ],
     "baseUrl": "./"
   },
-  "include": ["/home/app/1chat/src/"],
-  "exclude": ["/home/app/1chat/dist/"]
+  "paths": {
+    "*": ["./src/@types/*"]
+  },
+  "include": ["./src/", "./src/@types/**/*"],
+  "exclude": ["./dist/"]
 }

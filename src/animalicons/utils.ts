@@ -1,15 +1,13 @@
-const { TextEncoder } = require('util')
-const space = require('color-space');
+import { TextEncoder } from 'util';
+import space from 'color-space';
 
-const deltaE = require("delta-e");
-const crypto = require('crypto')
+import deltaE from "delta-e";
+import crypto from 'crypto';
+
 /**
  * Returns a SHA-1 hash of the given message.
- * @param message  The string to be hashed.
- * @returns {string}  The hash.
  */
-
-async function getHash(message) {
+export async function getHash(message: string): Promise<string> {
 	const encoder = new TextEncoder();
 	const data = encoder.encode(message);
 	const buffer = crypto.createHash('sha1').update(data).digest()
@@ -27,10 +25,8 @@ async function getHash(message) {
 
 /**
  * Returns an array with RGB values of the given hex color.
- * @param hex  The hex value of the color.
- * @returns {Array}  An array of R, G, B values.
  */
-function hex2RGB(hex) {
+function hex2RGB(hex: any): Array<any> {
 	let v = hex;
 	if (v.startsWith("#")) {
 		v = v.substring(1);
@@ -51,11 +47,8 @@ function hex2RGB(hex) {
 
 /**
  * Calculate the CIEDE2000 Delta E value between two colors.
- * @param hex1  The hex value of the first color to compare.
- * @param hex2  The hex value of the second color to compare.
- * @returns {number}  The Delta E value.
  */
-function getDeltaE(hex1, hex2) {
+function getDeltaE(hex1: any, hex2: any): number {
 	const lab1 = space.xyz.lab(space.rgb.xyz(hex2RGB(hex1)));
 	const lab2 = space.xyz.lab(space.rgb.xyz(hex2RGB(hex2)));
 	return deltaE.getDeltaE00(
@@ -66,12 +59,9 @@ function getDeltaE(hex1, hex2) {
 
 /**
  * Gets the minimum Delta E value for a color compared to a group of colors.
- * @param color
- * @param compareColors
- * @returns {*|number}
  */
-function getMinimumColorVariance(color, compareColors) {
-	let v;
+export function getMinimumColorVariance(color: any, compareColors: string | any[]): any | number {
+	let v: number | undefined;
 	for (let i = 0; i < compareColors.length; i++) {
 		const cv = getDeltaE(color, compareColors[i]);
 		if (v === undefined || cv < v) {
@@ -79,12 +69,4 @@ function getMinimumColorVariance(color, compareColors) {
 		}
 	}
 	return v || 0;
-}
-
-module.exports = {
-	getHash,
-	hex2RGB,
-	getDeltaE,
-	getMinimumColorVariance
-
 }

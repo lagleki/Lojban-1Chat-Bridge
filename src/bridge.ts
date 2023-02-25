@@ -1,4 +1,3 @@
-"use strict"
 interface ErrorConstructor {
   stackTraceLimit?: number
 }
@@ -17,19 +16,19 @@ declare var process: {
 process.env.NTBA_FIX_319 = 1
 
 // file system and network libs
-const fs = require("fs-extra")
-const path = require("path")
-import { mkdirp } from 'mkdirp'
+import fs from "fs-extra"
+import path from "path"
+import { mkdirp } from "mkdirp"
 import { ImplicitFlowUser } from "@vk-io/authorization"
 import to from "await-to-js"
 import axios, { AxiosResponse } from "axios"
 //discord
-import * as Discord from "discord.js"
-import * as http from "http"
+import Discord from "discord.js"
+import http from "http"
 // messengers' libs
 // const { login } = require("libfb")
-import * as Telegram from "node-telegram-bot-api"
-import * as request from "request"
+import Telegram from "node-telegram-bot-api"
+import request from "request"
 import { CallbackService } from "vk-io"
 // markedRenderer.text = (string: string) => string.replace(/\\/g, "\\\\");
 // markedRenderer.text = (string: string) => escapeHTML(string)
@@ -67,7 +66,7 @@ lexer.rules.list = { exec: () => {} }
 lexer.rules.listitem = { exec: () => {} }
 const markedRenderer = new marked.Renderer()
 
-const Avatar = require("../src/animalicons/index.js")
+import Avatar from "../src/animalicons/index.js"
 
 let server: http.Server
 
@@ -116,9 +115,9 @@ const ircolors = require("./formatting-converters/irc-colors-ts")
 const finalhandler = require("finalhandler")
 const serveStatic = require("serve-static")
 
-const winston = require("winston")
+import * as winston from "winston"
+import DailyRotateFile from "winston-daily-rotate-file"
 
-import DailyRotateFile = require("winston-daily-rotate-file")
 const logger = winston.createLogger({
   format: winston.format.combine(
     winston.format.timestamp(),
@@ -135,10 +134,10 @@ const logger = winston.createLogger({
   ],
 })
 const log = (messenger: String) => (message: any) =>
-  logger.log({ level: "info", message: { message, messenger } })
+  logger.log({ level: "info", message: JSON.stringify({ message, messenger }) })
 
 const R = require("ramda")
-const { default: PQueue } = require("p-queue")
+import PQueue from "p-queue"
 
 const blalalavla = require("./sugar/blalalavla")
 const modzi = require("./sugar/modzi")
@@ -244,7 +243,7 @@ pierObj.discord.sendTo = async ({
   edited,
   avatar,
 }: IsendToArgs) => {
-  let files = undefined
+  let files: { attachment: string }[] = []
   if (file) {
     files = [
       {
@@ -264,11 +263,13 @@ pierObj.discord.sendTo = async ({
 
   const parsedName = modzi.modzi(author)
   try {
-    const response: AxiosResponse = await axios.get(avatar, {
-      responseType: "arraybuffer",
-    })
-    const prefix = "data:" + response.headers["content-type"] + ";base64,"
-    avatar = prefix + Buffer.from(response.data, "binary").toString("base64")
+    if (avatar) {
+      const response: AxiosResponse = await axios.get(avatar, {
+        responseType: "arraybuffer",
+      })
+      const prefix = "data:" + response.headers["content-type"] + ";base64,"
+      avatar = prefix + Buffer.from(response.data, "binary").toString("base64")
+    }
   } catch (error) {
     avatar = undefined
   }
@@ -471,6 +472,7 @@ pierObj.discord.receivedFrom = async (messenger: string, message: any) => {
     //todo: height,width,common.LocalizeString
     let [, res]: [any, any] = await to(
       common.downloadFile({
+        messenger,
         type: "simple",
         remote_path: value.url,
       })
@@ -736,7 +738,7 @@ pierObj.telegram.receivedFrom = async (
   messenger: string,
   message: TelegramMessage
 ) => {
-  console.log(message);
+  console.log(message)
   //spammer
   //1. remove entered bots
   pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message)
@@ -1312,7 +1314,7 @@ pierObj.telegram.getChannels = async (pier: string): Promise<void> => {
   //read from file
   let res = {}
   try {
-    res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`))[pier]
+    res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`, {encoding: 'utf8'}))[pier]
   } catch (error) {}
   config.cache[pier] = res
 
@@ -1347,7 +1349,7 @@ pierObj.telegram.StartService = async ({
     pierObj.telegram.receivedFrom(messenger, message)
   })
   generic[messenger].client.on("polling_error", async (error: any) => {
-    logger.log({
+    log(messenger)({
       level: "error",
       function: "pierObj.telegram.StartService",
       error_code: error?.code,
@@ -1555,9 +1557,9 @@ async function FormatMessageChunkForSending({
   channelId: number | string
   author: string
   chunk: Chunk
-  action: string
+  action?: string
   title?: string
-  quotation: boolean
+  quotation?: boolean
 }) {
   const root_messenger = common.root_of_messenger(messenger)
   if (quotation) {
@@ -1573,7 +1575,7 @@ async function FormatMessageChunkForSending({
       ],
     })
 
-    logger.log({
+    log(messenger)({
       level: "info",
       function: "OverlayMessageWithQuotedMark",
       messenger,
@@ -1927,93 +1929,6 @@ common.prepareAuthor = function ({
   return `${text}`
 }
 
-async function checkHelpers({
-  messenger,
-  channelId,
-  author,
-  text,
-  ToWhom,
-  quotation,
-  action,
-  edited,
-  avatar,
-}: {
-  messenger: string
-  channelId: string | number
-  author: string
-  text: string
-  ToWhom?: string
-  quotation?: boolean
-  action?: string
-  edited?: boolean
-  avatar?: string
-}) {
-  const tags = ["#zlm", "#modzi"]
-  text = text.replace(/<[^>]*>/g, "")
-  const selected_tags = tags.filter((i) => text.indexOf(i) >= 0)
-  if (selected_tags.length === 0) return
-  tags.forEach((tag) => {
-    text = text.replace(tag, "")
-  })
-  text = text.trim()
-  if (xovahelojbo({ text }) < 0.5) return
-
-  const puppeteer = require("puppeteer-extra")
-  let browser, href
-  try {
-    browser = await puppeteer.launch({
-      args: ["--no-sandbox"],
-      headless: true,
-    })
-    let page = await browser.newPage()
-    await page.goto(
-      `https://la-lojban.github.io/melbi-zei-lojban/?ceha=${selected_tags[0]}&text=${text}`
-    )
-
-    await page.waitForFunction(
-      "document.querySelector('#myImage') && document.querySelector('#myImage').getAttribute('data:fonts-loaded')=='true'"
-    )
-    href = (
-      await page.evaluate(() =>
-        Array.from(document.querySelectorAll("#myImage"), (a) =>
-          a.getAttribute("src")
-        )
-      )
-    )[0]
-  } catch (error) {
-    logger.log({
-      level: "error",
-      function: "checkHelpers",
-      message: error.toString(),
-    })
-  }
-  try {
-    await browser.close()
-  } catch (error) {
-    logger.log({
-      level: "error",
-      function: "checkHelpers",
-      message: error.toString(),
-    })
-  }
-  if (!href) return
-  const [file, localfile]: [string, string] = await common.downloadFile({
-    type: "data",
-    remote_path: href,
-  })
-  universalSendTo({
-    messenger,
-    channelId,
-    author,
-    chunk: file,
-    quotation,
-    action,
-    file: localfile,
-    edited,
-    avatar,
-  })
-}
-
 async function universalSendTo({
   messenger,
   channelId,
@@ -2093,18 +2008,6 @@ async function sendFrom({
   text = await pierObj[messenger_core]?.convertFrom({ text, messenger })
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
-
-  //zbalermorna etc.
-  // await checkHelpers({
-  //   messenger,
-  //   channelId: ConfigNode[messenger],
-  //   author,
-  //   text,
-  //   quotation,
-  //   action,
-  //   edited,
-  //   avatar
-  // })
 
   const nsfw: any =
     config?.channelMapping?.[messenger]?.[channelId]?.settings?.nsfw_analysis &&
@@ -2227,7 +2130,9 @@ async function sendFrom({
   }
 }
 
-async function getNSFWString(file: string) {
+type NSFWPredictions = { id: string; prob: number }[]
+async function getNSFWString(file?: string): Promise<NSFWPredictions | null> {
+  if (file === undefined) return null
   // if (file.substr(-4) !== ".jpg") return
   const tf = require("@tensorflow/tfjs-node")
   const nsfw = require("nsfwjs")
@@ -2238,7 +2143,7 @@ async function getNSFWString(file: string) {
   // Image must be in tf.tensor3d format
   // you can convert image to tf.tensor3d with tf.node.decodeImage(Uint8Array,channels)
   const image = await tf.node.decodeImage(pic.data, 3)
-  let predictions = await model.classify(image)
+  let predictions: NSFWPredictions = await model.classify(image)
   predictions = predictions
     .filter((className: any) => {
       if (className.className === "Neutral") return
@@ -2284,6 +2189,7 @@ pierObj.facebook.receivedFrom = async (messenger: string, message: any) => {
     //todo: add type="photo","width","height","size"
     common
       .downloadFile({
+        messenger,
         type: "simple",
         remote_path: res,
       })
@@ -2306,6 +2212,15 @@ pierObj.facebook.receivedFrom = async (messenger: string, message: any) => {
       author,
       text: message.message,
     })
+}
+
+interface VkAttachment {
+  type: string
+  doc?: { url: string }
+  photo?: {
+    text: string
+    sizes: { url: string; width: number; height: number; square?: number }[]
+  }
 }
 
 pierObj.vkwall.receivedFrom = async (messenger: string, message: any) => {
@@ -2361,7 +2276,7 @@ pierObj.vkwall.receivedFrom = async (messenger: string, message: any) => {
         `^\\[club${config.piers[messenger]?.group_id}\\|(.*?)\\]: (.*)$`
       )
       if (rg.test(text)) {
-        ;[, replyuser, text] = text.match(rg)
+        ;[, replyuser, text] = Array.from(text.match(rg) ?? [])
       } else {
         let authorId = res?.response?.items?.[0]?.from_id
         ;[err, res] = await to(
@@ -2383,28 +2298,25 @@ pierObj.vkwall.receivedFrom = async (messenger: string, message: any) => {
       })
     }
   }
-  const attachments = message.attachments || []
-  let texts = []
+  const attachments: VkAttachment[] = message.attachments || []
+  let texts: string[] = []
   if (attachments.length > 0) {
     for (let a of attachments) {
       switch (a.type) {
         case "photo":
         case "posted_photo":
-          try {
-            const sizes = a.photo.sizes
-              .map((i: any) => {
-                i.square = i.width * i.height
-                return i
-              })
-              .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
-            texts.push(sizes[0].url)
-            texts.push(a.photo.text)
-          } catch (e) {}
+          const sizes = (a.photo?.sizes ?? [])
+            .map((i) => {
+              i.square = i.width * i.height
+              return i
+            })
+            .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
+          if (sizes[0].url) texts.push(sizes[0].url)
+          if (a?.photo?.text) texts.push(a?.photo?.text)
+
           break
         case "doc":
-          try {
-            texts.push(a.doc.url)
-          } catch (e) {}
+          if (a?.doc?.url) texts.push(a.doc.url)
           break
       }
     }
@@ -2481,7 +2393,7 @@ pierObj.vkboard.receivedFrom = async (messenger: string, message: any) => {
         `^\\[club${config.piers[messenger].group_id}\\|(.*?)\\]: (.*)$`
       )
       if (rg.test(text)) {
-        ;[, replyuser, text] = text.match(rg)
+        ;[, replyuser, text] = Array.from(text.match(rg) ?? [])
       } else {
         let authorId = res?.response?.items?.[0]?.from_id
         ;[err, res] = await to(
@@ -2503,28 +2415,24 @@ pierObj.vkboard.receivedFrom = async (messenger: string, message: any) => {
       })
     }
   }
-  const attachments = message.attachments || []
-  let texts = []
+  const attachments: VkAttachment[] = message.attachments || []
+  let texts: string[] = []
   if (attachments.length > 0) {
     for (let a of attachments) {
       switch (a.type) {
         case "photo":
         case "posted_photo":
-          try {
-            const sizes = a.photo.sizes
-              .map((i: any) => {
-                i.square = i.width * i.height
-                return i
-              })
-              .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
-            texts.push(sizes[0].url)
-            texts.push(a.photo.text)
-          } catch (e) {}
+          const sizes = (a?.photo?.sizes ?? [])
+            .map((i) => {
+              i.square = i.width * i.height
+              return i
+            })
+            .sort((d: any, c: any) => parseFloat(c.size) - parseFloat(d.size))
+          if (sizes[0].url) texts.push(sizes[0].url)
+          if (a?.photo?.text) texts.push(a?.photo?.text)
           break
         case "doc":
-          try {
-            texts.push(a.doc.url)
-          } catch (e) {}
+          if (a?.doc?.url) texts.push(a.doc.url)
           break
       }
     }
@@ -2586,17 +2494,18 @@ pierObj.slack.receivedFrom = async (messenger: string, message: any) => {
     })
   )
 
-  let err: any, user: any, chan: any, files: any[]
+  let err: any, user: any, chan: any, files: any[] | undefined
   ;[err, user] = await to(promUser)
   if (err) user = message.user
   ;[err, chan] = await to(promChannel)
   if (err) chan = message.channel
-  ;[err, files] = await to(Promise.all(promFiles))
+  const resolveFiles = await to(Promise.all(promFiles))
+  ;[err, files] = resolveFiles
   if (err) files = []
   const author = pierObj.slack.adaptName(messenger, user)
   const channelId = chan.channel.name || message.channel
 
-  let action
+  let action: string | undefined = undefined
   if (message.subtype === "me_message") action = "action"
   if (
     message.subtype === "channel_topic" &&
@@ -2611,7 +2520,7 @@ pierObj.slack.receivedFrom = async (messenger: string, message: any) => {
       arrElemsToInterpolate: [["topic", message.topic]],
     })
   }
-  if (files.length > 0)
+  if (files && files.length > 0)
     files.map(([file, localfile]: [string, string]) => {
       sendFrom({
         messenger,
@@ -2738,7 +2647,7 @@ pierObj.mattermost.receivedFrom = async (messenger: string, message: any) => {
     (postParsed?.type || "") === ""
   ) {
     if (!file_ids) file_ids = postParsed?.file_ids || []
-    let files = []
+    let files: any[] = []
     for (const file of file_ids) {
       const [err, promfile] = await to(
         new Promise((resolve) => {
@@ -2787,7 +2696,7 @@ pierObj.mattermost.receivedFrom = async (messenger: string, message: any) => {
           )
         })
       )
-      if (err2) console.error(err.toString())
+      if (err2) console.error(err?.toString())
       if (promfile && promfile2) files.push([promfile2, promfile])
     }
     author = author || message.data?.sender_name
@@ -2795,6 +2704,7 @@ pierObj.mattermost.receivedFrom = async (messenger: string, message: any) => {
     if (files.length > 0) {
       for (const [extension, file] of files) {
         const [file_, localfile]: [string, string] = await common.downloadFile({
+          messenger,
           type: "simple",
           remote_path: file,
           extension,
@@ -2861,7 +2771,7 @@ pierObj.irc.receivedFrom = async (
     text = text
       .replace(/^<([^<>]+?)>: /, "*$1*: ")
       .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ")
-    ;[, author, text] = text.match(/^<b>(.+?)<\/b>: (.*)/)
+    ;[, author, text] = Array.from(text.match(/^<b>(.+?)<\/b>: (.*)/) ?? [])
     if (text && text !== "") {
       sendFrom({
         messenger,
@@ -2923,7 +2833,9 @@ pierObj.irc.receivedFrom = async (
 // AdaptName
 pierObj.facebook.adaptName = (user: any) => user.name // || user.vanity || user.firstName;
 pierObj.vkboard.adaptName = (messenger: string, user: any) => {
-  let full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim()
+  let full_name: string | undefined = `${user.first_name || ""} ${
+    user.last_name || ""
+  }`.trim()
   if (full_name === "") full_name = undefined
   if (user.nickname && user.nickname.length < 1) user.nickname = null
   if (user.screen_name && user.screen_name.length < 1) user.screen_name = null
@@ -2970,28 +2882,28 @@ pierObj.slack.convertFrom = async ({
   }
 
   const matchTag = (match: RegExpExecArray | null) => {
-    const action = match[1].substr(0, 1)
+    const action = match?.[1]?.substr(0, 1)
     let p
 
     switch (action) {
       case "!":
-        return tag("span", { class: "slack-cmd" }, payloads(match[1], 1)[0])
+        return tag("span", { class: "slack-cmd" }, payloads(match?.[1], 1)[0])
       case "#":
-        p = payloads(match[1], 2)
+        p = payloads(match?.[1], 2)
         return tag(
           "span",
           { class: "slack-channel" },
           p.length === 1 ? p[0] : p[1]
         )
       case "@":
-        p = payloads(match[1], 2)
+        p = payloads(match?.[1], 2)
         return tag(
           "span",
           { class: "slack-user" },
           p.length === 1 ? p[0] : p[1]
         )
       default:
-        p = payloads(match[1])
+        p = payloads(match?.[1])
         return tag("a", { href: p[0] }, p.length === 1 ? p[0] : p[1])
     }
   }
@@ -3001,22 +2913,28 @@ pierObj.slack.convertFrom = async ({
     tag: string,
     trigger?: string
   ) => {
-    let prefix_ok = match.index === 0
-    let postfix_ok = match.index === match.input.length - match[0].length
+    let prefix_ok = match?.index === 0
+    let postfix_ok =
+      match?.index === (match?.input?.length ?? 0) - (match?.[0]?.length ?? 0)
 
     if (!prefix_ok) {
-      const charAtLeft: string = match.input.substr(match.index - 1, 1)
+      const charAtLeft: string | undefined = match?.input?.substr(
+        match.index - 1,
+        1
+      )
       prefix_ok =
-        notAlphanumeric(charAtLeft) && notRepeatedChar(trigger, charAtLeft)
+        notAlphanumeric(charAtLeft || "") &&
+        notRepeatedChar(trigger || "", charAtLeft || "")
     }
 
     if (!postfix_ok) {
-      const charAtRight: string = match.input.substr(
+      const charAtRight: string | undefined = match?.input?.substr(
         match.index + match[0].length,
         1
       )
       postfix_ok =
-        notAlphanumeric(charAtRight) && notRepeatedChar(trigger, charAtRight)
+        notAlphanumeric(charAtRight || "") &&
+        notRepeatedChar(trigger || "", charAtRight || "")
     }
 
     if (prefix_ok && postfix_ok) return tag
@@ -3024,15 +2942,15 @@ pierObj.slack.convertFrom = async ({
   }
 
   const matchBold = (match: RegExpExecArray | null) =>
-    safeMatch(match, tag("strong", payloads(match[1])), "*")
+    safeMatch(match, tag("strong", payloads(match?.[1])), "*")
 
   const matchItalic = (match: RegExpExecArray | null) =>
-    safeMatch(match, tag("em", payloads(match[1])), "_")
+    safeMatch(match, tag("em", payloads(match?.[1])), "_")
 
   const matchFixed = (match: RegExpExecArray | null) =>
-    safeMatch(match, tag("code", payloads(match[1])))
+    safeMatch(match, tag("code", payloads(match?.[1])))
   const matchPre = (match: RegExpExecArray | null) =>
-    safeMatch(match, tag("pre", payloads(match[1])))
+    safeMatch(match, tag("pre", payloads(match?.[1])))
 
   const notAlphanumeric = (input: string) => !RE_ALPHANUMERIC.test(input)
 
@@ -3521,8 +3439,8 @@ async function PopulateChannelMappingCore({
         restrictToLojban: newChannel["restrictToLojban"],
         nickcolor: newChannel[`${messenger}-nickcolor`],
         name: newChannel[messenger],
-        topicId: topicalizedChannel.topicId,
-        removeJoinMessages: topicalizedChannel.removeJoinMessages,
+        topicId: (topicalizedChannel.topicId || "") as string,
+        removeJoinMessages: (topicalizedChannel.removeJoinMessages?? false) as boolean,
       },
     }
 
@@ -4000,7 +3918,7 @@ function HTMLSplitter(text: string, limit = 400) {
     .replace(/<span class=/g, "<span_class=")
   let thisChunk
   let stop = false
-  let Chunks = []
+  let Chunks: string[] = []
   while (text !== "") {
     if (text.length >= limit) {
       thisChunk = text.substring(0, limit)
@@ -4021,7 +3939,7 @@ function HTMLSplitter(text: string, limit = 400) {
       thisChunk = text
       stop = true
     }
-    const thisChunkUntruncated = DOMPurify.sanitize(
+    const thisChunkUntruncated: string = DOMPurify.sanitize(
       thisChunk
         .replace(/<a_href=/g, "<a href=")
         .replace(/<span_class=/g, "<span class=")
@@ -4066,7 +3984,7 @@ function saveDataToFile({
   local_fullname: string
 }) {
   function decodeBase64Image(dataString: string) {
-    const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
+    const matches = Array.from(dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)??[]);
     const response: any = {}
 
     if (matches.length !== 3) {
@@ -4094,13 +4012,13 @@ function saveDataToFile({
 common.downloadFile = async ({
   messenger,
   type,
-  fileId,
+  fileId='',
   remote_path,
   extension = "",
 }: {
-  messenger?: string
+  messenger: string
   type: string
-  fileId?: number
+  fileId?: string | number
   remote_path?: string
   extension?: string
 }) => {
@@ -4114,7 +4032,7 @@ common.downloadFile = async ({
 
   let err: any, res: any
   let rem_fullname: string = ""
-  let local_fullname: string = ""
+  let local_fullname: string | undefined = ""
 
   if (type === "slack") {
     local_fullname = `${local_path}/${path.basename(remote_path)}`
@@ -4127,7 +4045,7 @@ common.downloadFile = async ({
               request(
                 {
                   method: "GET",
-                  url: remote_path,
+                  url: remote_path||'',
                   headers: {
                     Authorization: `Bearer ${config.piers[messenger]?.token}`,
                   },
@@ -4171,7 +4089,7 @@ common.downloadFile = async ({
   } else if (type === "data") {
     try {
       const { type, data } = saveDataToFile({
-        data: remote_path,
+        data: remote_path ?? '',
         local_fullname,
       })
       const basename = randomStringName + "." + (type ?? extension)
@@ -4200,7 +4118,7 @@ common.downloadFile = async ({
           .on("open", () => {
             let stream = request({
               method: "GET",
-              url: remote_path,
+              url: remote_path??'',
               timeout: 3000,
             })
               .pipe(file)
@@ -4282,7 +4200,7 @@ common.downloadFile = async ({
   //check if it's webp/tiff:
   if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
     const sharp = require("sharp")
-    const jpgname = `${local_fullname.split(".").slice(0, -1).join(".")}.jpg`
+    const jpgname = `${(local_fullname??'').split(".").slice(0, -1).join(".")}.jpg`
     ;[err, res] = await to(
       new Promise((resolve) => {
         sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {
@@ -4406,7 +4324,7 @@ common.LocalizeString = ({
         .replace(/%%/g, "%")
     return template
   } catch (error) {
-    logger.log({
+    log(messenger)({
       level: "error",
       function: "LocalizeString",
       messenger,
