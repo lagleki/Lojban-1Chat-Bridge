@@ -541,7 +541,6 @@ pierObj.telegram.sendTo = async ({ messenger, channelId, author, chunk, action, 
     }
 };
 pierObj.telegram.receivedFrom = async (messenger, message) => {
-    console.log(message);
     //spammer
     //1. remove entered bots
     pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message);
@@ -560,7 +559,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
     const age = Math.floor(Date.now() / 1000) - message.date;
     if (age > (config.piers[messenger].maxMsgAge || 0))
         return console.log(`skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`);
-    let topicalizedChatId = message.message_thread_id || message.chat.is_forum
+    let topicalizedChatId = message.chat.is_forum
         ? `${message.message_thread_id ??
             (message.chat.is_forum ? "1" : "")}@${message.chat.id}`
         : message.chat.id;
@@ -568,6 +567,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
         message.chat.is_forum) {
         topicalizedChatId = `1@${message.chat.id}`;
     }
+    // console.log(topicalizedChatId, config.channelMapping[messenger][topicalizedChatId])
     if (!config.channelMapping[messenger][topicalizedChatId]) {
         if (config.cache[messenger][message.chat.title] &&
             config.cache[messenger][message.chat.title] === message.chat.id)
@@ -962,7 +962,7 @@ pierObj.telegram.getChannels = async (pier) => {
     //read from file
     let res = {};
     try {
-        res = JSON.parse(fs_extra_1.default.readFileSync(`${cache_folder}/cache.json`, { encoding: 'utf8' }))[pier];
+        res = JSON.parse(fs_extra_1.default.readFileSync(`${cache_folder}/cache.json`, { encoding: "utf8" }))[pier];
     }
     catch (error) { }
     config.cache[pier] = res;
@@ -1420,6 +1420,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
     if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly)
         return;
     queueOf[messenger].add(async () => {
+        // console.log(messenger, chunk);
         await pierObj[common.root_of_messenger(messenger)]?.sendTo({
             messenger: messenger,
             channelId,
@@ -2147,6 +2148,16 @@ pierObj.irc.receivedFrom = async (messenger, { author, channelId, text, handler,
             action: "action",
         });
     }
+    else if (type === "notice") {
+        if (!config?.channelMapping[messenger]?.[channelId]?.settings?.showNotices)
+            return;
+        sendFrom({
+            messenger,
+            channelId,
+            author,
+            text: `${text}`,
+        });
+    }
     else if (type === "topic") {
         const topic = common.LocalizeString({
             messenger,
@@ -2560,12 +2571,14 @@ async function PopulateChannelMappingCore({ messenger, }) {
                 readonly: newChannel[`${messenger}-readonly`],
                 dontProcessOtherBridges: newChannel[`${messenger}-dontProcessOtherBridges`],
                 nsfw_analysis: newChannel[`nsfw_analysis`],
+                showNotices: newChannel["showNotices"],
                 language: newChannel["language"],
                 restrictToLojban: newChannel["restrictToLojban"],
                 nickcolor: newChannel[`${messenger}-nickcolor`],
                 name: newChannel[messenger],
                 topicId: (topicalizedChannel.topicId || ""),
-                removeJoinMessages: (topicalizedChannel.removeJoinMessages ?? false),
+                removeJoinMessages: (topicalizedChannel.removeJoinMessages ??
+                    false),
             },
         };
         for (const key of arrMappingKeys)
@@ -2782,6 +2795,14 @@ pierObj.irc.StartService = async ({ messenger }) => {
             channelId,
             text,
             type: "action",
+        });
+    });
+    generic[messenger].client.on("notice", (author, channelId, text) => {
+        pierObj.irc.receivedFrom(messenger, {
+            author,
+            channelId,
+            text,
+            type: "notice",
         });
     });
 };
@@ -3011,7 +3032,7 @@ function saveDataToFile({ data, local_fullname, }) {
     const type = imageBuffer.type.match(imageTypeRegularExpression);
     return { type: type[1], data: imageBuffer.data };
 }
-common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extension = "", }) => {
+common.downloadFile = async ({ messenger, type, fileId = "", remote_path, extension = "", }) => {
     const randomString = blalalavla.cupra(remote_path || fileId.toString());
     const randomStringName = blalalavla.cupra((remote_path || fileId.toString()) + "1");
     mkdirp_1.mkdirp.sync(`${cache_folder}/files/${randomString}`);
@@ -3029,7 +3050,7 @@ common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extens
                     .on("open", () => {
                     (0, request_1.default)({
                         method: "GET",
-                        url: remote_path || '',
+                        url: remote_path || "",
                         headers: {
                             Authorization: `Bearer ${config.piers[messenger]?.token}`,
                         },
@@ -3071,7 +3092,7 @@ common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extens
     else if (type === "data") {
         try {
             const { type, data } = saveDataToFile({
-                data: remote_path ?? '',
+                data: remote_path ?? "",
                 local_fullname,
             });
             const basename = randomStringName + "." + (type ?? extension);
@@ -3101,7 +3122,7 @@ common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extens
                     .on("open", () => {
                     let stream = (0, request_1.default)({
                         method: "GET",
-                        url: remote_path ?? '',
+                        url: remote_path ?? "",
                         timeout: 3000,
                     })
                         .pipe(file)
@@ -3176,7 +3197,10 @@ common.downloadFile = async ({ messenger, type, fileId = '', remote_path, extens
     //check if it's webp/tiff:
     if ([".webp", ".tiff"].includes(path_1.default.extname(local_fullname))) {
         const sharp = require("sharp");
-        const jpgname = `${(local_fullname ?? '').split(".").slice(0, -1).join(".")}.jpg`;
+        const jpgname = `${(local_fullname ?? "")
+            .split(".")
+            .slice(0, -1)
+            .join(".")}.jpg`;
         [err, res] = await (0, await_to_js_1.default)(new Promise((resolve) => {
             sharp(local_fullname).toFile(jpgname, (err, info) => {
                 if (err) {

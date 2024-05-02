@@ -738,7 +738,6 @@ pierObj.telegram.receivedFrom = async (
   messenger: string,
   message: TelegramMessage
 ) => {
-  console.log(message)
   //spammer
   //1. remove entered bots
   pierObj.telegram.common.TelegramRemoveAddedBots(messenger, message)
@@ -757,6 +756,7 @@ pierObj.telegram.receivedFrom = async (
     pierObj.telegram.common.TelegramRemoveNewMemberMessage(messenger, message)
   )
     return
+
   //now deal with the message that is fine
   if (!config.channelMapping[messenger]) return
 
@@ -767,7 +767,7 @@ pierObj.telegram.receivedFrom = async (
     )
 
   let topicalizedChatId =
-    message.message_thread_id || (message.chat as any).is_forum
+    (message.chat as any).is_forum
       ? `${
           message.message_thread_id ??
           ((message.chat as any).is_forum ? "1" : "")
@@ -780,6 +780,8 @@ pierObj.telegram.receivedFrom = async (
   ) {
     topicalizedChatId = `1@${message.chat.id}`
   }
+
+  // console.log(topicalizedChatId, config.channelMapping[messenger][topicalizedChatId])
 
   if (!config.channelMapping[messenger][topicalizedChatId]) {
     if (
@@ -1314,7 +1316,9 @@ pierObj.telegram.getChannels = async (pier: string): Promise<void> => {
   //read from file
   let res = {}
   try {
-    res = JSON.parse(fs.readFileSync(`${cache_folder}/cache.json`, {encoding: 'utf8'}))[pier]
+    res = JSON.parse(
+      fs.readFileSync(`${cache_folder}/cache.json`, { encoding: "utf8" })
+    )[pier]
   } catch (error) {}
   config.cache[pier] = res
 
@@ -1954,6 +1958,7 @@ async function universalSendTo({
   if (config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly)
     return
   queueOf[messenger].add(async () => {
+    // console.log(messenger, chunk);
     await pierObj[common.root_of_messenger(messenger)]?.sendTo({
       messenger: messenger,
       channelId,
@@ -2788,6 +2793,15 @@ pierObj.irc.receivedFrom = async (
       text,
       action: "action",
     })
+  } else if (type === "notice") {
+    if (!config?.channelMapping[messenger]?.[channelId]?.settings?.showNotices)
+      return
+    sendFrom({
+      messenger,
+      channelId,
+      author,
+      text: `${text}`,
+    })
   } else if (type === "topic") {
     const topic = common.LocalizeString({
       messenger,
@@ -3435,12 +3449,14 @@ async function PopulateChannelMappingCore({
         dontProcessOtherBridges:
           newChannel[`${messenger}-dontProcessOtherBridges`],
         nsfw_analysis: newChannel[`nsfw_analysis`],
+        showNotices: newChannel["showNotices"],
         language: newChannel["language"],
         restrictToLojban: newChannel["restrictToLojban"],
         nickcolor: newChannel[`${messenger}-nickcolor`],
         name: newChannel[messenger],
         topicId: (topicalizedChannel.topicId || "") as string,
-        removeJoinMessages: (topicalizedChannel.removeJoinMessages?? false) as boolean,
+        removeJoinMessages: (topicalizedChannel.removeJoinMessages ??
+          false) as boolean,
       },
     }
 
@@ -3725,6 +3741,18 @@ pierObj.irc.StartService = async ({ messenger }: { messenger: string }) => {
       })
     }
   )
+
+  generic[messenger].client.on(
+    "notice",
+    (author: string, channelId: string, text: string) => {
+      pierObj.irc.receivedFrom(messenger, {
+        author,
+        channelId,
+        text,
+        type: "notice",
+      })
+    }
+  )
 }
 
 async function StartServices() {
@@ -3984,7 +4012,9 @@ function saveDataToFile({
   local_fullname: string
 }) {
   function decodeBase64Image(dataString: string) {
-    const matches = Array.from(dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)??[]);
+    const matches = Array.from(
+      dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/) ?? []
+    )
     const response: any = {}
 
     if (matches.length !== 3) {
@@ -4012,7 +4042,7 @@ function saveDataToFile({
 common.downloadFile = async ({
   messenger,
   type,
-  fileId='',
+  fileId = "",
   remote_path,
   extension = "",
 }: {
@@ -4045,7 +4075,7 @@ common.downloadFile = async ({
               request(
                 {
                   method: "GET",
-                  url: remote_path||'',
+                  url: remote_path || "",
                   headers: {
                     Authorization: `Bearer ${config.piers[messenger]?.token}`,
                   },
@@ -4089,7 +4119,7 @@ common.downloadFile = async ({
   } else if (type === "data") {
     try {
       const { type, data } = saveDataToFile({
-        data: remote_path ?? '',
+        data: remote_path ?? "",
         local_fullname,
       })
       const basename = randomStringName + "." + (type ?? extension)
@@ -4118,7 +4148,7 @@ common.downloadFile = async ({
           .on("open", () => {
             let stream = request({
               method: "GET",
-              url: remote_path??'',
+              url: remote_path ?? "",
               timeout: 3000,
             })
               .pipe(file)
@@ -4200,7 +4230,10 @@ common.downloadFile = async ({
   //check if it's webp/tiff:
   if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
     const sharp = require("sharp")
-    const jpgname = `${(local_fullname??'').split(".").slice(0, -1).join(".")}.jpg`
+    const jpgname = `${(local_fullname ?? "")
+      .split(".")
+      .slice(0, -1)
+      .join(".")}.jpg`
     ;[err, res] = await to(
       new Promise((resolve) => {
         sharp(local_fullname).toFile(jpgname, (err: any, info: any) => {

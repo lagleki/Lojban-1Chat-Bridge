@@ -8,7 +8,8 @@ docker run \
   --name 1chat \
   --memory 1g \
   --cpus 1 \
-  -p 9091:3000 \
+  --network=host \
+  -p 9091:9091 \
   --log-opt max-size=1m --log-opt max-file=1 \
   -v $(pwd)/src:/home/app/1chat/src/:Z \
   -v $(pwd)/dist:/home/app/1chat/dist/:Z \
