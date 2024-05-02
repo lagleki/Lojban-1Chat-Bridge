@@ -67,7 +67,7 @@
     "request": "^2.88.2",
     "sanitize-html": "^2.10.0",
     "serve-static": "^1.15.0",
-    "sharp": "^0.31.3",
+    "sharp": "^0.32.6",
     "socket.io": "^4.6.1",
     "socket.io-client": "^4.6.1",
     "timeable-promise": "^1.2.8",
