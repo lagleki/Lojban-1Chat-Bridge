@@ -74,7 +74,7 @@
     "vk-io": "^4.8.1",
     "winston": "^3.8.2",
     "winston-daily-rotate-file": "^4.7.1",
-    "ws": "^8.12.1"
+    "ws": "^8.17.1"
   },
   "devDependencies": {
     "@types/debug": "^4.1.7",
