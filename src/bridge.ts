@@ -766,13 +766,11 @@ pierObj.telegram.receivedFrom = async (
       `skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`
     )
 
-  let topicalizedChatId =
-    (message.chat as any).is_forum
-      ? `${
-          message.message_thread_id ??
-          ((message.chat as any).is_forum ? "1" : "")
-        }@${message.chat.id}`
-      : message.chat.id
+  let topicalizedChatId = (message.chat as any).is_forum
+    ? `${
+        message.message_thread_id ?? ((message.chat as any).is_forum ? "1" : "")
+      }@${message.chat.id}`
+    : message.chat.id
 
   if (
     !config.channelMapping[messenger][topicalizedChatId] &&
@@ -842,23 +840,70 @@ pierObj.telegram.common.telegram_reconstructMarkdown = (
   }
 }
 
-pierObj.telegram.common.IsSpam = (message: any): boolean => {
-  const l = config.spamremover.telegram
-    .map((rule: any) => {
-      let matches = true
-      for (const key of Object.keys(rule)) {
-        const msg_val = R.path(key.split("."), message)
-        if (rule[key] === true && !msg_val) matches = false
-        if (
-          typeof rule[key] === "object" &&
-          (!msg_val || msg_val.search(new RegExp(rule[key].source, "i")) === -1)
-        )
-          matches = false
-      }
-      return matches
+const latinToCyrillicMap: Record<string, string> = {
+  a: "а",
+  b: "в",
+  6: "б",
+  e: "е",
+  i: "і",
+  j: "ј",
+  m: "м",
+  u: "и",
+  h: "н",
+  o: "о",
+  p: "р",
+  c: "с",
+  s: "ѕ",
+  y: "у",
+  x: "х",
+}
+
+function unmaskCyrillicChars(input: string) {
+  return (input ?? "")
+    .split("")
+    .map((char) => {
+      return latinToCyrillicMap[char] ?? char
     })
-    .some(Boolean)
-  return l
+    .join("")
+}
+
+pierObj.telegram.common.IsSpam = (message: any): boolean => {
+  return config.spamremover.telegram
+    .map((rule: any) => {
+      let messageOk = true
+      for (const key of Object.keys(rule)) {
+        const msg_val_orig = (R.path(key.split("."), message) ?? "")
+          .toLowerCase()
+          .replace(/\r?\n|\r/g, " ")
+        if (!msg_val_orig) return true
+        const unmasked_val = unmaskCyrillicChars(msg_val_orig)
+        for (const msg_val of [msg_val_orig, unmasked_val]) {
+          if (
+            typeof rule[key] === "object" &&
+            Array.isArray(rule[key]) &&
+            msg_val.search(
+              new RegExp(
+                rule[key].join("|").replace(/\\b/g, "(?<!\\p{L})"),
+                "iu"
+              )
+            ) >= 0
+          ) {
+            messageOk = false
+          } else if (
+            typeof rule[key] === "object" &&
+            msg_val.search(new RegExp(rule[key], "iu")) >= 0
+          ) {
+            messageOk = false
+          } else if (typeof rule[key] === "string" && msg_val === rule[key]) {
+            messageOk = false
+          } else if (typeof rule[key] === "boolean" && msg_val === rule[key]) {
+            messageOk = false
+          }
+        }
+      }
+      return messageOk
+    })
+    .some((i: boolean) => i === false)
 }
 
 pierObj.telegram.common.sendFromTelegram = async ({
@@ -1209,6 +1254,7 @@ pierObj.telegram.common.TelegramRemoveNewMemberMessage = (
 ) => {
   if (
     message?.left_chat_member ||
+    message?.new_chat_members.length > 0 ||
     (message?.new_chat_members || []).filter(
       (u: Telegram.User) =>
         (u.username || "").length > 100 ||
@@ -3779,7 +3825,7 @@ common.LogMessageToAdmin = async (
   messenger: string,
   message: TelegramMessage
 ) => {
-  if (config.piers[messenger].admins_userid)
+  if (config.piers[messenger].admins_userid) {
     await to(
       generic[messenger].client.forwardMessage(
         config.piers[messenger].admins_userid,
@@ -3787,6 +3833,16 @@ common.LogMessageToAdmin = async (
         message.message_id
       )
     )
+    await to(
+      generic[messenger].client.sendMessage(
+        config.piers[messenger].admins_userid,
+        JSON.stringify(message),
+        {
+          parse_mode: "HTML",
+        }
+      )
+    )
+  }
 }
 
 function catchError(err: any) {

@@ -560,8 +560,7 @@ pierObj.telegram.receivedFrom = async (messenger, message) => {
     if (age > (config.piers[messenger].maxMsgAge || 0))
         return console.log(`skipping ${age} seconds old message! NOTE: change this behaviour with config.telegram.maxMsgAge, also check your system clock`);
     let topicalizedChatId = message.chat.is_forum
-        ? `${message.message_thread_id ??
-            (message.chat.is_forum ? "1" : "")}@${message.chat.id}`
+        ? `${message.message_thread_id ?? (message.chat.is_forum ? "1" : "")}@${message.chat.id}`
         : message.chat.id;
     if (!config.channelMapping[messenger][topicalizedChatId] &&
         message.chat.is_forum) {
@@ -613,22 +612,63 @@ pierObj.telegram.common.telegram_reconstructMarkdown = (msg) => {
         text: (0, telegram_utils_1.fillMarkdownEntitiesMarkup)(msg.text, msg.entities || [], logger),
     };
 };
-pierObj.telegram.common.IsSpam = (message) => {
-    const l = config.spamremover.telegram
-        .map((rule) => {
-        let matches = true;
-        for (const key of Object.keys(rule)) {
-            const msg_val = R.path(key.split("."), message);
-            if (rule[key] === true && !msg_val)
-                matches = false;
-            if (typeof rule[key] === "object" &&
-                (!msg_val || msg_val.search(new RegExp(rule[key].source, "i")) === -1))
-                matches = false;
-        }
-        return matches;
+const latinToCyrillicMap = {
+    a: "а",
+    b: "в",
+    6: "б",
+    e: "е",
+    i: "і",
+    j: "ј",
+    m: "м",
+    u: "и",
+    h: "н",
+    o: "о",
+    p: "р",
+    c: "с",
+    s: "ѕ",
+    y: "у",
+    x: "х",
+};
+function unmaskCyrillicChars(input) {
+    return (input ?? "")
+        .split("")
+        .map((char) => {
+        return latinToCyrillicMap[char] ?? char;
     })
-        .some(Boolean);
-    return l;
+        .join("");
+}
+pierObj.telegram.common.IsSpam = (message) => {
+    return config.spamremover.telegram
+        .map((rule) => {
+        let messageOk = true;
+        for (const key of Object.keys(rule)) {
+            const msg_val_orig = (R.path(key.split("."), message) ?? "")
+                .toLowerCase()
+                .replace(/\r?\n|\r/g, " ");
+            if (!msg_val_orig)
+                return true;
+            const unmasked_val = unmaskCyrillicChars(msg_val_orig);
+            for (const msg_val of [msg_val_orig, unmasked_val]) {
+                if (typeof rule[key] === "object" &&
+                    Array.isArray(rule[key]) &&
+                    msg_val.search(new RegExp(rule[key].join("|").replace(/\\b/g, "(?<!\\p{L})"), "iu")) >= 0) {
+                    messageOk = false;
+                }
+                else if (typeof rule[key] === "object" &&
+                    msg_val.search(new RegExp(rule[key], "iu")) >= 0) {
+                    messageOk = false;
+                }
+                else if (typeof rule[key] === "string" && msg_val === rule[key]) {
+                    messageOk = false;
+                }
+                else if (typeof rule[key] === "boolean" && msg_val === rule[key]) {
+                    messageOk = false;
+                }
+            }
+        }
+        return messageOk;
+    })
+        .some((i) => i === false);
 };
 pierObj.telegram.common.sendFromTelegram = async ({ messenger, message, quotation, author, avatar, }) => {
     if (!message)
@@ -895,6 +935,7 @@ pierObj.telegram.common.TelegramRemoveAddedBots = (messenger, message) => {
 };
 pierObj.telegram.common.TelegramRemoveNewMemberMessage = (messenger, message) => {
     if (message?.left_chat_member ||
+        message?.new_chat_members.length > 0 ||
         (message?.new_chat_members || []).filter((u) => (u.username || "").length > 100 ||
             (u.first_name || "").length > 100 ||
             (u.last_name || "").length > 100).length > 0 ||
@@ -2824,8 +2865,12 @@ async function StartServices() {
 }
 // helper functions
 common.LogMessageToAdmin = async (messenger, message) => {
-    if (config.piers[messenger].admins_userid)
+    if (config.piers[messenger].admins_userid) {
         await (0, await_to_js_1.default)(generic[messenger].client.forwardMessage(config.piers[messenger].admins_userid, message.chat.id, message.message_id));
+        await (0, await_to_js_1.default)(generic[messenger].client.sendMessage(config.piers[messenger].admins_userid, JSON.stringify(message), {
+            parse_mode: "HTML",
+        }));
+    }
 };
 function catchError(err) {
     const error = JSON.stringify(err);
