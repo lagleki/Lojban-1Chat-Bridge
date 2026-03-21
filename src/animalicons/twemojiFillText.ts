@@ -4,7 +4,7 @@
  */
 import { loadImage } from "@napi-rs/canvas/node-canvas"
 import type { SKRSContext2D } from "@napi-rs/canvas"
-import { parse } from "twemoji-parser"
+import { parse, type TwemojiEntity } from "twemoji-parser"
 
 const defaultHeight = 16
 
@@ -53,9 +53,9 @@ function splitEntitiesFromText(text: string) {
 
   let unparsedText = text
   let lastTwemojiIndice = 0
-  const textEntities: (string | (typeof twemojiEntities)[0])[] = []
+  const textEntities: (string | TwemojiEntity)[] = []
 
-  twemojiEntities.forEach((twemoji) => {
+  twemojiEntities.forEach((twemoji: TwemojiEntity) => {
     textEntities.push(unparsedText.slice(0, twemoji.indices[0] - lastTwemojiIndice))
 
     if (twemoji.url) {

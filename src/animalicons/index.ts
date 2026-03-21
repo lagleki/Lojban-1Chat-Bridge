@@ -187,7 +187,7 @@ class Avatar {
     }
   }
 
-  async drawEmoji({ ctx, hash }: { ctx: any; hash: string }) {
+  async drawEmoji({ ctx, hash }: { ctx: any; hash: string }): Promise<null> {
     const { size } = this
     const { emojis } = this.theme
     if (this.modzi) {
