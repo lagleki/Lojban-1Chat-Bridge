@@ -25,7 +25,6 @@ import PQueue from "p-queue"
 import finalhandler from "finalhandler"
 import serveStatic from "serve-static"
 
-import { getNSFWString } from "./libs/nsfw"
 import { downloadFile } from "./piers/download-file"
 import { HTMLSplitter } from "./piers/html-splitter"
 import { hooks } from "./piers/hooks"
@@ -227,7 +226,7 @@ async function sendFrom({
   quotation,
   action,
   file,
-  remote_file,
+  remote_file: _remoteFile,
   edited,
   avatar,
 }: {
@@ -258,55 +257,6 @@ async function sendFrom({
   text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;")
   text = text.replace(/^(<br\/>)+/, "")
 
-  const nsfw: any =
-    state.config?.channelMapping?.[messenger]?.[channelId]?.settings
-      ?.nsfw_analysis && file
-      ? (await to(getNSFWString(remote_file)))[1]
-      : null
-  if (nsfw) {
-    for (const nsfw_result of nsfw) {
-      const translated_text = common.LocalizeString({
-        messenger,
-        channelId,
-        localized_string_key: "nsfw_kv_" + nsfw_result.id.toLowerCase(),
-        arrElemsToInterpolate: [["prob", nsfw_result.prob]],
-      })
-      const Chunks = await prepareChunks({
-        messenger,
-        channelId,
-        text: translated_text,
-        messengerTo: messenger,
-      })
-      for (const i in Chunks) {
-        const chunk = Chunks[i]
-        Chunks[i] = await FormatMessageChunkForSending({
-          messenger,
-          channelId,
-          title: state.config.piers[messenger]?.group_id,
-          author,
-          chunk,
-          action,
-          quotation,
-        })
-      }
-
-      Chunks.map((chunk) => {
-        universalSendTo({
-          messenger,
-          channelId: ConfigNode[messenger],
-          author,
-          chunk,
-          quotation,
-          action,
-          file,
-          edited,
-          avatar,
-        })
-      })
-
-      text = text + "<br/>" + translated_text
-    }
-  }
   for (const messengerTo of Object.keys(state.config.channelMapping)) {
     if (
       state.config.MessengersAvailable[messengerTo] &&
@@ -495,7 +445,6 @@ async function PopulateChannelMappingCore({
         readonly: newChannel[`${messenger}-readonly`],
         dontProcessOtherBridges:
           newChannel[`${messenger}-dontProcessOtherBridges`],
-        nsfw_analysis: newChannel[`nsfw_analysis`],
         showNotices: newChannel["showNotices"],
         language: newChannel["language"],
         restrictToLojban: newChannel["restrictToLojban"],

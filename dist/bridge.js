@@ -14,7 +14,6 @@ const http_1 = __importDefault(require("http"));
 const p_queue_1 = __importDefault(require("p-queue"));
 const finalhandler_1 = __importDefault(require("finalhandler"));
 const serve_static_1 = __importDefault(require("serve-static"));
-const nsfw_1 = require("./libs/nsfw");
 const download_file_1 = require("./piers/download-file");
 const html_splitter_1 = require("./piers/html-splitter");
 const hooks_1 = require("./piers/hooks");
@@ -142,7 +141,7 @@ async function universalSendTo({ messenger, channelId, author, chunk, quotation,
         });
     });
 }
-async function sendFrom({ messenger, channelId, topicId, author, text, ToWhom, quotation, action, file, remote_file, edited, avatar, }) {
+async function sendFrom({ messenger, channelId, topicId, author, text, ToWhom, quotation, action, file, remote_file: _remoteFile, edited, avatar, }) {
     const ConfigNode = state_1.state.config?.channelMapping?.[messenger]?.[topicId ? `${topicId}@${channelId}` : channelId];
     if (!ConfigNode)
         return state_1.common.LogToAdmin(`error finding assignment to ${messenger} channel with id ${channelId}`);
@@ -152,52 +151,6 @@ async function sendFrom({ messenger, channelId, topicId, author, text, ToWhom, q
     text = await state_1.pierObj[messenger_core]?.convertFrom({ text, messenger });
     text = text.replace(/\*/g, "&#x2A;").replace(/_/g, "&#x5F;");
     text = text.replace(/^(<br\/>)+/, "");
-    const nsfw = state_1.state.config?.channelMapping?.[messenger]?.[channelId]?.settings
-        ?.nsfw_analysis && file
-        ? (await (0, await_to_js_1.default)((0, nsfw_1.getNSFWString)(remote_file)))[1]
-        : null;
-    if (nsfw) {
-        for (const nsfw_result of nsfw) {
-            const translated_text = state_1.common.LocalizeString({
-                messenger,
-                channelId,
-                localized_string_key: "nsfw_kv_" + nsfw_result.id.toLowerCase(),
-                arrElemsToInterpolate: [["prob", nsfw_result.prob]],
-            });
-            const Chunks = await prepareChunks({
-                messenger,
-                channelId,
-                text: translated_text,
-                messengerTo: messenger,
-            });
-            for (const i in Chunks) {
-                const chunk = Chunks[i];
-                Chunks[i] = await FormatMessageChunkForSending({
-                    messenger,
-                    channelId,
-                    title: state_1.state.config.piers[messenger]?.group_id,
-                    author,
-                    chunk,
-                    action,
-                    quotation,
-                });
-            }
-            Chunks.map((chunk) => {
-                universalSendTo({
-                    messenger,
-                    channelId: ConfigNode[messenger],
-                    author,
-                    chunk,
-                    quotation,
-                    action,
-                    file,
-                    edited,
-                    avatar,
-                });
-            });
-            text = text + "<br/>" + translated_text;
-        }
-    }
     for (const messengerTo of Object.keys(state_1.state.config.channelMapping)) {
         if (state_1.state.config.MessengersAvailable[messengerTo] &&
             ConfigNode[messengerTo] &&
@@ -337,7 +290,6 @@ async function PopulateChannelMappingCore({ messenger, }) {
             settings: {
                 readonly: newChannel[`${messenger}-readonly`],
                 dontProcessOtherBridges: newChannel[`${messenger}-dontProcessOtherBridges`],
-                nsfw_analysis: newChannel[`nsfw_analysis`],
                 showNotices: newChannel["showNotices"],
                 language: newChannel["language"],
                 restrictToLojban: newChannel["restrictToLojban"],

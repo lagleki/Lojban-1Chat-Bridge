@@ -171,7 +171,6 @@ config.new_channels = [
     "irc_1-nickcolor": "mood", //options: mood / color / none
     "irc_1-readonly": true, // if true then the channel can'tbe sent to, can only be read from. Comment out for two-way bridge
     "irc_1-dontProcessOtherBridges": true, // if true then messages like "<another_bridge>: <user>: user's message" will be sent as if from another_bridge, not from user
-    nsfw_analysis: true, // if true will analyse every message for NSFW/ text in it and if anything is detected will send the result back as if sent from the same username
   },
   {
     // another relay entity

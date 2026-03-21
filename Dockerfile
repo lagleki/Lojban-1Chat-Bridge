@@ -1,5 +1,5 @@
-# Single-stage: node:22-bookworm-slim + deps for canvas, sharp, ffmpeg, tfjs (libgomp).
-# Mount-friendly: full node_modules (incl. typescript) so `pnpm run tsc && pnpm start` works.
+# Single-stage: node:22-bookworm-slim. Avatar rendering uses @napi-rs/canvas (Skia, prebuilt) — no Cairo stack.
+# sharp / @tensorflow/tfjs-node still need build tools + libgomp; ffmpeg for audio.
 
 FROM node:22-bookworm-slim
 
@@ -11,11 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   python3 \
   pkg-config \
-  libcairo2-dev \
-  libpango1.0-dev \
-  libjpeg62-turbo-dev \
-  libgif-dev \
-  libpixman-1-dev \
   ffmpeg \
   fontconfig \
   ca-certificates \
@@ -28,10 +23,8 @@ RUN fc-cache -fv && corepack enable && corepack prepare pnpm@10.32.1 --activate
 
 WORKDIR /home/app/1chat
 
-# Install deps first so Docker caches this layer when only src/ changes.
-# (Avoid --frozen-lockfile here: deploy copies often drift from the repo lockfile and abort the build.)
 COPY package.json pnpm-lock.yaml tsconfig.json ./
-RUN mkdir -p dist data && pnpm install
+RUN mkdir -p dist data && pnpm install --frozen-lockfile
 
 COPY src ./src
 COPY default-config ./default-config

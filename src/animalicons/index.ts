@@ -2,8 +2,8 @@ import fs from "fs"
 import path from "path"
 import { getHash, getMinimumColorVariance } from "./utils"
 const getMCV = getMinimumColorVariance
-import { createCanvas, Image, registerFont } from "canvas"
-import { fillTextWithTwemoji } from "node-canvas-with-twemoji"
+import { createCanvas, loadImage, registerFont } from "@napi-rs/canvas/node-canvas"
+import { fillTextWithTwemoji } from "./twemojiFillText"
 
 registerFont(path.resolve(__dirname, "fonts/NotoSans-Regular.ttf"), {
   family: "Noto",
@@ -204,30 +204,25 @@ class Avatar {
     }
 
     if (!this.modzi) {
-      return new Promise((resolve) => {
-        ctx.shadowColor = "rgba(0, 0, 0, 0.25)"
-        ctx.shadowBlur = size / 8
-        ctx.shadowOffsetX = 0
-        ctx.shadowOffsetY = 0
+      ctx.shadowColor = "rgba(0, 0, 0, 0.25)"
+      ctx.shadowBlur = size / 8
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
 
-        const emoji = emojis[parseInt(hash.substring(2, 5), 16) % emojis.length]
-        const img = new Image()
-        img.onload = () => {
-          ctx.drawImage(
-            img,
-            (size * 3) / 16,
-            (size * 3) / 16,
-            (size * 5) / 8,
-            (size * 5) / 8,
-          )
-          resolve(null)
-        }
-        img.onerror = (err) => {
-          console.log`${err}`
-          resolve(null)
-        }
-        img.src = emoji
-      })
+      const emoji = emojis[parseInt(hash.substring(2, 5), 16) % emojis.length]
+      try {
+        const img = await loadImage(emoji)
+        ctx.drawImage(
+          img,
+          (size * 3) / 16,
+          (size * 3) / 16,
+          (size * 5) / 8,
+          (size * 5) / 8,
+        )
+      } catch (err) {
+        console.log(err)
+      }
+      return null
     }
   }
 

@@ -3,7 +3,7 @@ import { Window } from "happy-dom"
 import { log } from "./logger"
 import { common } from "./state"
 
-// happy-dom avoids jsdom loading the native `canvas` addon (often absent if pnpm skipped canvas install scripts).
+// happy-dom avoids jsdom's heavier DOM/canvas integration paths used in some test stacks.
 const window = new Window()
 const DOMPurify = createDOMPurify(window as any)
 
