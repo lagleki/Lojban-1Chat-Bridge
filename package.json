@@ -36,7 +36,10 @@
       "canvas",
       "core-js",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "canvas": "^3.2.1"
+    }
   },
   "dependencies": {
     "@slack/rtm-api": "^7.0.4",
@@ -46,7 +49,7 @@
     "await-timeout": "^1.1.1",
     "await-to-js": "^3.0.0",
     "axios": "^1.13.6",
-    "canvas": "^2.11.0",
+    "canvas": "^3.2.1",
     "color-space": "2.0.0",
     "delta-e": "0.0.8",
     "discord-markdown": "^2.5.1",
@@ -97,6 +100,6 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.4.2",
     "ts-node": "^10.9.1",
-    "typescript": "^4.9.5"
+    "typescript": "^5.9.3"
   }
 }

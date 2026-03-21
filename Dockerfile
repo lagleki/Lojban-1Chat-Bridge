@@ -29,8 +29,9 @@ RUN fc-cache -fv && corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /home/app/1chat
 
 # Install deps first so Docker caches this layer when only src/ changes.
+# (Avoid --frozen-lockfile here: deploy copies often drift from the repo lockfile and abort the build.)
 COPY package.json pnpm-lock.yaml tsconfig.json ./
-RUN mkdir -p dist data && pnpm install --frozen-lockfile
+RUN mkdir -p dist data && pnpm install
 
 COPY src ./src
 COPY default-config ./default-config
