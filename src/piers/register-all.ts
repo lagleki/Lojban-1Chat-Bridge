@@ -1,7 +1,7 @@
 import type http from "http"
 /** Ensures default `downloadFile` transports (simple, data) are registered before piers add theirs. */
 import "./download-file"
-import { registerDiscordPier } from "./discord"
+import { registerDiscordPier } from "./discord/index"
 import { registerIrcPier } from "./irc"
 import { registerMattermostPier } from "./mattermost"
 import { registerSlackPier } from "./slack"
