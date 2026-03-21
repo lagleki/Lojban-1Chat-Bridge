@@ -29,22 +29,6 @@ config.piers = {
     //websocket dtream of messages into external services
     historyLength: 200, ///how many of them to store
   },
-  //Facebook messenger (doesn't work!):
-  facebook_1: {
-    Actions: ["action"],
-    //unstable bridge pier. Create and verifiy a user on Facebok. The user will be used as a bridge. Enter their email and password:
-    email: "",
-    password: "",
-    //then add you user to all your facebook chats
-  },
-  //Facebook bot (not usable!):
-  fbbot_1: {
-    Actions: ["action"],
-    //doesn't work yet. Chat using official Facebook API
-    accessToken: "",
-    appSecret: "",
-    verifyToken: "",
-  },
   //Telegram messenger:
   telegram_1: {
     /*
@@ -173,7 +157,6 @@ config.new_channels = [
   // example of a barebones IRC channel:
   // e.g. here 'Example chat' will be bridged to/from Slack "test" and others from this entity
   {
-    facebook_1: 123456, // facebook chat id
     //removeJoinMessages=true to remove new members join messages
     telegram_1: { groupName: "Example chat", removeJoinMessages: true },
     telegram_1: "Example chat", // telegram visiable chat name
@@ -192,7 +175,6 @@ config.new_channels = [
   },
   {
     // another relay entity
-    facebook_1: "...",
     //if a Telegram group has topics then the first topic has topicId: "1", see Ids of other topics in their menu in Telegram client GUI
     telegram_1: { groupName: "Lojban", topicId: "1", removeJoinMessages: true },
   },

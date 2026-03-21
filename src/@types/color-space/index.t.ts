@@ -1,1 +1,1 @@
-declare module 'color-space';
+declare module "color-space"

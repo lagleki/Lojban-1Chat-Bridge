@@ -1,4 +1,4 @@
-A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [Slack](https://slack.com) ↔ IRC ↔ [Mattermost](https://mattermost.com/) ↔ [Facebook Messenger](https://facebook.com)  ↔ vk.com (board) ↔ vk.com (wall)  ↔ websocket (API for external use in custom apps or custom messengers) gateway.
+A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [Slack](https://slack.com) ↔ IRC ↔ [Mattermost](https://mattermost.com/) ↔ vk.com (board) ↔ vk.com (wall) ↔ websocket (API for external use in custom apps or custom messengers) gateway.
 
 ![standards](https://imgs.xkcd.com/comics/standards.png)
 
@@ -10,7 +10,7 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 
 * makes a bridge where message from one messenger is sent to the rest. Both sending and receeving messages is possible.
 * e.g. Telegram messages are relayed to their respective IRC channel and Slack channel and Mattermost channels ... and vice versa
-* Supported messengers: [Telegram](https://telegram.org/), [Discord](https://discordapp.com), [Slack](https://slack.com), IRC, [Mattermost](https://mattermost.com/), [Facebook Messenger](https://facebook.com) (not stable currently, not recommended), vk.com (board), vk.com (wall), websocket (API for external use in custom apps, web widgets or custom messengers)
+* Supported messengers: [Telegram](https://telegram.org/), [Discord](https://discordapp.com), [Slack](https://slack.com), IRC, [Mattermost](https://mattermost.com/), vk.com (board), vk.com (wall), websocket (API for external use in custom apps, web widgets or custom messengers)
 * IRC messages can be configured to relay to Slack and Telegram but not from Telegram/Slack into them (thus making them readonly)
 * Supports Telegram/Slack/Mattermost/Discord media files, URL to file is sent to the other messengers. Local hosting of images
 * installation via Docker is highly recommended
@@ -29,4 +29,4 @@ A [Telegram](https://telegram.org/) ↔ [Discord](https://discordapp.com) ↔ [S
 ## Debug
 
 * run `./docker_dev.sh` in dev mode
-Run `DEBUG=telegram,mattermost,discord npm run start` to output messages to and from Telegram, Mattermost, Discord. Messengers to be separated with a comma. 
+Run `DEBUG=telegram,mattermost,discord pnpm start` to output messages to and from Telegram, Mattermost, Discord. Messengers to be separated with a comma. 

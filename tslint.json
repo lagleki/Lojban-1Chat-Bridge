@@ -1,7 +1,0 @@
-{
-  "extends": ["tslint:latest"],
-  "rules": {
-    "no-unreachable": true,
-    "semicolon": [true, "never"]
-  }
-}

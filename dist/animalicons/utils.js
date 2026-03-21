@@ -14,7 +14,7 @@ const crypto_1 = __importDefault(require("crypto"));
 async function getHash(message) {
     const encoder = new util_1.TextEncoder();
     const data = encoder.encode(message);
-    const buffer = crypto_1.default.createHash('sha1').update(data).digest();
+    const buffer = crypto_1.default.createHash("sha1").update(data).digest();
     // const buffer = await window.crypto.subtle.digest("SHA-1", data);
     const byteArray = new Uint8Array(buffer);
     const hexCodes = [...byteArray].map((value) => {

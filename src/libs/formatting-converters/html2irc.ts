@@ -1,18 +1,18 @@
-import {decode} from 'html-entities';
+import { decode } from "html-entities"
 interface Json {
-  [index: string]: string;
+  [index: string]: string
 }
 
 module.exports = function ircify(html: string) {
   const htmlparser = require("htmlparser")
 
-  const globalC = "\x03";
+  const globalC = "\x03"
 
   const globalStyles: Json = {
     underline: "\x1F",
     bold: "\x02",
     italic: "\x1D",
-  };
+  }
   const globalColors: Json = {
     white: "00",
     black: "01",
@@ -34,61 +34,61 @@ module.exports = function ircify(html: string) {
     gray: "14",
     grey: "14",
     silver: "15",
-  };
+  }
   function walk(dom: any, ignoreCode = false) {
-    let out = "";
+    let out = ""
     if (dom)
       dom.forEach((el: any) => {
-        if ("text" === el.type) out += el.data;
+        if ("text" === el.type) out += el.data
         if ("tag" === el.type)
           switch (el.name) {
             case "a":
               if (el.attribs?.href) {
-                const children = walk(el.children);
+                const children = walk(el.children)
                 if (el.attribs.href !== children) {
-                  out += `<${el.attribs.href} ${walk(el.children)}>`;
+                  out += `<${el.attribs.href} ${walk(el.children)}>`
                 } else {
-                  out += `${el.attribs.href}`;
+                  out += `${el.attribs.href}`
                 }
               }
-              break;
+              break
             case "br":
-              out += `\n`;
-              break;
+              out += `\n`
+              break
             case "blockquote":
               out += `\n${walk(el.children)
                 .split(/\n/)
                 .map((string) => `> ${string}`)
-                .join("\n")}\n`;
-              break;
+                .join("\n")}\n`
+              break
             case "u":
               out += `${globalStyles.underline}${walk(el.children)}${
                 globalStyles.underline
-              }`;
-              break;
+              }`
+              break
             case "p":
-              out += `\n${walk(el.children)}`;
-              break;
+              out += `\n${walk(el.children)}`
+              break
             case "strong":
             case "b":
               out += `${globalStyles.bold}${walk(el.children)}${
                 globalStyles.bold
-              }`;
-              break;
+              }`
+              break
             case "del":
               out += `${walk(el.children)
                 .split("")
                 .map((char) => char + "\u0336")
-                .join("")}`;
-              break;
+                .join("")}`
+              break
             case "pre":
-              out += `\n\`\`\`\n${walk(el.children, true)}\n\`\`\`\n`;
-              break;
+              out += `\n\`\`\`\n${walk(el.children, true)}\n\`\`\`\n`
+              break
             case "code":
               if (!ignoreCode) {
-                out += `\`${walk(el.children)}\``;
-              } else out += walk(el.children);
-              break;
+                out += `\`${walk(el.children)}\``
+              } else out += walk(el.children)
+              break
             case "i":
             case "em":
               out +=
@@ -96,25 +96,23 @@ module.exports = function ircify(html: string) {
                 "01," +
                 globalColors.yellow +
                 walk(el.children) +
-                globalC;
-              break;
+                globalC
+              break
             default:
-              out += walk(el.children);
+              out += walk(el.children)
           }
-      });
-    return out;
+      })
+    return out
   }
-  const handler = new htmlparser.DefaultHandler((error: any, dom: any) => {
+  const handler = new htmlparser.DefaultHandler((_error: any, _dom: any) => {
     // error ignored
-  });
-  const parser = new htmlparser.Parser(handler);
-  parser.parseComplete(html);
-  const dom = handler.dom;
+  })
+  const parser = new htmlparser.Parser(handler)
+  parser.parseComplete(html)
+  const dom = handler.dom
   if (dom)
     return decode(
-      walk(dom)
-        .replace(/&lt;/g, "&amp;lt;")
-        .replace(/&gt;/g, "&amp;gt;")
-    );
-  else return "";
-};
+      walk(dom).replace(/&lt;/g, "&amp;lt;").replace(/&gt;/g, "&amp;gt;"),
+    )
+  else return ""
+}

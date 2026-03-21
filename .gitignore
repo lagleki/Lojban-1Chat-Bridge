@@ -1,6 +1,8 @@
-
+archive/*
 data/*
 dev/
+dist/*
+.specstory/
 
 ### Node ###
 # Logs
@@ -29,8 +31,8 @@ node_modules/*
 # Output of 'npm pack'
 *.tgz
 
-# Yarn Integrity file
-.yarn-integrity
+# pnpm
+pnpm-debug.log*
 
 !data/.keep
 !node_modules/.keep

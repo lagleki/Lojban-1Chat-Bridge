@@ -47,7 +47,13 @@ class Avatar {
     this.canvas = createCanvas(size, size)
   }
 
-  async drawBackground(ctx: { fillStyle: string; fillRect: (arg0: number, arg1: number, arg2: number, arg3: number) => void }, hash: string) {
+  async drawBackground(
+    ctx: {
+      fillStyle: string
+      fillRect: (arg0: number, arg1: number, arg2: number, arg3: number) => void
+    },
+    hash: string,
+  ) {
     const { size } = this
     const { colors, layouts, minimumColorVariance } = this.theme
     const layout = layouts[parseInt(hash.substring(0, 2), 16) % layouts.length]
@@ -212,7 +218,7 @@ class Avatar {
             (size * 3) / 16,
             (size * 3) / 16,
             (size * 5) / 8,
-            (size * 5) / 8
+            (size * 5) / 8,
           )
           resolve(null)
         }

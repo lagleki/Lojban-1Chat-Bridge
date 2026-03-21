@@ -6,26 +6,17 @@
 
 #whatsapp
 
-#facebook
-
-- create an app
-- tune up your nginx/apache to forward port (Default 3011) to an https location
-- start facebook-installer, restart app
-- enter these webhooks into Facebook app
-- on new messages will come
-
 #Todo
 
 - several links ia message are merged into one
 - add comments to config.json via stripJsonComments
-  ReceivedFrom: config,facebook,sendFrom,AdaptName.facebook, generic.downloadFile
+  ReceivedFrom: config,sendFrom, generic.downloadFile
 - split code into files by messenger
 - remove spam via telegram user
 - qq support qq.js
 - topic set in slack not sent anywhere
 - get rid of all ".then"
 - fork await-to-js to "or"
-- facebook: support localization of attachments like in telegram
 - captcha for vk
 - get rid of all .js sub libs.
 - send youtube title
@@ -37,7 +28,6 @@
 - improve topic changes from irc, other action message, edit message
   - LocalizeString
 - generic.irc.start add
-- restart facebook on error
 - check cold start - no ~/.something files
 - complete README.md
 - localize via https://www.npmjs.com/package/safe-eval

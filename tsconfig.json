@@ -8,6 +8,8 @@
     "esModuleInterop": true,
     "module": "commonjs",
     "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "lib": [
       "esnext",
       "es2018",
@@ -20,10 +22,10 @@
       "dom",
       "dom.iterable"
     ],
-    "baseUrl": "./"
-  },
-  "paths": {
-    "*": ["./src/@types/*"]
+    "baseUrl": "./",
+    "paths": {
+      "*": ["./src/@types/*"]
+    }
   },
   "include": ["./src/", "./src/@types/**/*"],
   "exclude": ["./dist/"]
