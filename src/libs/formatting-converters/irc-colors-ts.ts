@@ -1,4 +1,4 @@
-const globalColors: any = {
+const globalColors: Record<string, string> = {
   white: "00",
   black: "01",
   navy: "02",
@@ -21,63 +21,21 @@ const globalColors: any = {
   silver: "15",
 }
 
-const globalStyles: any = {
+const globalStyles: Record<string, string> = {
   normal: "\x0F",
   underline: "\x1F",
   bold: "\x02",
   italic: "\x1D",
 }
 
-const styleChars: any = {}
+const styleChars: Record<string, boolean> = {}
 Object.keys(globalStyles).forEach((key) => {
   styleChars[globalStyles[key]] = true
 })
 
-const globalRichMood = [
-  // ["bold", ["yellow","yellow","white","white"]],
+type MoodPalette = [string, string[]][]
 
-  ["black", ["silver", "silver", "white", "white"]],
-  ["white", ["navy", "navy", "green", "green"]],
-  ["black", ["lime", "yellow", "white", "white"]],
-  ["red", ["green", "green"]],
-  ["black", ["red", "red", "white", "white"]],
-  ["white", ["brown", "brown", "black", "black"]],
-  ["black", ["purple", "purple", "white", "white"]],
-  ["black", ["olive", "olive", "white", "white"]],
-  ["black", ["lime", "lime", "white", "white"]],
-  ["black", ["teal", "teal", "white", "white"]],
-  ["black", ["cyan", "cyan", "white", "white"]],
-  ["black", ["pink", "pink", "white", "white"]],
-  ["black", ["yellow", "yellow", "white", "white"]],
-  ["black", ["violet", "violet", "white", "white"]],
-
-  // ["bold", ["red","red","brown","brown"]],
-  // ["bold", ["navy","navy","yellow","yellow"]],
-  // ["bold", ["lime","lime","silver","silver"]],
-  // ["bold", ["violet","violet","silver","silver"]],
-
-  // ["bold", ["red","red","red","brown","brown","brown"]],
-  // ["bold", ["white","white","white","brown","pink","pink"]],
-  // ["bold", ["lime","lime","lime","silver","silver","silver"]],
-  // ["bold", ["violet","violet","violet","silver","silver","silver"]],
-
-  ["black", ["white"]],
-  ["white", ["black"]],
-  ["white", ["navy"]],
-  ["white", ["green"]],
-  ["white", ["red"]],
-  ["white", ["brown"]],
-  ["white", ["purple"]],
-  ["white", ["olive"]],
-  ["black", ["lime"]],
-  ["white", ["teal"]],
-  ["white", ["cyan"]],
-  ["white", ["blue"]],
-  ["black", ["pink"]],
-  ["white", ["violet"]],
-]
-
-const globalSimpleMood = [
+const globalSimpleMood: MoodPalette = [
   ["normal", ["silver"]],
   ["normal", ["navy"]],
   ["normal", ["green"]],
@@ -133,6 +91,7 @@ function ColorifyText({
       return globalC + "01," + code + text + globalC
     }
   }
+  return text
 }
 
 function MoodifyText({
@@ -141,7 +100,7 @@ function MoodifyText({
   mood,
 }: {
   text: string
-  colors: any
+  colors?: MoodPalette | undefined
   mood: string
 }) {
   if (mood === "none") return text
@@ -170,15 +129,16 @@ function MoodifyText({
     .split("")
     .map((c: string) => {
       if (c === " ") return c
+      const fg = chosenFg[i++ % l] ?? "normal"
       const bg_text = ColorifyText({
         side: "fg",
         text: c,
-        color: chosenFg[i++ % l],
+        color: fg,
       })
       const a: string = ColorifyText({
         text: bg_text,
         side: "bg",
-        color: chosenBg,
+        color: chosenBg ?? "normal",
       })
       return a
     })
@@ -227,4 +187,5 @@ function stripStyle(str: string) {
   return str
 }
 
-module.exports = { ColorifyText, MoodifyText, stripColorsAndStyle }
+export { ColorifyText, MoodifyText, stripColorsAndStyle }
+export default { ColorifyText, MoodifyText, stripColorsAndStyle }

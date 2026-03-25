@@ -19,5 +19,5 @@ export const logger = winston.createLogger({
   ],
 })
 
-export const log = (messenger: string) => (message: any) =>
+export const log = (messenger: string) => (message: unknown) =>
   logger.log({ level: "info", message: JSON.stringify({ message, messenger }) })

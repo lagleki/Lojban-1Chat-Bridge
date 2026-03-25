@@ -8,10 +8,10 @@ import { xovahelojbo } from "../lojban-spam"
 import { common, generic, pierObj, state } from "../state"
 import type { Chunk, IsendToArgs, Json } from "../types"
 
-const html2md = require("../../libs/formatting-converters/html2md-ts")
-const discordParser = require("discord-markdown")
+import * as discordParser from "discord-markdown"
+import html2md from "../../libs/formatting-converters/html2md-ts"
 
-export function registerDiscordPier() {
+export function registerPier() {
   pierObj.discord.shouldDisableMessenger = (cfg: any) =>
     !cfg?.client || !cfg?.token || !cfg?.guildId
 
@@ -67,7 +67,7 @@ export function registerDiscordPier() {
           function: "discord.sendTo",
           event: "couldn't find webhooks for the channel",
           channelId,
-          message: error.toString(),
+          message: String(error),
           chunk: chunk_,
           author,
         })
@@ -198,7 +198,7 @@ export function registerDiscordPier() {
         ?.restrictToLojban &&
       plainText
     ) {
-      const xovahe = xovahelojbo({ text: plainText })
+      const xovahe = await xovahelojbo({ text: plainText })
       if (xovahe < 0.5) return true
     }
     return false
@@ -411,11 +411,11 @@ export function registerDiscordPier() {
     const { config } = state
     if (!config.MessengersAvailable[messenger]) return
 
-    await new Promise((resolve: any) => {
+    await new Promise<void>((resolve) => {
       const client = new Discord.Client()
       generic[messenger].client = client
       generic[messenger].client.once("ready", () => {
-        generic[messenger].guilds = client.guilds.cache.array()
+        generic[messenger].guilds = Array.from(client.guilds.cache.values())
         if (config.piers[messenger].guildId) {
           const guild = client.guilds.cache.find(
             (guild: any) =>
@@ -431,14 +431,14 @@ export function registerDiscordPier() {
               ),
             ]
         }
-        resolve(null)
+        resolve()
       })
       generic[messenger].client.on("error", (error: any) => {
-        resolve(null)
+        resolve()
         log("discord")(error)
       })
 
-      generic[messenger].client.on("message", (message: any) => {
+      generic[messenger].client.on("message", (message: Discord.Message) => {
         pierObj.discord.receivedFrom(messenger, message)
       })
       generic[messenger].client.on(

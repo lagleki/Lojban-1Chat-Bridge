@@ -1,8 +1,8 @@
-const crypt = require("crypto")
+import { createHash } from "crypto"
+import RandExp from "randexp"
 //regular expressions for gismu forms
 const C = "(" + "[bcdfgjklmnprstvxz]" + ")"
 const V = "(" + "[aeiou]" + ")"
-const Vy = "(" + "[aeiouy]" + ")"
 const D =
   "(" + "[bcfgkmpsvx][lr]|[td]r|[cs][pftkmn]|[jz][bvdgm]|t[cs]|d[jz]" + ")"
 const C_C =
@@ -13,32 +13,22 @@ const R =
   "(" +
   "[lmnr][bcdfgjkpstvx]|l[mnrz]|mn|n[lmrz]|r[lmnz]|b[dgjmnvz]|d[bglmnv]|g[bdjmnvz]|[jz][lnr]|v[bdgjmnz]|f[ckmnpstx]|k[cfmnpst]|p[cfkmnstx]|sx|t[fklmnpx]|x[fmnpst]" +
   ")"
-const CyC = `((${C})\\2|[bdgjvz][cfkpstx]|[cfkpstx][bdgjvz]|[cjsz]{2,2}|[ck]x|x[ck]|mz)`
-const T =
-  "(cfr|cfl|sfr|sfl|jvr|jvl|zvr|zvl|cpr|cpl|spr|spl|jbr|jbl|zbr|zbl|ckr|ckl|skr|skl|jgr|jgl|zgr|zgl|ctr|str|jdr|zdr|cmr|cml|smr|sml|jmr|jml|zmr|zml)"
-const CCV = `(${D}${V})`
-const CVV = `(${C}(?:ai|au|ei|oi|${V}'${V}))`
-const CVC = `(${C}${V}${C})`
 
 const asta = V + C_C + V
 const gismu = `(${D}${V}${C}|${C}${V}${C_C})${V}`
 const fragari = D + V + C + V + C + V
 const alpaka = V + R + V + C + V
 const sorpeka = C + V + R + V + C + V
-const strelka = T + V + R + V
 const univalsi = `(${gismu}|${fragari}|${alpaka}|${sorpeka}|${asta})`
 
-const RandExp = require("randexp")
-
-module.exports = {
+export default {
   cupra: function (url: string) {
     const R = new RandExp(univalsi)
     let gAcc = 0
     R.randInt = (a: number, b: number) => {
       const seed =
         parseInt(
-          crypt
-            .createHash("md5")
+          createHash("md5")
             .update(url + gAcc)
             .digest("hex"),
           16,

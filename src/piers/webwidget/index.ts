@@ -1,9 +1,10 @@
 import type http from "http"
+import { Server as SocketIoServer } from "socket.io"
 import { log } from "../logger"
 import { generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
 
-export function registerWebwidgetPier(getHttpServer: () => http.Server) {
+export function registerPier(getHttpServer: () => http.Server) {
   pierObj.webwidget.common = {
     Start: async function () {
       return
@@ -70,7 +71,7 @@ export function registerWebwidgetPier(getHttpServer: () => http.Server) {
   }) => {
     generic[messenger] = {
       Lojban1ChatHistory: [],
-      client: require("socket.io")(getHttpServer(), {
+      client: new SocketIoServer(getHttpServer(), {
         cors: {
           origin: "*",
           methods: ["GET", "POST"],

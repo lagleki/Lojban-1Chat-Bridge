@@ -1,11 +1,15 @@
+import { Lexer, Renderer, marked } from "marked"
 import { log } from "./logger"
 import { common } from "./state"
 
-const marked = require("marked")
-const lexer = marked.Lexer
-lexer.rules.list = { exec: () => {} }
-lexer.rules.listitem = { exec: () => {} }
-const markedRenderer = new marked.Renderer()
+// Disable list / listitem tokenization (marked API expects RegExp-like rules)
+;(Lexer.rules as { list: unknown; listitem: unknown }).list = {
+  exec: () => null,
+}
+;(Lexer.rules as { list: unknown; listitem: unknown }).listitem = {
+  exec: () => null,
+}
+const markedRenderer = new Renderer()
 
 export function markedParse({
   text,
@@ -37,7 +41,7 @@ export function markedParse({
       })
     return `<pre><code>${text}</code></pre>\n`
   }
-  const result = marked.parser(lexer.lex(text), {
+  const result = marked.parser(Lexer.lex(text), {
     gfm: true,
     renderer: markedRenderer,
   })

@@ -1,13 +1,14 @@
+import * as cp from "child_process"
 import fs from "fs-extra"
 import path from "path"
+import sharp from "sharp"
 import { mkdirp } from "mkdirp"
 import to from "await-to-js"
-import request from "request"
+import axios from "axios"
+import blalalavla from "../libs/sugar/blalalavla"
 import { log, logger } from "./logger"
 import { cache_folder } from "./paths"
 import { state } from "./state"
-
-const blalalavla = require("../libs/sugar/blalalavla")
 
 export type DownloadFileArgs = {
   messenger: string
@@ -91,23 +92,37 @@ const simpleTransport: DownloadTransport = async ({
       const file = fs.createWriteStream(local_fullname)
       file
         .on("open", () => {
-          request({
+          axios({
             method: "GET",
             url: remote_path ?? "",
             timeout: 3000,
+            responseType: "stream",
           })
-            .pipe(file)
-            .on("finish", () => {
-              rem_fullname = `${rem_path}/${basename}`
-              resolve(null)
+            .then((axiosRes) => {
+              axiosRes.data
+                .pipe(file)
+                .on("finish", () => {
+                  rem_fullname = `${rem_path}/${basename}`
+                  resolve(null)
+                })
+                .on("error", (error: any) => {
+                  logger.log({
+                    level: "error",
+                    function: "downloadFile",
+                    type: "simple",
+                    path: remote_path,
+                    message: error.toString(),
+                  })
+                  resolve(null)
+                })
             })
-            .on("error", (error: any) => {
+            .catch((error: unknown) => {
               logger.log({
                 level: "error",
                 function: "downloadFile",
                 type: "simple",
                 path: remote_path,
-                message: error.toString(),
+                message: String(error),
               })
               resolve(null)
             })
@@ -153,7 +168,7 @@ const dataTransport: DownloadTransport = async ({
       level: "error",
       function: "downloadFile",
       type: "data",
-      message: error.toString(),
+      message: String(error),
     })
   }
   return { rem_fullname, local_fullname }
@@ -211,13 +226,18 @@ export async function downloadFile({
     const fallback = String(remote_path ?? fileId)
     return [fallback, fallback]
   }
+  if (local_fullname === undefined || local_fullname === "") {
+    const fallback = String(remote_path ?? fileId)
+    return [fallback, fallback]
+  }
+  const localPathResolved: string = local_fullname
   ;[err, res] = await to(
     new Promise((resolve: any) => {
       const new_name = `${local_path}/${randomStringName}${path.extname(
-        local_fullname,
+        localPathResolved,
       )}`
 
-      fs.rename(local_fullname, new_name, (err: any) => {
+      fs.rename(localPathResolved, new_name, (err: any) => {
         if (err) {
           console.error({ remote_path, error: err, type: "renaming" })
           resolve(null)
@@ -230,40 +250,35 @@ export async function downloadFile({
   )
   if (!err) [rem_fullname, local_fullname] = res
 
-  if (
-    [".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(
-      path.extname(local_fullname),
-    )
-  ) {
-    const local_mp3_file = local_fullname + ".mp3"
-    const cp = require("child_process")
+  const fileOnDisk: string = local_fullname ?? localPathResolved
 
-    cp.spawnSync("ffmpeg", ["-i", local_fullname, local_mp3_file], {
+  if (
+    [".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(path.extname(fileOnDisk))
+  ) {
+    const local_mp3_file = fileOnDisk + ".mp3"
+
+    cp.spawnSync("ffmpeg", ["-i", fileOnDisk, local_mp3_file], {
       encoding: "utf8",
     })
     if (fs.existsSync(local_mp3_file))
       return [rem_fullname + ".mp3", local_mp3_file]
-    return [rem_fullname, local_fullname]
+    return [rem_fullname, fileOnDisk]
   }
 
-  if ([".webp", ".tiff"].includes(path.extname(local_fullname))) {
-    const sharp = require("sharp")
-    const jpgname = `${(local_fullname ?? "")
-      .split(".")
-      .slice(0, -1)
-      .join(".")}.jpg`
+  if ([".webp", ".tiff"].includes(path.extname(fileOnDisk))) {
+    const jpgname = `${fileOnDisk.split(".").slice(0, -1).join(".")}.jpg`
     ;[err, res] = await to(
       new Promise((resolve) => {
-        sharp(local_fullname).toFile(jpgname, (err: any, _info: any) => {
+        sharp(fileOnDisk).toFile(jpgname, (err: any, _info: any) => {
           if (err) {
             console.error({
               type: "conversion",
               remote_path,
               error: err.toString(),
             })
-            resolve([rem_fullname, local_fullname])
+            resolve([rem_fullname, fileOnDisk])
           } else {
-            fs.unlink(local_fullname)
+            fs.unlink(fileOnDisk)
             resolve([
               `${rem_fullname.split(".").slice(0, -1).join(".")}.jpg`,
               jpgname,

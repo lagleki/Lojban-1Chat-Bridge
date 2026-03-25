@@ -1,8 +1,7 @@
 import { decode } from "html-entities"
+import * as htmlparser from "htmlparser"
 
-module.exports = function slackify(html: string) {
-  const htmlparser = require("htmlparser")
-
+export default function slackify(html: string) {
   const handler = new htmlparser.DefaultHandler((_error: any, _dom: any) => {
     // error ignored
   })

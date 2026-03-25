@@ -1,23 +1,32 @@
 import type http from "http"
+import path from "path"
 /** Ensures default `downloadFile` transports (simple, data) are registered before piers add theirs. */
 import "./download-file"
-import { registerDiscordPier } from "./discord/index"
-import { registerIrcPier } from "./irc"
-import { registerMattermostPier } from "./mattermost"
-import { registerSlackPier } from "./slack"
-import { registerTelegramPier } from "./telegram"
-import { registerVkboardPier } from "./vkboard"
-import { registerVkwallPier } from "./vkwall"
-import { registerWebwidgetPier } from "./webwidget"
+import { PIER_IDS } from "./pier-registry"
 
-/** Registers all messenger piers on the shared `pierObj` (order matters for vkboard → vkwall). */
+type RegisterPierFn =
+  | (() => void)
+  | ((getHttpServer: () => http.Server) => void)
+
+/**
+ * Registers every pier under `src/piers/<id>/` that `PIER_IDS` lists.
+ * Each pier exports `registerPier` (arity 0, or 1 with `getHttpServer` for webwidget).
+ * Order follows `PIER_IDS` (sorted): e.g. vkboard → vkchat → vkwall.
+ */
 export function registerAllPiers(getHttpServer: () => http.Server) {
-  registerDiscordPier()
-  registerTelegramPier()
-  registerWebwidgetPier(getHttpServer)
-  registerVkboardPier()
-  registerVkwallPier()
-  registerSlackPier()
-  registerMattermostPier()
-  registerIrcPier()
+  for (const id of PIER_IDS) {
+    const { registerPier } = require(path.join(__dirname, id, "index")) as {
+      registerPier?: RegisterPierFn
+    }
+    if (typeof registerPier !== "function") {
+      throw new Error(
+        `pier "${id}": expected export registerPier in ./${id}/index`,
+      )
+    }
+    if (registerPier.length > 0) {
+      ;(registerPier as (g: () => http.Server) => void)(getHttpServer)
+    } else {
+      ;(registerPier as () => void)()
+    }
+  }
 }

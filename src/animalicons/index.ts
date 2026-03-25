@@ -2,7 +2,11 @@ import fs from "fs"
 import path from "path"
 import { getHash, getMinimumColorVariance } from "./utils"
 const getMCV = getMinimumColorVariance
-import { createCanvas, loadImage, registerFont } from "@napi-rs/canvas/node-canvas"
+import {
+  createCanvas,
+  loadImage,
+  registerFont,
+} from "@napi-rs/canvas/node-canvas"
 import { fillTextWithTwemoji } from "./twemojiFillText"
 
 registerFont(path.resolve(__dirname, "fonts/NotoSans-Regular.ttf"), {
@@ -224,6 +228,7 @@ class Avatar {
       }
       return null
     }
+    return null
   }
 
   async draw() {

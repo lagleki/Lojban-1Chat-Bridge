@@ -30,7 +30,7 @@ interface MessageEntity {
   custom_emoji_id?: string | undefined
 }
 
-const R = require("ramda")
+import * as R from "ramda"
 
 const rewriteTextAtPosition = (
   text: string,
@@ -152,8 +152,8 @@ const wrapTextWithMarkdownEntity = (
 }
 
 const findIndices = (str: string, char: string) =>
-  str.split("").reduce((indices, letter, index) => {
-    letter === char && indices.push(index)
+  str.split("").reduce<number[]>((indices, letter, index) => {
+    if (letter === char) indices.push(index)
     return indices
   }, [])
 

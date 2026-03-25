@@ -17,6 +17,9 @@ process.env.NTBA_FIX_319 = 1
 
 import fs from "fs-extra"
 import path from "path"
+import * as R from "ramda"
+import sanitizeHtml from "sanitize-html"
+import { pathToFileURL } from "url"
 import { mkdirp } from "mkdirp"
 import to from "await-to-js"
 import http from "http"
@@ -33,12 +36,9 @@ import { cache_folder } from "./piers/paths"
 import { registerAllPiers } from "./piers/register-all"
 import { common, generic, pierObj, queueOf, state } from "./piers/state"
 import type { Chunk } from "./piers/types"
-
-const R = require("ramda")
+import localizationDict from "./local/dict.json"
 
 const defaults = path.join(__dirname, `../default-config/defaults.js`)
-
-const sanitizeHtml = require("sanitize-html")
 
 type TelegramMessage = Telegram.Message & { message_thread_id?: number }
 
@@ -312,7 +312,7 @@ async function sendFrom({
         })
       }
 
-      Chunks.map((chunk) => {
+      for (const chunk of Chunks) {
         universalSendTo({
           messenger: messengerTo,
           channelId: ConfigNode[messengerTo],
@@ -324,7 +324,7 @@ async function sendFrom({
           edited,
           avatar,
         })
-      })
+      }
     }
   }
 }
@@ -340,7 +340,7 @@ common.writeCache = async ({
   channelId: string | number
   action: string
 }) => {
-  await new Promise((resolve) => {
+  await new Promise<void>((resolve) => {
     fs.writeFileSync(
       `${cache_folder}/channelMapping.json`,
       JSON.stringify(state.config.channelMapping),
@@ -348,9 +348,9 @@ common.writeCache = async ({
     fs.writeFile(
       `${cache_folder}/cache.json`,
       JSON.stringify(state.config.cache),
-      (err: any) => {
+      (err: NodeJS.ErrnoException | null) => {
         log("generic")({ pier, action, channelName, channelId, error: err })
-        resolve(null)
+        resolve()
       },
     )
   })
@@ -359,7 +359,7 @@ common.writeCache = async ({
 hooks.sendFrom = sendFrom
 
 // common
-common.ConfigBeforeStart = () => {
+common.ConfigBeforeStart = async () => {
   if (process.argv[2] === "--genconfig") {
     mkdirp.sync(cache_folder)
 
@@ -372,20 +372,29 @@ common.ConfigBeforeStart = () => {
     )
   }
 
+  const configPath = path.join(cache_folder, "config.js")
   try {
-    state.config = require(`${cache_folder}/config.js`)
-  } catch (e) {
+    const configMod = await import(pathToFileURL(configPath).href)
+    state.config =
+      (configMod as { default?: typeof state.config }).default ?? configMod
+  } catch (e: unknown) {
     throw new Error(
-      `ERROR while reading config:\n${e}\n\nPlease make sure ` +
+      `ERROR while reading config:\n${String(e)}\n\nPlease make sure ` +
         'it exists and is valid. Run "node bridge --genconfig" to ' +
         "generate a default config.",
     )
   }
 
-  const defaultConfig = require(defaults)
-  state.config = R.mergeDeepLeft(state.config, defaultConfig)
+  const defaultsMod = await import(pathToFileURL(defaults).href)
+  const defaultConfig =
+    (defaultsMod as { default?: Record<string, unknown> }).default ??
+    defaultsMod
+  state.config = R.mergeDeepLeft(
+    state.config,
+    defaultConfig as typeof state.config,
+  )
 
-  state.localizationConfig = require("../src/local/dict.json")
+  state.localizationConfig = localizationDict
 }
 
 common.getMessengersWithPrefix = async (prefix: string) => {
@@ -416,7 +425,7 @@ async function PopulateChannelMappingCore({
   const arrMappingKeys: string[] = Object.keys(
     state.config.MessengersAvailable,
   ).filter((el: string) => state.config.MessengersAvailable[el] === true)
-  state.config.new_channels.map((newChannel: NewChannel) => {
+  state.config.new_channels.forEach((newChannel: NewChannel) => {
     let i_mapped = newChannel[messenger] as string
     let topicalizedChannel: Partial<TopicalizedChannel> = {}
     if (state.config.cache[messenger]) {
@@ -499,10 +508,12 @@ common.root_of_messenger = (messenger_with_index: string) =>
   messenger_with_index.replace(/_.*/g, "").replace(/_.*/g, "")
 common.MessengersAvailable = () => {
   state.config.MessengersAvailable = {}
-  state.config.new_channels.forEach((i: any) => {
-    Object.keys(i)
-      .filter((a: any) => a.indexOf("-") === -1 && a.indexOf("_") > 0)
-      .forEach((a: any) => (state.config.MessengersAvailable[a] = true))
+  state.config.new_channels.forEach((entry: NewChannel) => {
+    Object.keys(entry)
+      .filter((key: string) => key.indexOf("-") === -1 && key.indexOf("_") > 0)
+      .forEach((key: string) => {
+        state.config.MessengersAvailable[key] = true
+      })
   })
   Object.keys(state.config.MessengersAvailable).forEach(
     (messenger_with_index: string) => {
@@ -577,7 +588,8 @@ common.LogToAdmin = (msg_text: string, repeat = true) => {
   const telegram_piers_with_logging_to_admin = Object.keys(
     state.config.piers,
   ).filter(
-    (i: any) => typeof state.config.piers[i].admins_userid !== "undefined",
+    (pier: string) =>
+      typeof state.config.piers[pier].admins_userid !== "undefined",
   )
   for (const pier of telegram_piers_with_logging_to_admin)
     if (generic[pier].client)
@@ -589,12 +601,12 @@ common.LogToAdmin = (msg_text: string, repeat = true) => {
             parse_mode: "Markdown",
           },
         )
-        .catch((_e: any) => {
+        .catch(() => {
           if (repeat) common.LogToAdmin(msg_text, false)
         })
 }
 
-const htmlEntities: any = {
+const htmlEntities: Record<string, string> = {
   nbsp: " ",
   cent: "¢",
   pound: "£",
@@ -622,17 +634,18 @@ common.unescapeHTML = ({
 }) => {
   if (escapeBackslashes) text = text.replace(/\\/g, "\\")
   text = text.replace(/&([^;]+);/g, (entity: string, entityCode: string) => {
-    let match: any
-
     if (convertHtmlEntities && htmlEntities[entityCode]) {
       return htmlEntities[entityCode]
-    } else if ((match = entityCode.match(/^#x([\da-fA-F]+)$/))) {
-      return String.fromCharCode(parseInt(match[1], 16))
-    } else if ((match = entityCode.match(/^#(\d+)$/))) {
-      return String.fromCharCode(~~match[1])
-    } else {
-      return entity
     }
+    const hexMatch = entityCode.match(/^#x([\da-fA-F]+)$/)
+    if (hexMatch) {
+      return String.fromCharCode(parseInt(hexMatch[1], 16))
+    }
+    const decMatch = entityCode.match(/^#(\d+)$/)
+    if (decMatch) {
+      return String.fromCharCode(parseInt(decMatch[1], 10))
+    }
+    return entity
   })
   return text
 }
@@ -739,7 +752,7 @@ common.LocalizeString = ({
         .replace(new RegExp(`%${value[0]}%`, "gu"), value[1])
         .replace(/%%/g, "%")
     return template
-  } catch (error) {
+  } catch {
     log(messenger)({
       level: "error",
       function: "LocalizeString",
@@ -751,23 +764,26 @@ common.LocalizeString = ({
   }
 }
 //START
-// get/set config
-common.ConfigBeforeStart()
+void (async () => {
+  // get/set config
+  await common.ConfigBeforeStart()
 
-// map channels & start listening
-StartServices()
+  // map channels & start listening
+  StartServices()
 
-// start HTTP server for media files if configured to do so
-if (state.config.generic.showMedia) {
-  mkdirp.sync(`${cache_folder}/files`)
-  const serve = serveStatic(`${cache_folder}/files`, {
-    lastModified: false,
-    index: false,
-    maxAge: 86400000,
-  })
-  server = http.createServer((req: any, res: any) => {
-    // if ((request.url || "").indexOf("/emailing/templates") === 0) {
-    serve(req, res, finalhandler(req, res))
-  })
-  server.listen(state.config.generic.httpPort)
-}
+  // start HTTP server for media files if configured to do so
+  if (state.config.generic.showMedia) {
+    mkdirp.sync(`${cache_folder}/files`)
+    const serve = serveStatic(`${cache_folder}/files`, {
+      lastModified: false,
+      index: false,
+      maxAge: 86400000,
+    })
+    server = http.createServer(
+      (req: http.IncomingMessage, res: http.ServerResponse) => {
+        serve(req, res, finalhandler(req, res))
+      },
+    )
+    server.listen(state.config.generic.httpPort)
+  }
+})()

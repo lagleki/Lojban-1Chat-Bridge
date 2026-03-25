@@ -3,13 +3,53 @@ import { hooks } from "../hooks"
 import { HTMLSplitter } from "../html-splitter"
 import { log } from "../logger"
 import { common, generic, pierObj, state } from "../state"
-import type { IsendToArgs } from "../types"
+import type { Chunk, IsendToArgs } from "../types"
 
-const Irc = require("irc-upd")
-const ircolors = require("../../libs/formatting-converters/irc-colors-ts")
-const html2irc = require("../../libs/formatting-converters/html2irc")
+import Irc from "irc-upd"
+import ircolors from "../../libs/formatting-converters/irc-colors-ts"
+import html2irc from "../../libs/formatting-converters/html2irc"
 
-export function registerIrcPier() {
+function ircChunkToString(chunk: Chunk): string {
+  if (typeof chunk === "string") return chunk
+  return chunk.main ?? chunk.fallback_solution ?? ""
+}
+
+/** Inbound events from irc-upd into `receivedFrom`. */
+type IrcReceivedFromPayload =
+  | {
+      type: "message"
+      author: string
+      channelId: string
+      text: string
+    }
+  | {
+      type: "action"
+      author: string
+      channelId: string
+      text: string
+    }
+  | {
+      type: "notice"
+      author: string
+      channelId: string
+      text: string
+    }
+  | {
+      type: "topic"
+      author: string
+      channelId: string
+      text: string
+    }
+  | { type: "error"; error: unknown }
+  | {
+      type: "registered"
+      handler: {
+        send: (...args: string[]) => void
+        join: (channel: string) => void
+      }
+    }
+
+export function registerPier() {
   pierObj.irc.sendTo = async ({
     messenger,
     channelId,
@@ -20,8 +60,9 @@ export function registerIrcPier() {
     file: _file,
     edited: _edited,
   }: IsendToArgs) => {
-    log("irc")({ "sending for irc": chunk })
-    generic[messenger].client.say(channelId, chunk)
+    const line = ircChunkToString(chunk)
+    log("irc")({ "sending for irc": line })
+    generic[messenger].client.say(channelId, line)
   }
 
   pierObj.irc.common.prepareToWhom = function ({
@@ -86,108 +127,117 @@ export function registerIrcPier() {
 
   pierObj.irc.receivedFrom = async (
     messenger: string,
-    {
-      author,
-      channelId,
-      text,
-      handler,
-      error,
-      type,
-    }: {
-      author: string
-      channelId: string
-      text: string
-      handler: any
-      error: any
-      type: string
-    },
+    payload: IrcReceivedFromPayload,
   ) => {
     const sendFrom = hooks.sendFrom!
     const { config } = state
     if (!config?.channelMapping[messenger]) return
-    if (type === "message") {
-      if (text.search(new RegExp(config.spamremover.irc.source, "i")) >= 0)
-        return
-      text = ircolors.stripColorsAndStyle(text)
 
-      text = `<${ircolors
-        .stripColorsAndStyle(author)
-        .replace(/_+$/g, "")}>: ${text}`
+    switch (payload.type) {
+      case "message": {
+        const { channelId } = payload
+        let { author, text } = payload
+        if (text.search(new RegExp(config.spamremover.irc.source, "i")) >= 0)
+          return
+        text = ircolors.stripColorsAndStyle(text)
 
-      if (
-        !config?.channelMapping[messenger]?.[channelId]?.settings
-          ?.dontProcessOtherBridges
-      ) {
+        text = `<${ircolors
+          .stripColorsAndStyle(author)
+          .replace(/_+$/g, "")}>: ${text}`
+
+        if (
+          !config?.channelMapping[messenger]?.[channelId]?.settings
+            ?.dontProcessOtherBridges
+        ) {
+          text = text
+            .replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
+            .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ")
+        }
         text = text
-          .replace(/^<[^ <>]+?>: <([^<>]+?)> ?: /, "*$1*: ")
-          .replace(/^<[^ <>]+?>: &lt;([^<>]+?)&gt; ?: /, "*$1*: ")
+          .replace(/^<([^<>]+?)>: /, "*$1*: ")
+          .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ")
+        const boldMatch = text.match(/^<b>(.+?)<\/b>: (.*)/)
+        ;[, author, text] = boldMatch ? Array.from(boldMatch) : []
+        if (text && text !== "") {
+          sendFrom({
+            messenger,
+            channelId,
+            author,
+            text,
+          })
+        }
+        break
       }
-      text = text
-        .replace(/^<([^<>]+?)>: /, "*$1*: ")
-        .replace(/^\*([^<>]+?)\*: /, "<b>$1</b>: ")
-      ;[, author, text] = Array.from(text.match(/^<b>(.+?)<\/b>: (.*)/) ?? [])
-      if (text && text !== "") {
+      case "action":
+        sendFrom({
+          messenger,
+          channelId: payload.channelId,
+          author: payload.author,
+          text: payload.text,
+          action: "action",
+        })
+        break
+      case "notice": {
+        if (
+          !config?.channelMapping[messenger]?.[payload.channelId]?.settings
+            ?.showNotices
+        )
+          return
+        sendFrom({
+          messenger,
+          channelId: payload.channelId,
+          author: payload.author,
+          text: `${payload.text}`,
+        })
+        break
+      }
+      case "topic": {
+        const { channelId, text, author } = payload
+        const topic = common.LocalizeString({
+          messenger,
+          channelId,
+          localized_string_key: "topic",
+          arrElemsToInterpolate: [["topic", text]],
+        })
+        if (!config.channelMapping[messenger][channelId]) return
+
+        if (
+          !topic ||
+          !config.piers[messenger].sendTopic ||
+          !config.channelMapping[messenger][channelId].previousTopic ||
+          config.channelMapping[messenger][channelId].previousTopic === text
+        ) {
+          config.channelMapping[messenger][channelId].previousTopic = text
+          return
+        }
         sendFrom({
           messenger,
           channelId,
-          author,
-          text,
+          author: author.split("!")[0],
+          text: topic,
+          action: "topic",
         })
+        break
       }
-    } else if (type === "action") {
-      sendFrom({
-        messenger,
-        channelId,
-        author,
-        text,
-        action: "action",
-      })
-    } else if (type === "notice") {
-      if (
-        !config?.channelMapping[messenger]?.[channelId]?.settings?.showNotices
-      )
-        return
-      sendFrom({
-        messenger,
-        channelId,
-        author,
-        text: `${text}`,
-      })
-    } else if (type === "topic") {
-      const topic = common.LocalizeString({
-        messenger,
-        channelId,
-        localized_string_key: type,
-        arrElemsToInterpolate: [[type, text]],
-      })
-      if (!config.channelMapping[messenger][channelId]) return
-
-      if (
-        !topic ||
-        !config.piers[messenger].sendTopic ||
-        !config.channelMapping[messenger][channelId].previousTopic ||
-        config.channelMapping[messenger][channelId].previousTopic === text
-      ) {
-        config.channelMapping[messenger][channelId].previousTopic = text
-        return
+      case "error":
+        console.error("IRC ERROR:", payload.error)
+        break
+      case "registered": {
+        const { handler } = payload
+        config.piers[messenger].ircPerformCmds.forEach((cmd: string) => {
+          handler.send.apply(null, cmd.split(" "))
+        })
+        config.piers[messenger].ircOptions.channels.forEach(
+          (channel: string) => {
+            handler.join(channel)
+          },
+        )
+        break
       }
-      sendFrom({
-        messenger,
-        channelId,
-        author: author.split("!")[0],
-        text: topic,
-        action: "topic",
-      })
-    } else if (type === "error") {
-      console.error`IRC ERROR:`
-      console.error(error)
-    } else if (type === "registered") {
-      config.piers[messenger].ircPerformCmds.forEach((cmd: string) => {
-        handler.send.apply(null, cmd.split(" "))
-      })
-      config.piers[messenger].ircOptions.channels.forEach((channel: string) => {
-        handler.join(channel)
-      })
+      default: {
+        const _exhaustive: never = payload
+        return _exhaustive
+      }
     }
   }
 
@@ -233,24 +283,25 @@ export function registerIrcPier() {
   pierObj.irc.getChannels = async (pier: string): Promise<void> => {
     const { config } = state
     const json = config.piers[pier].ircOptions.channels.reduce(
-      (json: { [x: string]: string }, value: string) => {
-        json[value] = value
-        return json
+      (acc: Record<string, string>, value: string) => {
+        acc[value] = value
+        return acc
       },
-      {},
+      {} as Record<string, string>,
     )
     config.cache[pier] = json
   }
 
   pierObj.irc.StartService = async ({ messenger }: { messenger: string }) => {
     const { config } = state
-    const channels = config.new_channels
-    const results: any[] = []
+    const channels = config.new_channels as Array<Record<string, unknown>>
+    const results: string[] = []
     for (const channel of channels) {
-      if (!channel[messenger]) continue
-      const chanName = channel[`${messenger}-password`]
-        ? `${channel[messenger]} ${channel[`${messenger}-password`]}`
-        : channel[messenger]
+      const raw = channel[messenger]
+      if (raw === undefined || raw === null) continue
+      if (typeof raw !== "string") continue
+      const password = channel[`${messenger}-password`]
+      const chanName = typeof password === "string" ? `${raw} ${password}` : raw
       results.push(chanName)
     }
     config.piers[messenger].ircOptions.channels = [...new Set(results)]
@@ -262,7 +313,7 @@ export function registerIrcPier() {
       config.piers[messenger].ircOptions,
     )
     if (!config.MessengersAvailable[messenger]) return
-    generic[messenger].client.on("error", (error: any) => {
+    generic[messenger].client.on("error", (error: unknown) => {
       pierObj.irc.receivedFrom(messenger, {
         error,
         type: "error",

@@ -3,7 +3,7 @@
  * Copyright(c) 2015-2015 Harminder Virk
  * MIT Licensed
  */
-const formatters = require("./html2md-formatters-ts")
+import formatters from "./html2md-formatters-ts"
 const extrasRegex = /<\/?(?:div|address|section|article|span)>/gim
 /**
  * @description replacing unncessary html tags
@@ -17,7 +17,7 @@ function replaceExtras(doc: string): string {
   return newDoc
 }
 
-const replacements = [
+const replacements: [RegExp, string][] = [
   [/\\/g, "\\"],
   // [/\*/g, "\*"],
   // [/#/g, "\#"],
@@ -31,7 +31,7 @@ const replacements = [
   // [/_/g, "\\_"]
 ]
 
-module.exports = {
+export default {
   /**
    * @description converts given html to a markdown
    * document
@@ -59,9 +59,11 @@ module.exports = {
      * @type {String}
      */
     let html: string = replaceExtras(
-      replacements.reduce((string: string, replacement: string[]) => {
-        return string.replace(replacement[0], replacement[1])
-      }, string),
+      replacements.reduce(
+        (acc: string, replacement: [RegExp, string]) =>
+          acc.replace(replacement[0], replacement[1]),
+        string,
+      ),
     )
     /**
      * looping through registered formatters

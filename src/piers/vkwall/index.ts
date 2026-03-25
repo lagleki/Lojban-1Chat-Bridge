@@ -5,8 +5,8 @@ import { hooks } from "../hooks"
 import { generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
 
-const VkBot = require("node-vk-bot-api")
-export function registerVkwallPier() {
+import VkBot from "node-vk-bot-api"
+export function registerPier() {
   pierObj.vkwall.shouldDisableMessenger = (cfg: any) =>
     !cfg?.token || !cfg?.group_id || !cfg?.login || !cfg?.password
 

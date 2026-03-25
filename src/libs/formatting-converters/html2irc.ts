@@ -1,11 +1,11 @@
 import { decode } from "html-entities"
+import * as htmlparser from "htmlparser"
+
 interface Json {
   [index: string]: string
 }
 
-module.exports = function ircify(html: string) {
-  const htmlparser = require("htmlparser")
-
+export default function ircify(html: string) {
   const globalC = "\x03"
 
   const globalStyles: Json = {

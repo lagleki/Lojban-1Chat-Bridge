@@ -11,4 +11,5 @@ export const generic: Igeneric = {}
 export const queueOf: IMessengerInfo = {}
 export const common: any = {}
 
-export const pierObj: any = createPierObj()
+/** Populated by each pier’s `register*Pier`; kept loose for dynamic methods. */
+export const pierObj = createPierObj() as Record<string, any>

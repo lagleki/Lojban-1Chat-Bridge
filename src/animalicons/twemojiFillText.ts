@@ -13,7 +13,9 @@ function getFontSizeByCssFont(cssFont: string): number {
     return defaultHeight
   }
 
-  const sizeFamily = cssFont.match(/([0-9.]+)(px|pt|pc|in|cm|mm|%|em|ex|ch|rem|q)/)
+  const sizeFamily = cssFont.match(
+    /([0-9.]+)(px|pt|pc|in|cm|mm|%|em|ex|ch|rem|q)/,
+  )
   if (!sizeFamily || sizeFamily.length !== 3) {
     return defaultHeight
   }
@@ -56,7 +58,9 @@ function splitEntitiesFromText(text: string) {
   const textEntities: (string | TwemojiEntity)[] = []
 
   twemojiEntities.forEach((twemoji: TwemojiEntity) => {
-    textEntities.push(unparsedText.slice(0, twemoji.indices[0] - lastTwemojiIndice))
+    textEntities.push(
+      unparsedText.slice(0, twemoji.indices[0] - lastTwemojiIndice),
+    )
 
     if (twemoji.url) {
       textEntities.push(twemoji)
@@ -71,7 +75,10 @@ function splitEntitiesFromText(text: string) {
   return textEntities
 }
 
-const cachedTwemojiImages = new Map<string, Awaited<ReturnType<typeof loadImage>>>()
+const cachedTwemojiImages = new Map<
+  string,
+  Awaited<ReturnType<typeof loadImage>>
+>()
 
 async function loadTwemojiImageByUrl(url: string) {
   if (cachedTwemojiImages.has(url)) {
@@ -136,7 +143,11 @@ async function drawTextWithTwemoji(
   const emojiSideMargin = fontSize * emojiSideMarginPercent
   const emojiTopMargin = fontSize * emojiTopMarginPercent
 
-  const textWidth = measureTextWidth(context, text, emojiSideMarginPercent).width
+  const textWidth = measureTextWidth(
+    context,
+    text,
+    emojiSideMarginPercent,
+  ).width
 
   let textLeftMargin = 0
 

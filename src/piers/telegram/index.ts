@@ -14,7 +14,7 @@ import { cache_folder } from "../paths"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
 
-const R = require("ramda")
+import * as R from "ramda"
 
 type TelegramMessage = Telegram.Message & { message_thread_id?: number }
 
@@ -33,11 +33,12 @@ async function telegramDownloadFileTransport({
     generic[messenger].client.downloadFile(fileId, local_path),
   )) as [unknown, string | undefined]
   let rem_fullname = ""
-  if (!err) rem_fullname = `${rem_path}/${path.basename(local_fullname)}`
+  if (!err && local_fullname)
+    rem_fullname = `${rem_path}/${path.basename(local_fullname)}`
   return { err, rem_fullname, local_fullname }
 }
 
-export function registerTelegramPier() {
+export function registerPier() {
   pierObj.telegram.shouldDisableMessenger = (cfg: any) => !cfg?.token
 
   pierObj.telegram.common = {
@@ -117,15 +118,16 @@ export function registerTelegramPier() {
 
     if (
       !config.channelMapping[messenger][topicalizedChatId] &&
-      (message.chat as any).is_forum
+      (message.chat as Telegram.Chat & { is_forum?: boolean }).is_forum
     ) {
       topicalizedChatId = `1@${message.chat.id}`
     }
 
+    const chatTitle = message.chat.title ?? ""
     if (!config.channelMapping[messenger][topicalizedChatId]) {
       if (
-        config.cache[messenger][message.chat.title] &&
-        config.cache[messenger][message.chat.title] === message.chat.id
+        config.cache[messenger]?.[chatTitle] &&
+        config.cache[messenger]?.[chatTitle] === message.chat.id
       )
         return
       await pierObj.telegram.common.NewChannelAppeared({
@@ -175,7 +177,11 @@ export function registerTelegramPier() {
   ) => {
     return {
       ...msg,
-      text: fillMarkdownEntitiesMarkup(msg.text, msg.entities || [], logger),
+      text: fillMarkdownEntitiesMarkup(
+        msg.text ?? "",
+        msg.entities || [],
+        logger,
+      ),
     }
   }
 
@@ -392,9 +398,9 @@ export function registerTelegramPier() {
 
       sendFrom({
         messenger,
-        channelId: message.chat.id,
-        topicId,
-        author,
+        channelId: message.chat.id as number,
+        topicId: topicId ?? "",
+        author: author ?? "",
         text,
         action,
         quotation,
@@ -428,14 +434,14 @@ export function registerTelegramPier() {
 
     name = name.replace(/(^\s*)|(\s*$)/g, "")
 
-    let link: string
+    let link: string | undefined
     try {
       const { photos } = await generic[messenger].client.getUserProfilePhotos(
         user.id,
         { limit: 1 },
       )
       const file_id = photos?.[0]?.[0]?.file_id
-      link = await generic[messenger].client.getFileLink(file_id)
+      if (file_id) link = await generic[messenger].client.getFileLink(file_id)
     } catch {
       // ignore if profile photo unavailable
     }
@@ -549,7 +555,7 @@ export function registerTelegramPier() {
         ?.restrictToLojban &&
       message?.text
     ) {
-      const xovahe = xovahelojbo({ text: message.text })
+      const xovahe = await xovahelojbo({ text: message.text })
       if (xovahe < 0.5) {
         generic[messenger].client
           .sendMessage(
@@ -568,6 +574,7 @@ export function registerTelegramPier() {
         return true
       }
     }
+    return false
   }
 
   pierObj.telegram.common.TelegramRemoveAddedBots = (
@@ -643,7 +650,8 @@ export function registerTelegramPier() {
         message: message?.text,
       }
       common.LogToAdmin(`leaving chat ${JSON.stringify(jsonMessage)}`)
-      delete config.cache?.[messenger]?.[message?.chat?.title]
+      const titleKey = message.chat.title ?? ""
+      delete config.cache?.[messenger]?.[titleKey]
       await to(
         common.writeCache({
           pier: messenger,

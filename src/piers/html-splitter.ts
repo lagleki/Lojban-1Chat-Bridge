@@ -1,11 +1,12 @@
 import createDOMPurify from "dompurify"
+import type { WindowLike } from "dompurify"
 import { Window } from "happy-dom"
 import { log } from "./logger"
 import { common } from "./state"
 
 // happy-dom avoids jsdom's heavier DOM/canvas integration paths used in some test stacks.
 const window = new Window()
-const DOMPurify = createDOMPurify(window as any)
+const DOMPurify = createDOMPurify(window as unknown as WindowLike)
 
 const diffTwo = (diffMe: string, diffBy: string) => {
   diffMe = diffMe

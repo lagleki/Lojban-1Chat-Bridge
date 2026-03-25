@@ -29,6 +29,19 @@ config.piers = {
     //websocket dtream of messages into external services
     historyLength: 200, ///how many of them to store
   },
+  // MAX (VK MAX Messenger) — https://dev.max.ru/docs — uses @maxhub/max-bot-api (long polling)
+  max_1: {
+    /*
+      1. Create a bot (e.g. Master Bot at https://max.ru/masterbot) and paste the token below.
+      2. Add the bot to each MAX chat you bridge.
+      3. In config.new_channels, set max_1 to the chat title (after cache is filled) or to the numeric chat_id string.
+      4. One MAX chat_id maps to one relay row — same idea as one Telegram group/topic or one Discord channel.
+    */
+    token: "",
+    // Drop inbound MAX messages older than this many seconds (0 = no limit). Similar to telegram_1.maxMsgAge.
+    maxMsgAge: 24 * 60 * 60,
+    Actions: ["action"],
+  },
   //Telegram messenger:
   telegram_1: {
     /*
@@ -61,9 +74,10 @@ config.piers = {
   },
   //Slack messenger:
   slack_1: {
-    //Slack bot token
-    // Create a Slack bot via https://api.slack.com/apps . There in "OAuth & Permissions" section add the following  permission scopes: channels:read, incoming-webhook, mpim:read, files:read, bot. Add your bot to necessary channels of your Slack project.
-    // Invite your bot to all the Slack channels you've configured it for
+    // Bot User OAuth Token (xoxb-...) from https://api.slack.com/apps -> Your App -> OAuth & Permissions (after installing the app to the workspace).
+    // This bridge uses @slack/rtm-api (RTM WebSocket) + @slack/web-api. Typical bot scopes include: chat:write, channels:read, groups:read, users:read, files:read, mpim:read (add others if your mapping needs them).
+    // RTM is not available to all modern granular-only Slack apps; if the bridge logs RTM/start failures, check Slack's RTM + legacy-app notes in README.md and the @slack/rtm-api package readme.
+    // Invite the bot into each Slack channel listed in channelMapping for this pier.
     token: "xoxb-12......",
     Actions: ["action"],
   },
@@ -89,6 +103,18 @@ config.piers = {
     appId: "123456", //id of your vk.com app
     login: "1@example.com", //your vk.com email or phone
     password: "my_password", //your vk.com password
+    Actions: ["action"],
+  },
+  // VK community messages (Bot / Long Poll): DMs and group chats where the community bot is invited.
+  // https://dev.vk.com/ru/api/bots/getting-started — enable bot features and "allow adding community to chats".
+  // For a full two-way bridge in a chat, a chat admin must grant the bot access to all messages (not only @mentions).
+  // channelMapping key is peer_id (string), e.g. "2000000123" for a multi-user chat; use exact title from cache or numeric peer in new_channels.
+  vkchat_1: {
+    token:
+      "1dec5e308a554e004eb9931d39a41a8661a6d483916bd6e089b581e275c44ca0d13f3f3fbc64ebe602085", // community access token with messages scope (Manage → API → key)
+    group_id: "123456", // positive VK group id (same community as the token)
+    // apiVersion: "5.199", // optional; default in code if omitted
+    maxMsgAge: 24 * 60 * 60, // ignore inbound VK messages older than this many seconds (0 = no limit)
     Actions: ["action"],
   },
   //VK discussion wall:
@@ -161,10 +187,12 @@ config.new_channels = [
     telegram_1: { groupName: "Example chat", removeJoinMessages: true },
     telegram_1: "Example chat", // telegram visiable chat name
     vkboard_1: "123456", // the id can be seen in board url
+    // vkchat_1: "2000000123", // messages peer_id as string, or chat title after cache is filled from getConversations
     vkwall_1: "7", // the id can be seen in wall url
     slack_1: "test", //visible channel name
     mattermost_1: "test", //visible or url name
     discord_1: "test", // visible name without "#"
+    // max_1: "123456789", // MAX chat_id as string, or exact chat title once cache lists chats
     language_1: "lojban", // comment out for English
     irc_1: "#lojbanme", // IRC channel with "#"
     webwidget_1: "#lojbanme", //how theexternal websocket service will tag this relay entity

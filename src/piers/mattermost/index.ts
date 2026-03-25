@@ -1,95 +1,122 @@
-import request from "request"
+import axios from "axios"
 import to from "await-to-js"
 import { hooks } from "../hooks"
 import { log } from "../logger"
 import { markedParse } from "../marked-parse"
 import { escapeHTML } from "../../libs/formatting-converters/generic"
 import { common, generic, pierObj, state } from "../state"
+import ReconnectingWebSocket from "reconnecting-websocket"
+import WebSocket from "ws"
 import type { IsendToArgs, Json } from "../types"
+import html2md from "../../libs/formatting-converters/html2md-ts"
 
-const html2md = require("../../libs/formatting-converters/html2md-ts")
+function pierConfig(messenger: string) {
+  return state.config.piers[messenger]
+}
 
-export function registerMattermostPier() {
+function authHeaders(messenger: string) {
+  return {
+    Authorization: `Bearer ${pierConfig(messenger).token}`,
+  }
+}
+
+function apiBase(messenger: string): string {
+  return pierConfig(messenger).ProviderUrl
+}
+
+async function mmLogin(messenger: string) {
+  const pier = pierConfig(messenger)
+  const url = `${pier.ProviderUrl}/api/v4/users/login`
+  const [err, response] = await to(
+    axios.post<{ id: string }>(url, {
+      login_id: pier.login,
+      password: pier.password,
+    }),
+  )
+  if (err || !response) {
+    console.error(err ?? new Error("Mattermost login: no response"))
+    return null
+  }
+  const h = response.headers as Record<string, string | undefined>
+  const token = h.token ?? h.Token ?? ""
+  return { token, id: response.data.id }
+}
+
+async function mmGetJson<T>(
+  messenger: string,
+  path: string,
+): Promise<T | null> {
+  const pathPart = path.startsWith("/") ? path : `/${path}`
+  const url = `${apiBase(messenger)}${pathPart}`
+  const [err, res] = await to(
+    axios.get<T>(url, { headers: authHeaders(messenger) }),
+  )
+  if (err) {
+    console.error(String(err))
+    return null
+  }
+  return res!.data
+}
+
+/** Same as mmGetJson but accepts an absolute URL (used where callers already build full ProviderUrl paths). */
+async function mmGetAbsolute<T>(
+  messenger: string,
+  absoluteUrl: string,
+): Promise<T | null> {
+  const [err, res] = await to(
+    axios.get<T>(absoluteUrl, { headers: authHeaders(messenger) }),
+  )
+  if (err) {
+    console.error(String(err))
+    return null
+  }
+  return res!.data
+}
+
+type MattermostTeam = {
+  id: string
+  name: string
+  display_name?: string
+}
+
+export function registerPier() {
   pierObj.mattermost.common = {
     Start: async function ({ messenger }: { messenger: string }) {
-      let [err, res]: [Error, any] = await to(
-        new Promise((resolve) => {
-          const credentials = {
-            login_id: state.config.piers[messenger].login,
-            password: state.config.piers[messenger].password,
-          }
-          const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/users/login`
-          request(
-            {
-              body: JSON.stringify(credentials),
-              method: "POST",
-              url,
-            },
-            (err: any, response: any, body: any) => {
-              if (err) {
-                console.error(err)
-                resolve(null)
-              } else {
-                resolve({
-                  token: response?.headers?.token || "",
-                  id: JSON.parse(body).id,
-                })
-              }
-            },
-          )
-        }),
-      )
-      if (err || !res) {
-        state.config.MessengersAvailable[messenger] = false
-        return
-      } else {
-        state.config.piers[messenger].token = res.token
-        state.config.piers[messenger].user_id = res.id
-      }
-
-      ;[err, res] = await to(
-        new Promise((resolve) => {
-          const user_id = state.config.piers[messenger].user_id
-          const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/users/${user_id}/teams`
-          request(
-            {
-              method: "GET",
-              url,
-              headers: {
-                Authorization: `Bearer ${state.config.piers[messenger].token}`,
-              },
-            },
-            (error: any, _response: any, body: any) => {
-              if (error) {
-                console.error(error)
-                resolve(null)
-              } else {
-                const team = JSON.parse(body).find((i: any) => {
-                  return (
-                    i.display_name === state.config.piers[messenger].team ||
-                    i.name === state.config.piers[messenger].team
-                  )
-                })
-                state.config.piers[messenger].team_id = team.id
-                resolve(team)
-              }
-            },
-          )
-        }),
-      )
-      if (!res) {
+      const login = await mmLogin(messenger)
+      if (!login) {
         state.config.MessengersAvailable[messenger] = false
         return
       }
+      pierConfig(messenger).token = login.token
+      pierConfig(messenger).user_id = login.id
 
-      const ReconnectingWebSocket = require("reconnecting-websocket")
-      return new ReconnectingWebSocket(
-        state.config.piers[messenger].APIUrl,
-        [],
-        {
-          WebSocket: require("ws"),
-        },
+      const teams = await mmGetJson<MattermostTeam[]>(
+        messenger,
+        `/api/v4/users/${login.id}/teams`,
       )
+      if (!teams) {
+        state.config.MessengersAvailable[messenger] = false
+        return
+      }
+      const team = teams.find(
+        (i) =>
+          i.display_name === pierConfig(messenger).team ||
+          i.name === pierConfig(messenger).team,
+      )
+      if (!team) {
+        console.error(
+          new Error(
+            `Mattermost: no team matching "${pierConfig(messenger).team}"`,
+          ),
+        )
+        state.config.MessengersAvailable[messenger] = false
+        return
+      }
+      pierConfig(messenger).team_id = team.id
+
+      return new ReconnectingWebSocket(pierConfig(messenger).APIUrl, [], {
+        WebSocket,
+      })
     },
   }
 
@@ -103,113 +130,63 @@ export function registerMattermostPier() {
     file: _file,
     edited: _edited,
   }: IsendToArgs) => {
-    await new Promise((resolve: any) => {
-      const option = {
-        url: state.config.piers[messenger].HookUrl,
-        json: {
-          text: chunk,
-          // username: author,
-          channel: channelId,
-        },
-      }
-      request.post(option, (_error: any, _response: any, _body: any) => {
-        resolve(null)
-      })
-    })
+    const text =
+      typeof chunk === "string"
+        ? chunk
+        : ((chunk as { main?: string }).main ?? String(chunk))
+    const [err] = await to(
+      axios.post(pierConfig(messenger).HookUrl, {
+        text,
+        channel: channelId,
+      }),
+    )
+    if (err) console.error(String(err))
   }
 
   pierObj.mattermost.receivedFrom = async (messenger: string, message: any) => {
     const sendFrom = hooks.sendFrom!
-    // log("mattermost")(message);
-    // if (process.env.log)
-    //   logger.log({
-    //     level: "info",
-    //     message: JSON.stringify(message)
-    //   });
     if (!state.config.channelMapping[messenger]) return
-    let channelId, msgText, author, file_ids, postParsed
+
+    let channelId: string | undefined
+    let msgText: string | undefined
+    let author: string | undefined
+    let file_ids: string[] | undefined
+    let postParsed: any
+
     if (message.event === "post_edited") {
       const post = JSON.parse(message.data?.post || "")
 
       if (!post.id) return
       message.event = "posted"
       message.edited = true
-      let err: any
-      ;[err] = await to(
-        new Promise((resolve) => {
-          const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/posts/${post.id}`
-          request(
-            {
-              method: "GET",
-              url,
-              headers: {
-                Authorization: `Bearer ${state.config.piers[messenger].token}`,
-              },
-            },
-            (error: any, _response: any, body: any) => {
-              if (error) {
-                console.error(error.toString())
-              } else {
-                msgText = JSON.parse(body).message
-                file_ids = JSON.parse(body).file_ids
-              }
-              resolve(null)
-            },
-          )
-        }),
+
+      const postData = await mmGetJson<{
+        message: string
+        file_ids: string[]
+      }>(messenger, `/api/v4/posts/${post.id}`)
+      if (postData) {
+        msgText = postData.message
+        file_ids = postData.file_ids
+      }
+
+      const userData = await mmGetJson<{
+        username?: string
+        nickname?: string
+        first_name?: string
+      }>(messenger, `/api/v4/users/${post.user_id}`)
+      if (userData) {
+        author =
+          userData.username || userData.nickname || userData.first_name || ""
+      }
+
+      const channelData = await mmGetJson<{ name: string }>(
+        messenger,
+        `/api/v4/channels/${post.channel_id}`,
       )
-      if (err) console.error(err.toString())
-      ;[err] = await to(
-        new Promise((resolve) => {
-          const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/users/${post.user_id}`
-          request(
-            {
-              method: "GET",
-              url,
-              headers: {
-                Authorization: `Bearer ${state.config.piers[messenger].token}`,
-              },
-            },
-            (error: any, _response: any, body: any) => {
-              if (error) {
-                console.error(error.toString())
-              } else {
-                body = JSON.parse(body)
-                author = body.username || body.nickname || body.first_name || ""
-              }
-              resolve(null)
-            },
-          )
-        }),
-      )
-      if (err) console.error(err.toString())
-      ;[err] = await to(
-        new Promise((resolve) => {
-          const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/channels/${post.channel_id}`
-          request(
-            {
-              method: "GET",
-              url,
-              headers: {
-                Authorization: `Bearer ${state.config.piers[messenger].token}`,
-              },
-            },
-            (error: any, _response: any, body: any) => {
-              if (error) {
-                console.error(error.toString())
-              } else {
-                channelId = JSON.parse(body).name
-              }
-              resolve(null)
-            },
-          )
-        }),
-      )
-      if (err) console.error(err.toString())
+      if (channelData) channelId = channelData.name
     } else {
       message.edited = false
-      if (message.data?.team_id !== state.config.piers[messenger].team_id)
-        return
+      if (message.data?.team_id !== pierConfig(messenger).team_id) return
       if (message.event !== "posted") return
       const post = message.data?.post
       if (!post) return
@@ -217,63 +194,28 @@ export function registerMattermostPier() {
       channelId = message.data?.channel_name
     }
     if (
+      channelId !== undefined &&
       state.config.channelMapping[messenger][channelId] &&
       !postParsed?.props?.from_webhook &&
       (postParsed?.type || "") === ""
     ) {
-      if (!file_ids) file_ids = postParsed?.file_ids || []
-      const files: any[] = []
-      for (const file of file_ids) {
-        const [err, promfile] = await to(
-          new Promise((resolve) => {
-            const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/files/${file}/link`
-            request(
-              {
-                method: "GET",
-                url,
-                headers: {
-                  Authorization: `Bearer ${state.config.piers[messenger].token}`,
-                },
-              },
-              (error: any, _response: any, body: any) => {
-                if (error) {
-                  console.error(error.toString())
-                  resolve(null)
-                } else {
-                  resolve(JSON.parse(body).link)
-                }
-              },
-            )
-          }),
+      const attachmentIds: string[] = file_ids ?? postParsed?.file_ids ?? []
+      const files: [string, string][] = []
+      for (const file of attachmentIds) {
+        const linkData = await mmGetJson<{ link: string }>(
+          messenger,
+          `/api/v4/files/${file}/link`,
         )
-        if (err) console.error(err.toString())
-        const [err2, promfile2] = await to(
-          new Promise((resolve) => {
-            const url = `${state.config.piers[messenger].ProviderUrl}/api/v4/files/${file}/info`
-            request(
-              {
-                method: "GET",
-                url,
-                headers: {
-                  Authorization: `Bearer ${state.config.piers[messenger].token}`,
-                },
-              },
-              (error: any, _response: any, body: any) => {
-                if (error) {
-                  console.error(error.toString())
-                  resolve(null)
-                } else {
-                  resolve(JSON.parse(body).extension)
-                }
-              },
-            )
-          }),
+        const infoData = await mmGetJson<{ extension: string }>(
+          messenger,
+          `/api/v4/files/${file}/info`,
         )
-        if (err2) console.error(err?.toString())
-        if (promfile && promfile2) files.push([promfile2, promfile])
+        if (linkData?.link && infoData?.extension) {
+          files.push([infoData.extension, linkData.link])
+        }
       }
       author = author || message.data?.sender_name
-      author = author.replace(/^@/, "")
+      author = (author ?? "").replace(/^@/, "")
       if (files.length > 0) {
         for (const [extension, file] of files) {
           const [file_, localfile]: [string, string] =
@@ -294,7 +236,7 @@ export function registerMattermostPier() {
           })
         }
       }
-      let action
+      let action: string | undefined
       //todo; handle mattermost actions
       sendFrom({
         messenger,
@@ -343,13 +285,13 @@ export function registerMattermostPier() {
 
   pierObj.mattermost.getChannels = async (pier: string): Promise<void> => {
     let json: Json = {}
-    let url: string = `${state.config.piers[pier].ProviderUrl}/api/v4/teams/${state.config.piers[pier].team_id}/channels`
+    let url = `${pierConfig(pier).ProviderUrl}/api/v4/teams/${pierConfig(pier).team_id}/channels`
     json = await pierObj.mattermost.common.GetChannelsMattermostCore(
       pier,
       json,
       url,
     )
-    url = `${state.config.piers[pier].ProviderUrl}/api/v4/users/${state.config.piers[pier].user_id}/teams/${state.config.piers[pier].team_id}/channels`
+    url = `${pierConfig(pier).ProviderUrl}/api/v4/users/${pierConfig(pier).user_id}/teams/${pierConfig(pier).team_id}/channels`
     json = await pierObj.mattermost.common.GetChannelsMattermostCore(
       pier,
       json,
@@ -363,32 +305,12 @@ export function registerMattermostPier() {
     json: Json,
     url: string,
   ) => {
-    await to(
-      new Promise((resolve) => {
-        request(
-          {
-            method: "GET",
-            url,
-            headers: {
-              Authorization: `Bearer ${state.config.piers[messenger].token}`,
-            },
-          },
-          (error: any, _response: any, body: any) => {
-            if (error) {
-              console.error(error.toString())
-            } else {
-              body = JSON.parse(body)
-              if (body[0]) {
-                body.map((i: any) => {
-                  json[i.name] = i.name
-                })
-              }
-            }
-            resolve(null)
-          },
-        )
-      }),
-    )
+    const body = await mmGetAbsolute<Array<{ name: string }>>(messenger, url)
+    if (Array.isArray(body)) {
+      for (const i of body) {
+        json[i.name] = i.name
+      }
+    }
     return json
   }
 
@@ -397,7 +319,6 @@ export function registerMattermostPier() {
   }: {
     messenger: string
   }) => {
-    //mattermost
     generic[messenger].client = await pierObj.mattermost.common.Start({
       messenger,
     })
@@ -408,15 +329,19 @@ export function registerMattermostPier() {
           seq: 1,
           action: "authentication_challenge",
           data: {
-            token: state.config.piers[messenger].token,
+            token: pierConfig(messenger).token,
           },
         }),
       )
     })
     generic[messenger].client.addEventListener("message", (message: any) => {
-      if (!message?.data || !state.config.piers[messenger].team_id) return
-      message = JSON.parse(message.data)
-      pierObj.mattermost.receivedFrom(messenger, message)
+      if (!message?.data || !pierConfig(messenger).team_id) return
+      try {
+        const parsed = JSON.parse(message.data)
+        pierObj.mattermost.receivedFrom(messenger, parsed)
+      } catch (e) {
+        console.error(String(e))
+      }
     })
     generic[messenger].client.addEventListener("close", () =>
       generic[messenger].client._connect(),

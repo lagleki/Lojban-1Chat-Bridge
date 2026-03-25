@@ -7,10 +7,10 @@ import { log, logger } from "../logger"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
 
-const VkBot = require("node-vk-bot-api")
-const html2irc = require("../../libs/formatting-converters/html2irc")
+import VkBot from "node-vk-bot-api"
+import html2irc from "../../libs/formatting-converters/html2irc"
 
-export function registerVkboardPier() {
+export function registerPier() {
   pierObj.vkboard.shouldDisableMessenger = (cfg: any) =>
     !cfg?.token || !cfg?.group_id || !cfg?.login || !cfg?.password
 

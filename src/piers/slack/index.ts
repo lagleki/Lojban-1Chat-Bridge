@@ -1,6 +1,6 @@
 import fs from "fs-extra"
 import path from "path"
-import request from "request"
+import axios from "axios"
 import to from "await-to-js"
 import emoji from "node-emoji"
 import { RTMClient } from "@slack/rtm-api"
@@ -11,7 +11,7 @@ import { log, logger } from "../logger"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs, Json } from "../types"
 
-const html2slack = require("../../libs/formatting-converters/html2slack")
+import html2slack from "../../libs/formatting-converters/html2slack"
 
 async function slackDownloadFileTransport({
   messenger,
@@ -31,33 +31,33 @@ async function slackDownloadFileTransport({
         const file = fs.createWriteStream(local_fullname)
         file
           .on("open", () => {
-            request(
-              {
-                method: "GET",
-                url: remote_path || "",
-                headers: {
-                  Authorization: `Bearer ${state.config.piers[messenger]?.token}`,
-                },
-                timeout: 3000,
+            axios({
+              method: "GET",
+              url: remote_path || "",
+              headers: {
+                Authorization: `Bearer ${state.config.piers[messenger]?.token}`,
               },
-              (reqErr: any) => {
-                if (reqErr) {
-                  console.log(remote_path, reqErr.toString())
-                  resolve(null)
-                }
-              },
-            )
-              .pipe(file)
-              .on("finish", () => {
-                const rf = `${rem_path}/${path.basename(remote_path ?? "")}`
-                resolve([rf, local_fullname])
+              timeout: 3000,
+              responseType: "stream",
+            })
+              .then((axiosRes) => {
+                axiosRes.data
+                  .pipe(file)
+                  .on("finish", () => {
+                    const rf = `${rem_path}/${path.basename(remote_path ?? "")}`
+                    resolve([rf, local_fullname])
+                  })
+                  .on("error", (error: any) => {
+                    console.error({
+                      type: "streaming error",
+                      path: remote_path,
+                      error,
+                    })
+                    resolve(null)
+                  })
               })
-              .on("error", (error: any) => {
-                console.error({
-                  type: "streaming error",
-                  path: remote_path,
-                  error,
-                })
+              .catch((reqErr: unknown) => {
+                console.log(remote_path, String(reqErr))
                 resolve(null)
               })
           })
@@ -78,7 +78,7 @@ async function slackDownloadFileTransport({
   return { err, rem_fullname, local_fullname: lf }
 }
 
-export function registerSlackPier() {
+export function registerPier() {
   pierObj.slack.common = {
     Start: async function ({ messenger }: { messenger: string }) {
       generic[messenger].client = {

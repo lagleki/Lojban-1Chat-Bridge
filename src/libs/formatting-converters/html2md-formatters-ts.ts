@@ -41,19 +41,19 @@ function makeRegex({
   after?: string
   replaceFn?: any
 }): string {
-  let matches = []
+  let m: RegExpExecArray | null
   let newDoc = doc
   let replaceString
-  while ((matches = regex.exec(doc))) {
-    if (matches && matches[1]) {
+  while ((m = regex.exec(doc)) !== null) {
+    if (m[1]) {
       replaceString = before || ""
-      let replaceText = matches[1].trim()
+      let replaceText = m[1].trim()
       if (replaceFn && typeof replaceFn === "function") {
-        replaceText = replaceFn(matches)
+        replaceText = replaceFn(m)
       }
       replaceString += `${replaceText}`
       replaceString += after || ""
-      newDoc = newDoc.replace(matches[0], replaceString)
+      newDoc = newDoc.replace(m[0], replaceString)
     }
   }
   return newDoc
@@ -235,8 +235,9 @@ function replaceSpoiler({
   doc: string
   dialect?: string
 }): string {
-  if (["discord", "telegram"].includes(dialect))
+  if (dialect && ["discord", "telegram"].includes(dialect))
     return makeRegex({ regex: spoilerRegex, doc, before: "||", after: "||" })
+  return doc
 }
 
 /**
@@ -281,25 +282,25 @@ function replaceLi({
   dialect?: string
   tag?: string
 }): string {
-  let matches = []
+  let m: RegExpExecArray | null
   let newDoc = doc
   let replaceIndex = 0
   let replaceTag = ""
-  while ((matches = liRegex.exec(doc))) {
-    if (matches && matches[1]) {
+  while ((m = liRegex.exec(doc)) !== null) {
+    if (m[1]) {
       if (tag !== "ul") {
         replaceIndex++
         replaceTag = `${replaceIndex}. `
       } else {
         replaceTag = "* "
       }
-      newDoc = newDoc.replace(matches[0], replaceTag + matches[1].trim())
+      newDoc = newDoc.replace(m[0], replaceTag + m[1].trim())
     }
   }
   return newDoc
 }
 
-module.exports = [
+export default [
   replaceHeading,
   replaceParagraph,
   replaceDel,
@@ -310,5 +311,6 @@ module.exports = [
   replaceBold,
   replaceUnderline,
   replaceItalic,
+  replaceSpoiler,
   replaceBlockQuote,
 ]
