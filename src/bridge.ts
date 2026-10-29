@@ -21,7 +21,6 @@ import fs from "fs-extra"
 import path from "path"
 import * as R from "ramda"
 import sanitizeHtml from "sanitize-html"
-import { pathToFileURL } from "url"
 import { mkdirp } from "mkdirp"
 import to from "await-to-js"
 import http from "http"
@@ -382,7 +381,8 @@ common.ConfigBeforeStart = async () => {
 
   const configPath = path.join(cache_folder, "config.js")
   try {
-    const configMod = await import(pathToFileURL(configPath).href)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const configMod = require(configPath)
     state.config =
       (configMod as { default?: typeof state.config }).default ?? configMod
   } catch (e: unknown) {
@@ -393,7 +393,8 @@ common.ConfigBeforeStart = async () => {
     )
   }
 
-  const defaultsMod = await import(pathToFileURL(defaults).href)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const defaultsMod = require(defaults)
   const defaultConfig =
     (defaultsMod as { default?: Record<string, unknown> }).default ??
     defaultsMod
