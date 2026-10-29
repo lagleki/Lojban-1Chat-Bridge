@@ -46,6 +46,11 @@ export interface PeerAdapter<P = any> {
   probeIntervalMs?: number
   /** How long one send() may take (overrides the supervisor default). */
   sendTimeoutMs?: number
+  /**
+   * Lower bound for every reconnect delay, e.g. for networks that throttle or
+   * ban clients that reconnect too often (IRC).
+   */
+  minRestartDelayMs?: number
 }
 
 export interface SupervisorOptions {
@@ -289,6 +294,19 @@ export class PeerSupervisor extends EventEmitter {
       this.goDown(`health probe failed (${this.lastError ?? "unknown"})`)
   }
 
+  /**
+   * A fresh connection that reports ready is not torn down because of one
+   * slow probe: retry (as the periodic check does) while it stays ready.
+   */
+  private async probeAfterStart(): Promise<boolean> {
+    const tries = Math.max(1, this.options.probeFailuresBeforeDown)
+    for (let i = 0; i < tries && !this.stopped; i++) {
+      if (await this.healthCheck()) return true
+      if (!this.adapter.isReady()) return false
+    }
+    return false
+  }
+
   private async waitReady(ms: number): Promise<boolean> {
     const deadline = this.now() + ms
     while (!this.stopped) {
@@ -341,9 +359,19 @@ export class PeerSupervisor extends EventEmitter {
       }
       this.restartAttempts = 1 // native recovery counts as the first try
     }
-    // 2. backoff before every restart except the very first start
-    if (this.restartAttempts > 0) {
-      const delay = this.restartBackoff.next()
+    // 2. backoff before every restart except the very first start; and never
+    //    start more often than minRestartDelayMs (counted between attempts)
+    const floor = this.adapter.minRestartDelayMs ?? 0
+    const sinceLastStart = this.now() - this.lastStartAttemptAt
+    const floorWait =
+      floor > 0 && (this.everReady || this.restartAttempts > 0)
+        ? Math.max(0, floor - sinceLastStart)
+        : 0
+    if (this.restartAttempts > 0 || floorWait > 0) {
+      const delay = Math.max(
+        this.restartAttempts > 0 ? this.restartBackoff.next() : 0,
+        floorWait,
+      )
       this.log("info", `${this.target}: reconnecting in ${delay}ms`)
       const deadline = this.now() + delay
       while (!this.stopped && this.now() < deadline) {
@@ -386,7 +414,7 @@ export class PeerSupervisor extends EventEmitter {
       const readyMs = this.adapter.readyTimeoutMs ?? this.options.readyTimeoutMs
       if (!(await this.waitReady(readyMs)))
         throw new Error(`not ready ${readyMs}ms after start`)
-      if (!(await this.healthCheck()))
+      if (!(await this.probeAfterStart()))
         throw new Error(`probe failed after start: ${this.lastError}`)
       if (this.stopped) return
       await this.becomeReady(isRestart ? "restarted" : "started")

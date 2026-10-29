@@ -56,8 +56,19 @@ type IrcReceivedFromPayload =
       }
     }
 
-/** Max wait for the server's PONG that confirms our PRIVMSG went through. */
+/**
+ * Max wait for the server's PONG that confirms our PRIVMSG went through,
+ * on top of the time irc-upd's flood protection queue needs to drain.
+ */
 const IRC_ROUNDTRIP_TIMEOUT_MS = 20000
+/** Anything received from the server this recently proves the link is alive. */
+const IRC_LIVENESS_MS = 90000
+/** Max wait for any reply to a liveness PING (below the supervisor's 15 s). */
+const IRC_PROBE_TIMEOUT_MS = 12000
+/** Never reconnect to an IRC network more often than this (k-line risk). */
+export const IRC_MIN_RECONNECT_MS = 60000
+/** irc-upd's own reconnect delay when the config does not set one. */
+const IRC_DEFAULT_RETRY_DELAY_MS = 60000
 /** Max wait for a JOIN before a send to that channel. */
 const IRC_JOIN_TIMEOUT_MS = 15000
 /** After registration, wait at most this long for all channels to be joined. */
@@ -80,18 +91,87 @@ export function ircConnected(messenger: string): boolean {
 }
 
 /**
+ * Time irc-upd's flood protection needs to send what is already queued
+ * (with `floodProtection` every command, PING/JOIN/MODE included, goes out
+ * one per `floodProtectionDelay`).
+ */
+export function ircQueueDelayMs(client: any): number {
+  if (!client?.floodProtectionEnabled) return 0
+  const queued = client.cmdQueue?.length ?? 0
+  return queued * (client.opt?.floodProtectionDelay ?? 1000)
+}
+
+/** Remember that the server sent something on `conn` (liveness). */
+export function noteIrcActivity(messenger: string, conn: unknown) {
+  const g = generic[messenger]
+  if (!g) return
+  g.lastRxAt = Date.now()
+  g.lastRxConn = conn
+}
+
+/**
+ * Liveness probe. Any traffic from the server on the current connection is
+ * proof of life; when it has been quiet, PING it *bypassing* the flood
+ * protection queue (which may hold tens of seconds of JOIN/MODE commands
+ * after a connect) and accept any reply.
+ */
+export function ircProbe(
+  messenger: string,
+  timeoutMs = IRC_PROBE_TIMEOUT_MS,
+  livenessMs = IRC_LIVENESS_MS,
+): Promise<void> {
+  const g = generic[messenger]
+  const client = g?.client
+  const conn = client?.conn
+  if (!client || !conn || !ircConnected(messenger))
+    return Promise.reject(new NotReadyError("irc not connected"))
+  if (g.lastRxConn === conn && Date.now() - (g.lastRxAt ?? 0) < livenessMs)
+    return Promise.resolve()
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer)
+      client.removeListener("raw", onRaw)
+      conn.removeListener("close", onClose)
+    }
+    const onRaw = () => {
+      cleanup()
+      if (client.conn !== conn)
+        reject(new Error("irc connection changed while probing"))
+      else resolve()
+    }
+    const onClose = () => {
+      cleanup()
+      reject(new Error("irc connection closed while probing"))
+    }
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new TimeoutError(`irc: no reply to PING within ${timeoutMs}ms`))
+    }, timeoutMs)
+    timer.unref?.()
+    client.on("raw", onRaw)
+    conn.once("close", onClose)
+    const token = `bridge-probe-${crypto.randomBytes(4).toString("hex")}`
+    const sendNow = client._sendImmediate ?? client.send
+    sendNow.call(client, "PING", token)
+  })
+}
+
+/**
  * PING the server and wait for the matching PONG on the same connection.
  * IRC handles commands in order, so the PONG proves that everything written
  * before it (e.g. a PRIVMSG) reached the server.
  */
 export function ircRoundTrip(
   messenger: string,
-  timeoutMs = IRC_ROUNDTRIP_TIMEOUT_MS,
+  timeoutMs?: number,
 ): Promise<void> {
   const client = generic[messenger]?.client
   const conn = client?.conn
   if (!client || !conn || !ircConnected(messenger))
     return Promise.reject(new NotReadyError("irc not connected"))
+  // the PING must stay *behind* the PRIVMSG in the flood queue (that is what
+  // makes the PONG a delivery receipt), so wait for the queue too
+  timeoutMs ??= IRC_ROUNDTRIP_TIMEOUT_MS + ircQueueDelayMs(client)
   const token = `bridge-${crypto.randomBytes(6).toString("hex")}`
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
@@ -100,6 +180,8 @@ export function ircRoundTrip(
       conn.removeListener("close", onClose)
     }
     const onRaw = (message: any) => {
+      // irc-upd: { command: "PONG", args: ["irc.server", "<token>"] }
+      // (its own "pong" event only carries args[0], the server name)
       if (message?.command !== "PONG") return
       if (!(message.args ?? []).includes(token)) return
       cleanup()
@@ -174,6 +256,10 @@ export function registerPier() {
   pierObj.irc.health = (messenger: string) => ({
     // irc-upd reconnects by itself (and pings on silence); give it a minute
     nativeRecoveryMs: 60000,
+    // IRC networks throttle / k-line clients that reconnect too often
+    minRestartDelayMs: IRC_MIN_RECONNECT_MS,
+    // a send waits for the flood protection queue (1 command/s)
+    sendTimeoutMs: 180000,
     isReady: () => {
       if (!ircConnected(messenger)) return false
       const client = generic[messenger].client
@@ -184,7 +270,7 @@ export function registerPier() {
       const since = generic[messenger].registeredAt ?? 0
       return allJoined || Date.now() - since > IRC_JOIN_GRACE_MS
     },
-    probe: () => ircRoundTrip(messenger),
+    probe: () => ircProbe(messenger),
     stop: async () => {
       const client = generic[messenger]?.client
       if (!client) return
@@ -193,12 +279,14 @@ export function registerPier() {
       client.removeAllListeners()
       client.on("error", () => {}) // late socket errors must not crash
       if (client.retryTimeout) clearTimeout(client.retryTimeout)
-      client.deactivateFloodProtection?.()
       try {
+        // QUIT goes out immediately and the flood queue is dropped; turning
+        // flood protection off *first* would flush the whole queue at once
         client.disconnect("reconnecting")
       } catch {
         // already gone
       }
+      client.deactivateFloodProtection?.()
       client.end?.()
     },
   })
@@ -444,6 +532,11 @@ export function registerPier() {
     }
     config.piers[messenger].ircOptions.channels = [...new Set(results)]
     config.piers[messenger].ircOptions.encoding = "utf-8"
+    // irc-upd's default is to reconnect every 2 s, forever
+    config.piers[messenger].ircOptions.retryDelay = Math.max(
+      Number(config.piers[messenger].ircOptions.retryDelay) || 0,
+      IRC_DEFAULT_RETRY_DELAY_MS,
+    )
 
     generic[messenger].client = new Irc.Client(
       config.piers[messenger].ircServer,
@@ -452,6 +545,7 @@ export function registerPier() {
     )
     if (!config.MessengersAvailable[messenger]) return
     const client = generic[messenger].client
+    client.on("raw", () => noteIrcActivity(messenger, client.conn))
     client.on("netError", (error: any) =>
       reportDown(messenger, `irc network error: ${error?.message ?? error}`),
     )

@@ -181,7 +181,7 @@ describe("irc pier", () => {
         client = fakeIrc(net)
         install(generic, client)
       },
-      { nativeRecoveryMs: 0 },
+      { nativeRecoveryMs: 0, minRestartDelayMs: 0 },
       { probeIntervalMs: 10 },
     )
     await waitFor(() => h!.manager.isReady(M))

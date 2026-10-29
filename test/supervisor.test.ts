@@ -500,3 +500,66 @@ describe("PeerSupervisor: reconnect", () => {
     await waitFor(() => sentNs().length === 1, 1000)
   })
 })
+
+describe("PeerSupervisor: reconnect floor and post-start probe", () => {
+  test("minRestartDelayMs is a floor for every reconnect delay", async () => {
+    const peer = new FakePeer("p")
+    const logs: string[] = []
+    const outbox = new Outbox({ path: ":memory:" })
+    const sup = new PeerSupervisor(
+      peer.adapter({ minRestartDelayMs: 80 }) as any,
+      outbox,
+      {
+        ...FAST,
+        restartBackoff: { initialMs: 5, maxMs: 40, factor: 2, jitter: 0 },
+      } as any,
+      (_l, m) => logs.push(m),
+    )
+    running.push(sup)
+    sup.start()
+    await waitFor(() => sup.isReady())
+    // first restart after a drop: at least 80 ms after the previous start
+    peer.drop()
+    sup.reportDown("closed")
+    peer.restore()
+    await waitFor(() => peer.startCalls >= 2, 2000)
+    // failing restarts: backoff (5, 10, 20...) is raised to the floor
+    peer.probeFails = true
+    sup.reportDown("closed again")
+    await waitFor(() => peer.startCalls >= 5, 3000)
+    const gaps = peer.startTimes.slice(1).map((t, i) => t - peer.startTimes[i])
+    for (const g of gaps) assert.ok(g >= 75, `restart gap ${g}ms (${gaps})`)
+    assert.ok(
+      logs.some((m) => /reconnecting in (7\d|80)ms/.test(m)),
+      logs.join("; "),
+    )
+  })
+
+  test("one slow probe right after start does not tear the connection down", async () => {
+    const peer = new FakePeer("p")
+    let calls = 0
+    const { sup } = setup(
+      peer,
+      { probeFailuresBeforeDown: 2 },
+      {
+        probe: async () => {
+          if (++calls === 1) throw new Error("slow")
+        },
+      },
+    )
+    sup.start()
+    await waitFor(() => sup.isReady())
+    assert.equal(calls, 2)
+    assert.equal(peer.startCalls, 1)
+  })
+
+  test("a probe that keeps failing after start still counts as a failed start", async () => {
+    const peer = new FakePeer("p")
+    peer.probeFails = true
+    const { sup } = setup(peer, { probeFailuresBeforeDown: 2 })
+    sup.start()
+    await waitFor(() => peer.startCalls >= 2, 2000)
+    assert.equal(sup.isReady(), false)
+    assert.ok(peer.probeCalls >= 2)
+  })
+})
