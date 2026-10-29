@@ -17,7 +17,8 @@
     "genconfig": "node ./dist/bridge.js --genconfig",
     "build": "pnpm install && pnpm run tsc",
     "dev": "ts-node src/bridge.ts",
-    "start": "node ./dist/bridge.js"
+    "start": "node ./dist/bridge.js",
+    "test": "node --require ./test/setup.js --test \"test/**/*.test.ts\""
   },
   "licenses": [
     {
@@ -32,6 +33,7 @@
   "homepage": "https://github.com/lagleki/Lojban-1Chat-Bridge",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "better-sqlite3",
       "core-js",
       "sharp"
     ]
@@ -45,6 +47,7 @@
     "await-timeout": "^1.1.1",
     "await-to-js": "^3.0.0",
     "axios": "^1.13.6",
+    "better-sqlite3": "^12.11.1",
     "buffer": "^6.0.3",
     "color-space": "2.0.0",
     "delta-e": "0.0.8",
@@ -79,6 +82,7 @@
     "ws": "^8.12.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/delta-e": "^0.0.0",
     "@types/finalhandler": "^1.2.4",
     "@types/fs-extra": "^11.0.1",

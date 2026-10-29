@@ -2,8 +2,15 @@ import to from "await-to-js"
 import { CallbackService } from "vk-io"
 import { ImplicitFlowUser } from "@vk-io/authorization"
 import { hooks } from "../hooks"
+import { log, logger } from "../logger"
 import { generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
+import { NotReadyError } from "../../reliability/errors"
+import { classifyVkError } from "../vkchat"
+import { vkApiCall, vkBotPollLoop, VkPollSession } from "../vk-bot-longpoll"
+
+/** VK posts are published this long after the message was relayed. */
+const POST_DELAY_MS = 60000
 
 import VkBot from "node-vk-bot-api"
 export function registerPier() {
@@ -44,30 +51,49 @@ export function registerPier() {
     quotation: _quotation,
     file: _file,
     edited: _edited,
+    enqueuedAt,
   }: IsendToArgs) => {
     const { config } = state
-    if (!generic[messenger].client.vkapp) {
-      config.MessengersAvailable[messenger] = false
-      return
-    }
-    await new Promise((resolve: any) => {
-      const token = generic[messenger].client.vkapp.token
-      setTimeout(() => {
-        generic[messenger].client.bot
-          .api("wall.createComment", {
-            access_token: token,
-            owner_id: "-" + config.piers[messenger].group_id,
-            post_id: channelId,
-            from_group: config.piers[messenger].group_id,
-            reply_to_comment: 1,
-            message: chunk,
-          })
-          .then((_res: any) => {})
-          .catch(() => {})
-        resolve(null)
-      }, 60000)
+    const client = generic[messenger]?.client
+    if (!client?.vkapp) throw new NotReadyError(`${messenger}: not logged in`)
+    // keep the historical delay, counted from when the message was relayed
+    // (so a backlog after an outage is not delayed once per message)
+    const wait = (enqueuedAt ?? Date.now()) + POST_DELAY_MS - Date.now()
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+    const token = client.vkapp.token
+    // throws on network/API errors: the outbox retries
+    await vkApiCall(client.bot, "wall.createComment", {
+      access_token: token,
+      owner_id: "-" + config.piers[messenger].group_id,
+      post_id: channelId,
+      from_group: config.piers[messenger].group_id,
+      reply_to_comment: 1,
+      message: chunk,
     })
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.vkwall.health = (messenger: string) => ({
+    nativeRecoveryMs: 0,
+    sendTimeoutMs: POST_DELAY_MS + 60000,
+    isReady: () => {
+      const c = generic[messenger]?.client
+      return !!c?.vkapp && !!c.poll && !c.poll.stopped && c.poll.errors === 0
+    },
+    probe: async () => {
+      const c = generic[messenger]?.client
+      if (!c?.bot) throw new NotReadyError("no VK bot")
+      await vkApiCall(c.bot, "groups.getById", {
+        group_id: state.config.piers[messenger].group_id,
+        access_token: state.config.piers[messenger].token,
+      })
+    },
+    stop: async () => {
+      const c = generic[messenger]?.client
+      if (c?.poll) c.poll.stopped = true
+    },
+    classifyError: classifyVkError,
+  })
 
   pierObj.vkwall.adaptName = pierObj.vkboard.adaptName
 
@@ -94,8 +120,8 @@ export function registerPier() {
       "-" + config.piers[messenger].group_id === message.from_id.toString()
     )
       return
-    if (!generic[messenger].client.vkapp) {
-      config.MessengersAvailable[messenger] = false
+    if (!generic[messenger].client?.vkapp) {
+      log(messenger)({ skip: "inbound message: not logged in yet" })
       return
     }
     const { text, from_id: fromwhomId } = message
@@ -210,6 +236,17 @@ export function registerPier() {
   }) => {
     const { config } = state
     if (!config.MessengersAvailable[messenger]) return
+    const prev = generic[messenger].client
+    if (prev?.bot) {
+      // reconnect: keep the bot (its constructor starts a timer), redo the
+      // user login only if it failed before, start a fresh poll session
+      if (prev.poll) prev.poll.stopped = true
+      if (!prev.vkapp)
+        prev.vkapp = (await pierObj.vkwall.common.Start({ messenger })).vkapp
+      if (!prev.vkapp) throw new Error(`${messenger}: VK user login failed`)
+      startPoll(messenger)
+      return
+    }
     generic[messenger].client = await pierObj.vkwall.common.Start({ messenger })
     generic[messenger].client.bot.event(
       "wall_reply_new",
@@ -223,6 +260,21 @@ export function registerPier() {
         pierObj.vkwall.receivedFrom(messenger, { ...message, edited: true })
       },
     )
-    generic[messenger].client.bot.startPolling()
+    startPoll(messenger)
+    if (!generic[messenger].client.vkapp)
+      throw new Error(`${messenger}: VK user login failed`)
+  }
+
+  function startPoll(messenger: string) {
+    const client = generic[messenger].client
+    const session: VkPollSession = { stopped: false, errors: 0, lastOkAt: 0 }
+    client.poll = session
+    void vkBotPollLoop(messenger, client.bot, session).catch((error) =>
+      logger.log({
+        level: "error",
+        function: "vkwall long polling",
+        message: String(error),
+      }),
+    )
   }
 }

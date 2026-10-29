@@ -7,9 +7,57 @@ import { log, logger } from "../logger"
 import { xovahelojbo } from "../lojban-spam"
 import { common, generic, pierObj, state } from "../state"
 import type { Chunk, IsendToArgs, Json } from "../types"
+import {
+  classifyError,
+  NotReadyError,
+  PermanentSendError,
+} from "../../reliability/errors"
+import {
+  getCursor,
+  reportDown,
+  SeenSet,
+  setCursor,
+} from "../../reliability/runtime"
 
 import * as discordParser from "discord-markdown"
 import html2md from "../../libs/formatting-converters/html2md-ts"
+
+/** Discord gateway status READY (discord.js v12 Constants.Status.READY). */
+const WS_READY = 0
+/** Inbound catch-up after a reconnect: at most this many pages of 100. */
+const CATCHUP_MAX_PAGES = 10
+/** ...and only messages younger than this. */
+const CATCHUP_MAX_AGE_MS = 24 * 3600 * 1000
+
+const seenIds: Record<string, SeenSet> = {}
+const seen = (messenger: string) =>
+  (seenIds[messenger] = seenIds[messenger] ?? new SeenSet())
+const cursorKey = (messenger: string, channelId: string) =>
+  `discord:${messenger}:${channelId}`
+
+/** Discord snowflakes compare as big integers. */
+export function snowflakeGreater(a: string, b: string | undefined): boolean {
+  if (!b) return true
+  try {
+    return BigInt(a) > BigInt(b)
+  } catch {
+    return a > b
+  }
+}
+
+function rememberMessage(messenger: string, message: any) {
+  const id = message?.id
+  const channelId = message?.channel?.id
+  if (!id || !channelId) return
+  seen(messenger).add(id)
+  const key = cursorKey(messenger, String(channelId))
+  if (snowflakeGreater(String(id), getCursor(key))) setCursor(key, String(id))
+}
+
+/** Only errors that a different send method could fix are worth a fallback. */
+function bail(error: unknown) {
+  if (classifyError(error).kind !== "permanent") throw error
+}
 
 export function registerPier() {
   pierObj.discord.shouldDisableMessenger = (cfg: any) =>
@@ -52,10 +100,17 @@ export function registerPier() {
       avatar = undefined
     }
 
-    let error
+    let error: any
 
-    const channel = generic[messenger].client.channels.cache.get(channelId)
-    let webhooks = [],
+    const client = generic[messenger]?.client
+    if (!client || client.ws?.status !== WS_READY)
+      throw new NotReadyError(`${messenger}: discord gateway not ready`)
+    const channel = client.channels.cache.get(channelId)
+    if (!channel)
+      throw new PermanentSendError(
+        `${messenger}: unknown discord channel ${channelId}`,
+      )
+    let webhooks: any = [],
       webhook = null
     if (!config.piers[messenger]?.noWebhooks) {
       try {
@@ -71,6 +126,7 @@ export function registerPier() {
           chunk: chunk_,
           author,
         })
+        bail(error)
       }
       if (webhook) {
         ;[error, webhook] = await tot(
@@ -88,6 +144,7 @@ export function registerPier() {
             chunk: chunk_,
             author,
           })
+          bail(error)
         }
       }
       if (error || !webhook) {
@@ -114,6 +171,7 @@ export function registerPier() {
             chunk: chunk_,
             author,
           })
+          bail(error)
         }
       }
       if (!error) {
@@ -132,6 +190,7 @@ export function registerPier() {
             chunk: chunk_,
             author,
           })
+          bail(error)
         } else return
       }
       if (webhook) {
@@ -149,13 +208,15 @@ export function registerPier() {
             chunk: chunk_,
             author,
           })
+          bail(error)
         } else return
       }
     }
     ;[error] = await to(
-      generic[messenger].client.channels.cache
-        .get(channelId)
-        .send({ content: (chunk as any).fallback_solution ?? chunk, files }),
+      channel.send({
+        content: (chunk as any).fallback_solution ?? chunk,
+        files,
+      }),
     )
 
     if (error) {
@@ -167,11 +228,10 @@ export function registerPier() {
         chunk: (chunk as any).fallback_solution ?? chunk,
         author,
       })
+      bail(error)
     } else return
     ;[error] = await to(
-      generic[messenger].client.channels.cache
-        .get(channelId)
-        .send({ content: (chunk as any).fallback_solution ?? chunk }),
+      channel.send({ content: (chunk as any).fallback_solution ?? chunk }),
     )
 
     if (error) {
@@ -184,8 +244,65 @@ export function registerPier() {
         chunk: (chunk as any).fallback_solution ?? chunk,
         author,
       })
+      // every method failed: let the outbox retry
+      throw error
     }
   }
+
+  /** Re-relays messages posted while the bridge was disconnected. */
+  pierObj.discord.catchUp = async (messenger: string) => {
+    const { config } = state
+    const client = generic[messenger]?.client
+    if (!client) return
+    for (const channelId of Object.keys(
+      config.channelMapping?.[messenger] ?? {},
+    )) {
+      const key = cursorKey(messenger, channelId)
+      let after: string | undefined = getCursor(key)
+      if (!after) continue // never seen this channel: nothing to catch up
+      const channel = client.channels.cache.get(channelId)
+      if (!channel?.messages) continue
+      for (let page = 0; page < CATCHUP_MAX_PAGES; page++) {
+        const fetched: any = await channel.messages.fetch({ after, limit: 100 })
+        const messages: any[] = Array.from(
+          fetched.values() as Iterable<any>,
+        ).sort((a: any, b: any) => (snowflakeGreater(a.id, b.id) ? 1 : -1))
+        for (const message of messages as any[]) {
+          after = String(message.id)
+          if (seen(messenger).has(message.id)) continue
+          rememberMessage(messenger, message)
+          if (Date.now() - (message.createdTimestamp ?? 0) > CATCHUP_MAX_AGE_MS)
+            continue
+          log(messenger)({ catchUp: message.id, channelId })
+          await pierObj.discord.receivedFrom(messenger, message)
+        }
+        if (after) setCursor(key, after)
+        if (messages.length < 100) break
+      }
+    }
+  }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.discord.health = (messenger: string) => ({
+    // discord.js resumes/reconnects the gateway by itself; give it time
+    nativeRecoveryMs: 30000,
+    isReady: () => generic[messenger]?.client?.ws?.status === WS_READY,
+    probe: async () => {
+      const client = generic[messenger]?.client
+      if (!client || client.ws?.status !== WS_READY)
+        throw new NotReadyError("discord gateway not ready")
+      // REST round trip; the gateway's own heartbeat watchdog covers the socket
+      await client.api.users("@me").get()
+    },
+    stop: async () => {
+      const client = generic[messenger]?.client
+      if (!client) return
+      generic[messenger].client = null
+      client.removeAllListeners()
+      client.destroy()
+    },
+    onReady: () => pierObj.discord.catchUp(messenger),
+  })
 
   pierObj.discord.common.removeSpam = async (
     messenger: string,
@@ -395,7 +512,9 @@ export function registerPier() {
   pierObj.discord.getChannels = async (pier: string): Promise<void> => {
     const { config } = state
     const json: Json = {}
-    for (const value of generic[pier].client.channels.cache.values()) {
+    const client = generic[pier]?.client
+    if (!client) return
+    for (const value of client.channels.cache.values()) {
       if (value.guild.id === config.piers[pier].guildId) {
         json[value.name] = value.id
       }
@@ -411,8 +530,8 @@ export function registerPier() {
     const { config } = state
     if (!config.MessengersAvailable[messenger]) return
 
-    await new Promise<void>((resolve) => {
-      const client = new Discord.Client()
+    await new Promise<void>((resolve, reject) => {
+      const client = new Discord.Client({ retryLimit: 0 } as any)
       generic[messenger].client = client
       generic[messenger].client.once("ready", () => {
         generic[messenger].guilds = Array.from(client.guilds.cache.values())
@@ -434,11 +553,18 @@ export function registerPier() {
         resolve()
       })
       generic[messenger].client.on("error", (error: any) => {
-        resolve()
         log("discord")(error)
+        reject(error)
       })
+      client.on("shardDisconnect", (event: any) =>
+        reportDown(messenger, `gateway closed (${event?.code})`),
+      )
+      client.on("invalidated", () =>
+        reportDown(messenger, "gateway session invalidated"),
+      )
 
       generic[messenger].client.on("message", (message: Discord.Message) => {
+        rememberMessage(messenger, message)
         pierObj.discord.receivedFrom(messenger, message)
       })
       generic[messenger].client.on(
@@ -450,7 +576,7 @@ export function registerPier() {
           }
         },
       )
-      generic[messenger].client.login(config.piers[messenger].token)
+      client.login(config.piers[messenger].token).catch(reject)
     })
   }
 }

@@ -177,6 +177,38 @@ config.generic = {
   httpPort: 3000, // change if this port is taken. in case of using Docker you must leave it as it is
   // HTTP server location, URLs are generated from this
   httpLocation: "https://image.jbotcan.org", // change to your server
+  // Reliable delivery: every outgoing message is first stored in a SQLite
+  // outbox and removed only after the target network confirmed it.
+  outbox: {
+    // relative paths are resolved against the data/ folder
+    dbPath: "outbox.sqlite",
+    // FULL survives power loss, NORMAL is faster (still survives crashes)
+    synchronous: "FULL",
+    // messages permanently rejected by a target are kept this long (0 = forever)
+    failedRetentionDays: 30,
+    // a single send attempt is aborted (and retried) after this many ms
+    sendTimeoutMs: 60000,
+    // retry delays for a message that failed (exponential, with jitter)
+    retryInitialMs: 1000,
+    retryMaxMs: 60000,
+    // a message rejected this many times with a permanent error is given up
+    maxPermanentAttempts: 3,
+  },
+  // Connection health checks and reconnection
+  health: {
+    // global internet check: TCP connect to any of these "host:port"
+    connectivityTargets: ["1.1.1.1:443", "8.8.8.8:53", "9.9.9.9:53"],
+    connectivityIntervalMs: 15000,
+    // active per-network probe (e.g. IRC PING, Telegram getMe) while idle
+    probeIntervalMs: 60000,
+    probeTimeoutMs: 15000,
+    // reconnect delays (exponential, with jitter, never gives up)
+    reconnectInitialMs: 2000,
+    reconnectMaxMs: 300000,
+    // max time a network may take to connect / become ready
+    startTimeoutMs: 90000,
+    readyTimeoutMs: 90000,
+  },
 };
 
 config.new_channels = [

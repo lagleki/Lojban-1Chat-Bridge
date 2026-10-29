@@ -12,6 +12,8 @@ declare let process: {
     PWD?: string
   }
   argv: string[]
+  exit: (code?: number) => never
+  once: (event: string, listener: () => void) => unknown
 }
 process.env.NTBA_FIX_319 = 1
 
@@ -24,7 +26,6 @@ import { mkdirp } from "mkdirp"
 import to from "await-to-js"
 import http from "http"
 import Telegram from "node-telegram-bot-api"
-import PQueue from "p-queue"
 import finalhandler from "finalhandler"
 import serveStatic from "serve-static"
 
@@ -34,7 +35,15 @@ import { hooks } from "./piers/hooks"
 import { log, logger } from "./piers/logger"
 import { cache_folder } from "./piers/paths"
 import { registerAllPiers } from "./piers/register-all"
-import { common, generic, pierObj, queueOf, state } from "./piers/state"
+import { common, generic, pierObj, state } from "./piers/state"
+import {
+  buildAdapter,
+  createManagerFromConfig,
+  guardedGetChannels,
+  OutgoingPayload,
+} from "./reliability/integration"
+import type { ReliabilityManager } from "./reliability/manager"
+import type { LogFn } from "./reliability/supervisor"
 import type { Chunk } from "./piers/types"
 import localizationDict from "./local/dict.json"
 
@@ -193,27 +202,26 @@ async function universalSendTo({
     state.config?.channelMapping?.[messenger]?.[channelId]?.settings?.readonly
   )
     return
-  if (!queueOf[messenger]) {
+  if (!reliability?.has(messenger)) {
     logger.log({
       level: "warn",
-      message: `universalSendTo: no send queue for ${messenger}; skip (pier missing or StartService did not run)`,
+      message: `universalSendTo: no outbox supervisor for ${messenger}; skip (pier missing or StartService did not run)`,
     })
     return
   }
-  queueOf[messenger].add(async () => {
-    // console.log(messenger, chunk);
-    await pierObj[common.root_of_messenger(messenger)]?.sendTo({
-      messenger: messenger,
-      channelId,
-      author,
-      chunk,
-      quotation,
-      action,
-      file,
-      edited,
-      avatar,
-    })
-  })
+  // persisted first; the pier's supervisor delivers it (in order) once the
+  // target is connected and confirms the send
+  const payload: OutgoingPayload = {
+    channelId,
+    author,
+    chunk,
+    quotation,
+    action,
+    file,
+    edited,
+    avatar,
+  }
+  reliability.enqueue(messenger, payload)
 }
 
 async function sendFrom({
@@ -496,12 +504,73 @@ common.PopulateChannelMapping = async () => {
   for (const pier of arrAvailableMessengers) {
     const messenger = common.root_of_messenger(pier)
     if (pierObj[messenger]?.getChannels)
-      await pierObj[messenger].getChannels(pier)
+      await guardedGetChannels(
+        state.config.cache,
+        pier,
+        pierObj[messenger].getChannels,
+        reliabilityLog,
+      )
   }
 
   for (const pier of arrAvailableMessengers) {
     await PopulateChannelMappingCore({ messenger: pier })
   }
+}
+
+let reliability: ReliabilityManager | null = null
+
+const reliabilityLog: LogFn = (level, message, meta) =>
+  logger.log({ level, message, ...(meta ?? {}) })
+
+/** Last known channel name -> id cache, so channels map while offline. */
+function loadPersistedCache() {
+  try {
+    const saved = JSON.parse(
+      fs.readFileSync(`${cache_folder}/cache.json`, { encoding: "utf8" }),
+    )
+    if (saved && typeof saved === "object")
+      for (const pier of Object.keys(saved))
+        state.config.cache[pier] = {
+          ...(saved[pier] ?? {}),
+          ...(state.config.cache[pier] ?? {}),
+        }
+  } catch {
+    // no cache yet
+  }
+}
+
+function persistCache() {
+  try {
+    fs.writeFileSync(
+      `${cache_folder}/cache.json`,
+      JSON.stringify(state.config.cache),
+    )
+  } catch (err) {
+    reliabilityLog("error", "could not write cache.json", {
+      error: String(err),
+    })
+  }
+}
+
+let channelRefresh: Promise<void> = Promise.resolve()
+/** A pier (re)connected: refresh its channel list and rebuild the mapping. */
+function refreshChannelsOf(pier: string) {
+  channelRefresh = channelRefresh.then(async () => {
+    const messenger = common.root_of_messenger(pier)
+    if (pierObj[messenger]?.getChannels)
+      await guardedGetChannels(
+        state.config.cache,
+        pier,
+        pierObj[messenger].getChannels,
+        reliabilityLog,
+      )
+    for (const p of Object.keys(state.config.MessengersAvailable).filter(
+      (i: string) => !!state.config.MessengersAvailable[i],
+    ))
+      await to(PopulateChannelMappingCore({ messenger: p }))
+    persistCache()
+  })
+  return channelRefresh
 }
 
 common.root_of_messenger = (messenger_with_index: string) =>
@@ -540,19 +609,59 @@ common.MessengersAvailable = () => {
 async function StartServices() {
   common.MessengersAvailable()
   if (!state.config.channelMapping) state.config.channelMapping = {}
+  if (!state.config.cache) state.config.cache = {}
+  mkdirp.sync(cache_folder)
 
-  for (const messenger_with_index of Object.keys(
-    state.config.MessengersAvailable,
-  )) {
-    const messenger = messenger_with_index.replace(/_.*/g, "")
-    if (pierObj[messenger]?.StartService) {
-      queueOf[messenger_with_index] = new PQueue({ concurrency: 1 })
-      await pierObj[messenger]?.StartService({
-        messenger: messenger_with_index,
-      })
+  // map channels from the last known cache first: routing works even if
+  // some networks are still unreachable
+  loadPersistedCache()
+  const available = Object.keys(state.config.MessengersAvailable).filter(
+    (i: string) => !!state.config.MessengersAvailable[i],
+  )
+  for (const pier of available)
+    await to(PopulateChannelMappingCore({ messenger: pier }))
+
+  reliability = createManagerFromConfig(
+    state.config.generic,
+    cache_folder,
+    reliabilityLog,
+    (row, err) =>
+      common.LogToAdmin(
+        `Message to ${row.target} was rejected permanently and dropped after ${row.attempts + 1} attempts.\n\nPayload: ${JSON.stringify(
+          row.payload,
+        )}\n\nError: ${String((err as Error)?.message ?? err)}`,
+      ),
+  )
+  const pending = reliability.outbox.pendingCount()
+  if (pending > 0)
+    reliabilityLog(
+      "info",
+      `outbox: ${pending} undelivered message(s) from before restart`,
+    )
+
+  // every network connects (and reconnects) independently; a slow or
+  // unreachable one does not block the others
+  for (const messenger_with_index of available) {
+    const messenger = common.root_of_messenger(messenger_with_index)
+    if (!pierObj[messenger]?.StartService) continue
+    const sup = reliability.register(
+      buildAdapter(messenger_with_index, pierObj[messenger]),
+    )
+    sup.on("ready", () => void refreshChannelsOf(messenger_with_index))
+  }
+  reliability.start()
+
+  const shutdown = async (signal: string) => {
+    reliabilityLog("info", `received ${signal}, stopping`)
+    try {
+      await reliability?.stop()
+      reliability?.close()
+    } finally {
+      process.exit(0)
     }
   }
-  await common.PopulateChannelMapping()
+  process.once("SIGTERM", () => void shutdown("SIGTERM"))
+  process.once("SIGINT", () => void shutdown("SIGINT"))
 
   console.log("Lojban-1Chat-Bridge started!")
 }

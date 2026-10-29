@@ -10,6 +10,42 @@ import { hooks } from "../hooks"
 import { log, logger } from "../logger"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs, Json } from "../types"
+import { ErrorClassification, NotReadyError } from "../../reliability/errors"
+import { reportDown } from "../../reliability/runtime"
+
+/** Slack platform errors that are worth retrying. */
+const SLACK_TRANSIENT_ERRORS = new Set([
+  "ratelimited",
+  "internal_error",
+  "fatal_error",
+  "service_unavailable",
+  "request_timeout",
+  "team_added_to_org",
+])
+
+/** Maps @slack/web-api error codes (retryAfter is in seconds there). */
+export function classifySlackError(
+  err: unknown,
+): ErrorClassification | undefined {
+  const e = err as { code?: string; retryAfter?: number; data?: any }
+  switch (e?.code) {
+    case "slack_webapi_rate_limited_error":
+      return {
+        kind: "transient",
+        retryAfterMs: Number(e.retryAfter ?? 1) * 1000,
+        reason: "rate limited",
+      }
+    case "slack_webapi_request_error":
+    case "slack_webapi_http_error":
+      return { kind: "transient", reason: e.code }
+    case "slack_webapi_platform_error":
+      return SLACK_TRANSIENT_ERRORS.has(e.data?.error)
+        ? { kind: "transient", reason: e.data?.error }
+        : { kind: "permanent", reason: e.data?.error }
+    default:
+      return undefined
+  }
+}
 
 import html2slack from "../../libs/formatting-converters/html2slack"
 
@@ -83,19 +119,36 @@ export function registerPier() {
     Start: async function ({ messenger }: { messenger: string }) {
       generic[messenger].client = {
         rtm: new RTMClient(state.config.piers[messenger].token),
-        web: new WebClient(state.config.piers[messenger].token),
+        // no hidden retries/long waits: the outbox owns retrying
+        web: new WebClient(state.config.piers[messenger].token, {
+          retryConfig: { retries: 0 },
+          timeout: 30000,
+          rejectRateLimitedCalls: true,
+        }),
       }
-      generic[messenger].client.rtm.start().catch((e: any) => {
-        if (!e?.data?.ok) {
-          state.config.MessengersAvailable[messenger] = false
-          log("slack")({
-            error: "Couldn't start Slack",
-          })
-        }
-      })
       return true
     },
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.slack.health = (messenger: string) => ({
+    // RTM reconnects by itself; give it some time
+    nativeRecoveryMs: 30000,
+    isReady: () => !!generic[messenger]?.client?.rtm?.connected,
+    probe: async () => {
+      const web = generic[messenger]?.client?.web
+      if (!web) throw new NotReadyError("no slack client")
+      await web.auth.test()
+    },
+    stop: async () => {
+      const client = generic[messenger]?.client
+      if (!client) return
+      generic[messenger].client = null
+      client.rtm.removeAllListeners()
+      await client.rtm.disconnect().catch(() => {})
+    },
+    classifyError: classifySlackError,
+  })
 
   pierObj.slack.sendTo = async ({
     messenger,
@@ -112,7 +165,9 @@ export function registerPier() {
         ? chunk
         : ((chunk as { main?: string }).main ?? "")
     const textOut = emoji.unemojify(chunkStr)
-    generic[messenger].client.web.chat
+    const web = generic[messenger]?.client?.web
+    if (!web) throw new NotReadyError(`${messenger}: no slack client`)
+    await web.chat
       .postMessage({
         channel: channelId,
         username: (author || "").replace(/(^.{21}).*$/, "$1"),
@@ -124,6 +179,7 @@ export function registerPier() {
           function: "slack.sendTo",
           message: error.toString(),
         })
+        throw error // the outbox retries
       })
   }
 
@@ -455,9 +511,9 @@ export function registerPier() {
   }
 
   pierObj.slack.getChannels = async (pier: string): Promise<void> => {
-    const [err, listRes]: [any, any] = await to(
-      generic[pier].client.web.conversations.list(),
-    )
+    const web = generic[pier]?.client?.web
+    if (!web) return
+    const [err, listRes]: [any, any] = await to(web.conversations.list())
     if (err) {
       console.error(err)
     }
@@ -471,10 +527,19 @@ export function registerPier() {
 
   pierObj.slack.StartService = async ({ messenger }: { messenger: string }) => {
     //slack
-    await pierObj.slack.common.Start({ messenger })
     if (!state.config.MessengersAvailable[messenger]) return
-    generic[messenger].client.rtm.on("message", (message: any) => {
+    await pierObj.slack.common.Start({ messenger })
+    const rtm = generic[messenger].client.rtm
+    rtm.on("message", (message: any) => {
       pierObj.slack.receivedFrom(messenger, message)
+    })
+    rtm.on("disconnected", (error: any) =>
+      reportDown(messenger, `slack RTM disconnected: ${error?.message ?? ""}`),
+    )
+    // throws while offline (or on a bad token): the supervisor retries
+    await rtm.start().catch((e: any) => {
+      log("slack")({ error: "Couldn't start Slack", detail: String(e) })
+      throw e
     })
   }
 

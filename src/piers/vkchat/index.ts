@@ -6,6 +6,20 @@ import { hooks } from "../hooks"
 import { log, logger } from "../logger"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
+import { ErrorClassification, NotReadyError } from "../../reliability/errors"
+import { hash31 } from "../../reliability/runtime"
+
+/** VK API error codes worth retrying (unknown, too many requests, flood, internal). */
+const VK_TRANSIENT_CODES = new Set([1, 6, 9, 10])
+
+/** Maps VK APIError codes; other errors use the generic classification. */
+export function classifyVkError(err: unknown): ErrorClassification | undefined {
+  const e = err as { name?: string; code?: unknown }
+  if (e?.name !== "APIError" || typeof e.code !== "number") return undefined
+  if (VK_TRANSIENT_CODES.has(e.code))
+    return { kind: "transient", reason: `VK API error ${e.code}` }
+  return { kind: "permanent", reason: `VK API error ${e.code}` }
+}
 
 const DEFAULT_API_VERSION = "5.199"
 
@@ -206,9 +220,10 @@ export function registerPier() {
     quotation: _quotation,
     file: _file,
     edited: _edited,
+    deliveryKey,
   }: IsendToArgs) => {
     const vk = generic[messenger].client as VK | undefined
-    if (!vk) return
+    if (!vk) throw new NotReadyError(`${messenger}: no VK client`)
 
     const chunkStr =
       typeof chunk === "string"
@@ -219,19 +234,42 @@ export function registerPier() {
       vk.api.messages.send({
         peer_id: Number(channelId),
         message: chunkStr,
-        random_id: getRandomId(),
+        // stable per outbox row: VK drops a repeated random_id, so a retry
+        // after an unconfirmed send cannot produce a duplicate
+        random_id: deliveryKey ? hash31(deliveryKey) : getRandomId(),
       }),
     )
     if (err) {
-      const { escapeHTML: esc } =
-        await import("../../libs/formatting-converters/generic")
-      common.LogToAdmin(
-        `VK chat send error\n\nMessenger: ${messenger}\nChannel: ${channelId}\nChunk: ${esc(
-          chunkStr,
-        )}\n\n${esc(util.inspect(err, { depth: 4 }))}`,
-      )
+      logger.log({
+        level: "error",
+        function: "vkchat.sendTo",
+        messenger,
+        channelId,
+        message: util.inspect(err, { depth: 4 }),
+      })
+      throw err // the outbox retries (and reports to admins if it gives up)
     }
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.vkchat.health = (messenger: string) => ({
+    // vk-io's long poll retries by itself and keeps `ts`
+    nativeRecoveryMs: 0,
+    isReady: () =>
+      !!(generic[messenger]?.client as VK | undefined)?.updates?.isStarted,
+    probe: async () => {
+      const vk = generic[messenger]?.client as VK | undefined
+      if (!vk) throw new NotReadyError("no VK client")
+      await vk.api.groups.getById({
+        group_id: String(pierCfg(messenger).group_id),
+      } as any)
+    },
+    stop: async () => {
+      const vk = generic[messenger]?.client as VK | undefined
+      await vk?.updates.stop()
+    },
+    classifyError: classifyVkError,
+  })
 
   pierObj.vkchat.receivedFrom = async (
     messenger: string,
@@ -338,8 +376,14 @@ export function registerPier() {
   }) => {
     if (!state.config.MessengersAvailable[messenger]) return
 
+    const existing = generic[messenger].client as VK | undefined
+    if (existing) {
+      // reconnect: the same transport keeps its `ts`, so events from the
+      // outage are fetched (within VK's long poll history)
+      if (!existing.updates.isStarted) await existing.updates.startPolling()
+      return
+    }
     const vk = buildVk(messenger)
-    generic[messenger].client = vk
 
     vk.updates.on("message_new", (ctx) => {
       void pierObj.vkchat.receivedFrom(messenger, ctx, false)
@@ -349,12 +393,15 @@ export function registerPier() {
       void pierObj.vkchat.receivedFrom(messenger, ctx, true)
     })
 
-    void vk.updates.startPolling().catch((err: unknown) => {
+    // throws while offline: the supervisor retries with backoff
+    generic[messenger].client = vk
+    await vk.updates.startPolling().catch((err: unknown) => {
       logger.log({
         level: "error",
         function: "vkchat.StartService",
         message: String(err),
       })
+      throw err
     })
   }
 }

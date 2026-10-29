@@ -13,6 +13,8 @@ import { registerDownloadFileTransport } from "../download-file"
 import { cache_folder } from "../paths"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
+import { NotReadyError } from "../../reliability/errors"
+import { reportDown } from "../../reliability/runtime"
 
 import * as R from "ramda"
 
@@ -38,13 +40,27 @@ async function telegramDownloadFileTransport({
   return { err, rem_fullname, local_fullname }
 }
 
+const TELEGRAM_POLL_TIMEOUT_S = 25
+const TELEGRAM_REQUEST_TIMEOUT_MS = 45000
+const TELEGRAM_MIN_POLL_INTERVAL_MS = 300
+const TELEGRAM_MAX_POLL_INTERVAL_MS = 10000
+/** No successful getUpdates for this long means polling is stuck. */
+const TELEGRAM_POLL_STALE_MS =
+  TELEGRAM_POLL_TIMEOUT_S * 1000 + TELEGRAM_REQUEST_TIMEOUT_MS + 30000
+
+function setPollInterval(client: any, ms: number) {
+  if (client?._polling?.options) client._polling.options.interval = ms
+}
+
 export function registerPier() {
   pierObj.telegram.shouldDisableMessenger = (cfg: any) => !cfg?.token
 
   pierObj.telegram.common = {
     Start: async function ({ messenger }: { messenger: string }) {
       return new Telegram(state.config.piers[messenger].token, {
-        polling: true,
+        // long polling; a hung request is aborted by the request timeout
+        polling: { params: { timeout: TELEGRAM_POLL_TIMEOUT_S } },
+        request: { timeout: TELEGRAM_REQUEST_TIMEOUT_MS } as any,
       })
     },
   }
@@ -59,10 +75,12 @@ export function registerPier() {
     file: _file,
     edited: _edited,
   }: IsendToArgs) => {
+    const client = generic[messenger]?.client
+    if (!client) throw new NotReadyError(`${messenger}: no telegram client`)
     try {
       log("telegram")({ "sending text": chunk })
       const [topicId, channel] = channelId.toString().split("@")
-      await generic[messenger].client.sendMessage(
+      await client.sendMessage(
         channel ?? channelId,
         chunk,
         R.reject(R.isNil)({
@@ -72,15 +90,44 @@ export function registerPier() {
       )
     } catch (error: any) {
       const errorDetail = util.inspect(error, { showHidden: false, depth: 4 })
-      const { escapeHTML } =
-        await import("../../libs/formatting-converters/generic")
-      common.LogToAdmin(
-        `Error sending a chunk:\n\nMessenger: ${messenger}.\n\nChannel: ${channelId}.\n\nChunk: ${escapeHTML(
-          chunk as string,
-        )}\n\nError message: ${escapeHTML(errorDetail)}`,
-      )
+      log(messenger)({
+        level: "error",
+        function: "pierObj.telegram.sendTo",
+        channelId,
+        error: errorDetail,
+      })
+      // the outbox retries (and reports to admins if it gives up)
+      throw error
     }
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.telegram.health = (messenger: string) => ({
+    // the polling loop retries by itself; on trouble a restart only has to
+    // make sure polling runs and getMe works (same client => same offset)
+    nativeRecoveryMs: 0,
+    isReady: () => {
+      const client = generic[messenger]?.client
+      return (
+        !!client &&
+        client.isPolling() &&
+        !!state.config.piers[messenger]?.myUser
+      )
+    },
+    probe: async () => {
+      const client = generic[messenger]?.client
+      if (!client) throw new NotReadyError("no telegram client")
+      await client.getMe()
+      const last: number = client._polling?._lastUpdate ?? 0
+      const startedAt: number = generic[messenger].pollingStartedAt ?? 0
+      const since = Math.max(last, startedAt)
+      if (since > 0 && Date.now() - since > TELEGRAM_POLL_STALE_MS)
+        throw new Error(
+          `telegram polling stalled: no getUpdates success for ${Date.now() - since}ms`,
+        )
+      setPollInterval(client, TELEGRAM_MIN_POLL_INTERVAL_MS)
+    },
+  })
 
   pierObj.telegram.receivedFrom = async (
     messenger: string,
@@ -727,6 +774,19 @@ export function registerPier() {
   }) => {
     const { config } = state
     if (!config.MessengersAvailable[messenger]) return
+    const existing = generic[messenger].client
+    if (existing) {
+      // reconnect: reuse the client so the getUpdates offset is kept and
+      // updates that arrived while offline are fetched (Telegram keeps them ~24h)
+      if (!existing.isPolling()) {
+        generic[messenger].pollingStartedAt = Date.now()
+        void existing.startPolling().catch(() => {})
+      }
+      config.piers[messenger].myUser = await existing.getMe()
+      setPollInterval(existing, TELEGRAM_MIN_POLL_INTERVAL_MS)
+      return
+    }
+    generic[messenger].pollingStartedAt = Date.now()
     generic[messenger].client = await pierObj.telegram.common.Start({
       messenger,
     })
@@ -744,28 +804,27 @@ export function registerPier() {
         error_message: error?.message,
         response_code: error?.response?.body?.error_code,
       })
-      generic[messenger].client.stopPolling().then(() => {
-        setTimeout(() => {
-          logger.log({
-            level: "info",
-            function: "pierObj.telegram.StartService",
-            message: "restarting polling",
-          })
-          generic[messenger].client.startPolling()
-        }, 3000)
-      })
+      // the library keeps polling by itself; slow it down while failing
+      const client = generic[messenger].client
+      const interval = client?._polling?.options?.interval ?? 0
+      setPollInterval(
+        client,
+        Math.min(TELEGRAM_MAX_POLL_INTERVAL_MS, Math.max(1000, interval * 2)),
+      )
+      if (error?.code === "EFATAL" || error?.code === "EPARSE")
+        reportDown(messenger, `polling error: ${error?.message}`)
     })
-    const [err, res] = await to(generic[messenger].client.getMe())
-    if (err) {
+    generic[messenger].client.on("error", (error: any) => {
       logger.log({
         level: "error",
-        function: "StartService",
+        function: "pierObj.telegram.StartService",
         messenger,
-        message: err.message || "",
+        message: String(error?.message ?? error),
       })
-    } else {
-      config.piers[messenger].myUser = res
-    }
+    })
+    // throws while offline; the supervisor retries with backoff
+    const res = await generic[messenger].client.getMe()
+    config.piers[messenger].myUser = res
   }
 
   registerDownloadFileTransport("telegram", telegramDownloadFileTransport)

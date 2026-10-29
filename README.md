@@ -90,6 +90,36 @@ Inbound/outbound text uses the same VK-oriented **`convertFrom` / `convertTo`** 
 
 Include `vkchat` in the messenger list if you add logging for it: `DEBUG=vkchat pnpm start` (see the Debug section below).
 
+# Delivery guarantees and reconnection
+
+Every outgoing message is first written to a SQLite outbox (`data/outbox.sqlite`,
+see `generic.outbox` in the config) and removed only after the target network
+confirmed it. Messages to one target are sent in order (head-of-line); pending
+messages survive restarts and crashes (in-flight rows are re-sent on start).
+
+Each network is supervised separately (`generic.health`): disconnect events,
+an active probe (IRC `PING`/`PONG`, Telegram `getMe` + stalled long-poll check,
+Discord REST + gateway status, Mattermost websocket round trip, VK/MAX/Slack API
+calls) and a global internet check. A network that is down is restarted with
+exponential backoff and jitter (never giving up); queued messages are flushed
+only once it is ready again.
+
+Missed inbound messages:
+
+* Telegram, VK chat (`vkchat`), `vkboard`/`vkwall`, MAX: fetched by the
+  long-poll after reconnecting (offset/`ts`/marker are kept; MAX can limit the
+  age with `maxMsgAge`; VK servers keep only a limited history).
+* Discord, Mattermost: channel history after the last seen message is
+  re-relayed (only messages up to 24 h old, and only once a message has been
+  seen in that channel).
+* IRC and Slack (RTM): not recoverable, messages sent while disconnected are lost.
+
+Delivery is at-least-once: a message may be duplicated if the connection
+drops after the network accepted it but before it confirmed it (VK chat uses
+a stable `random_id`, so it is not duplicated there).
+
+Run the tests with `pnpm test`.
+
 # Quick start via docker
 
 * install Docker

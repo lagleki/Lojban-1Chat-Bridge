@@ -7,6 +7,61 @@ import { markedParse } from "../marked-parse"
 import { escapeHTML } from "../../libs/formatting-converters/generic"
 import { common, generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
+import { NotReadyError, PermanentSendError } from "../../reliability/errors"
+import { getCursor, reportDown, setCursor } from "../../reliability/runtime"
+
+/** One run of our own long-polling loop (replaced on every restart). */
+interface MaxPollSession {
+  stopped: boolean
+  errors: number
+}
+
+const markerKey = (messenger: string) => `max:${messenger}:marker`
+
+/**
+ * Long polling with a persisted marker. The library's own loop stops for
+ * good after the first network error, so we run our own: on failure the
+ * session marks itself unhealthy and the supervisor restarts it, resuming
+ * from the last marker (updates sent while offline are fetched then).
+ */
+async function maxPollLoop(
+  messenger: string,
+  bot: Bot,
+  session: MaxPollSession,
+) {
+  const g = generic[messenger]
+  while (!session.stopped) {
+    try {
+      const saved = getCursor(markerKey(messenger))
+      const marker = g.maxMarker ?? (saved ? Number(saved) : undefined)
+      const res: any = await (bot.api as any).getUpdates(
+        [],
+        marker !== undefined ? { marker } : {},
+      )
+      if (session.stopped) return // a newer session took over
+      session.errors = 0
+      g.maxLastPollOk = Date.now()
+      for (const update of res?.updates ?? [])
+        await (bot as any).handleUpdate(update)
+      if (res?.marker !== undefined && res?.marker !== null) {
+        g.maxMarker = res.marker
+        setCursor(markerKey(messenger), String(res.marker))
+      }
+    } catch (err) {
+      if (session.stopped) return
+      session.errors++
+      logger.log({
+        level: "error",
+        function: "max.poll",
+        message: String(err),
+      })
+      reportDown(messenger, `max polling failed: ${String(err)}`)
+      await new Promise((r) =>
+        setTimeout(r, Math.min(30000, 1000 * 2 ** session.errors)).unref?.(),
+      )
+    }
+  }
+}
 
 function pierCfg(messenger: string) {
   return state.config.piers[messenger]
@@ -124,20 +179,44 @@ export function registerPier() {
         function: "max.sendTo",
         message: `invalid MAX chat id: ${String(channelId)}`,
       })
-      return
+      throw new PermanentSendError(`invalid MAX chat id: ${String(channelId)}`)
     }
     const client = generic[messenger]?.client as Bot | undefined
-    if (!client?.api) return
+    if (!client?.api) throw new NotReadyError(`${messenger}: no MAX client`)
     const [err] = await to(
       client.api.sendMessageToChat(id, chunkStr, { format: "html" }),
     )
-    if (err)
+    if (err) {
       logger.log({
         level: "error",
         function: "max.sendTo",
         message: String(err),
       })
+      throw err // the outbox retries
+    }
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.max.health = (messenger: string) => ({
+    nativeRecoveryMs: 0,
+    isReady: () => {
+      const g = generic[messenger]
+      const session: MaxPollSession | undefined = g?.maxSession
+      return (
+        !!g?.client && !!session && !session.stopped && session.errors === 0
+      )
+    },
+    probe: async () => {
+      const client = generic[messenger]?.client as Bot | undefined
+      if (!client) throw new NotReadyError("no MAX client")
+      await client.api.getMyInfo()
+    },
+    stop: async () => {
+      const g = generic[messenger]
+      if (g?.maxSession) g.maxSession.stopped = true
+      if (g) g.maxSession = null
+    },
+  })
 
   pierObj.max.convertFrom = async ({
     text,
@@ -267,6 +346,17 @@ export function registerPier() {
 
   pierObj.max.StartService = async ({ messenger }: { messenger: string }) => {
     if (!state.config.MessengersAvailable[messenger]) return
+    const g = generic[messenger]
+    if (g.client) {
+      // reconnect: same bot and handlers, new polling session from the marker
+      const bot = g.client as Bot
+      bot.botInfo = await bot.api.getMyInfo()
+      if (g.maxSession) g.maxSession.stopped = true
+      const session: MaxPollSession = { stopped: false, errors: 0 }
+      g.maxSession = session
+      void maxPollLoop(messenger, bot, session)
+      return
+    }
 
     const token = pierCfg(messenger).token
     const bot = new Bot(token)
@@ -316,13 +406,11 @@ export function registerPier() {
       await to(common.PopulateChannelMapping())
     })
 
+    // throws while offline: the supervisor retries with backoff
+    bot.botInfo = await bot.api.getMyInfo()
     generic[messenger].client = bot
-    void bot.start().catch((err: unknown) => {
-      logger.log({
-        level: "error",
-        function: "max.StartService",
-        message: String(err),
-      })
-    })
+    const session: MaxPollSession = { stopped: false, errors: 0 }
+    g.maxSession = session
+    void maxPollLoop(messenger, bot, session)
   }
 }

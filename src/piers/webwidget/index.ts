@@ -3,6 +3,7 @@ import { Server as SocketIoServer } from "socket.io"
 import { log } from "../logger"
 import { generic, pierObj, state } from "../state"
 import type { IsendToArgs } from "../types"
+import { NotReadyError } from "../../reliability/errors"
 
 export function registerPier(getHttpServer: () => http.Server) {
   pierObj.webwidget.common = {
@@ -22,6 +23,8 @@ export function registerPier(getHttpServer: () => http.Server) {
     edited,
   }: IsendToArgs) => {
     const { config } = state
+    if (!generic[messenger]?.client)
+      throw new NotReadyError(`${messenger}: widget server not started`)
     await new Promise((resolve: any) => {
       const data = {
         channelId,
@@ -46,6 +49,11 @@ export function registerPier(getHttpServer: () => http.Server) {
     })
   }
 
+  /** Local socket.io server: up as soon as it is started, no remote side. */
+  pierObj.webwidget.health = (messenger: string) => ({
+    isReady: () => !!generic[messenger]?.client,
+  })
+
   pierObj.webwidget.convertFrom = async ({
     text,
     messenger: _messenger,
@@ -69,6 +77,7 @@ export function registerPier(getHttpServer: () => http.Server) {
   }: {
     messenger: string
   }) => {
+    if (generic[messenger]?.client) return // already serving (restart is a no-op)
     generic[messenger] = {
       Lojban1ChatHistory: [],
       client: new SocketIoServer(getHttpServer(), {

@@ -47,4 +47,10 @@ export interface IsendToArgs {
   file?: string
   edited?: boolean
   avatar?: string
+  /** Stable per message+target key from the outbox (for idempotent sends). */
+  deliveryKey?: string
+  /** 1-based delivery attempt number. */
+  attempt?: number
+  /** When the message entered the outbox (ms since epoch). */
+  enqueuedAt?: number
 }

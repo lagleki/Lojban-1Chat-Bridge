@@ -1,7 +1,8 @@
 # Bugs:
 
-* Telegram stops listening after a while
-* mattermost stops listening after a while
+* ~~Telegram stops listening after a while~~ (supervised + outbox, see README)
+* ~~mattermost stops listening after a while~~ (supervised + outbox, see README)
+* IRC/Slack: messages sent while disconnected are not recovered
 * reload channelMapping and cache when new channels appear (discord,slack, working for telegram already) on the fly
 
 #whatsapp

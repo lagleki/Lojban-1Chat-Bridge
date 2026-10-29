@@ -6,6 +6,13 @@ import { common, generic, pierObj, state } from "../state"
 import type { Chunk, IsendToArgs } from "../types"
 
 import Irc from "irc-upd"
+import crypto from "crypto"
+import {
+  NotReadyError,
+  PermanentSendError,
+  TimeoutError,
+} from "../../reliability/errors"
+import { reportDown } from "../../reliability/runtime"
 import ircolors from "../../libs/formatting-converters/irc-colors-ts"
 import html2irc from "../../libs/formatting-converters/html2irc"
 
@@ -49,6 +56,98 @@ type IrcReceivedFromPayload =
       }
     }
 
+/** Max wait for the server's PONG that confirms our PRIVMSG went through. */
+const IRC_ROUNDTRIP_TIMEOUT_MS = 20000
+/** Max wait for a JOIN before a send to that channel. */
+const IRC_JOIN_TIMEOUT_MS = 15000
+/** After registration, wait at most this long for all channels to be joined. */
+const IRC_JOIN_GRACE_MS = 20000
+
+const channelKey = (channelId: string) =>
+  String(channelId).split(" ")[0].toLowerCase()
+
+/** Socket open and registered (001 received) on the *current* connection. */
+export function ircConnected(messenger: string): boolean {
+  const client = generic[messenger]?.client
+  const conn = client?.conn
+  return (
+    !!conn &&
+    !conn.requestedDisconnect &&
+    !conn.destroyed &&
+    conn.readyState === "open" &&
+    generic[messenger].registeredConn === conn
+  )
+}
+
+/**
+ * PING the server and wait for the matching PONG on the same connection.
+ * IRC handles commands in order, so the PONG proves that everything written
+ * before it (e.g. a PRIVMSG) reached the server.
+ */
+export function ircRoundTrip(
+  messenger: string,
+  timeoutMs = IRC_ROUNDTRIP_TIMEOUT_MS,
+): Promise<void> {
+  const client = generic[messenger]?.client
+  const conn = client?.conn
+  if (!client || !conn || !ircConnected(messenger))
+    return Promise.reject(new NotReadyError("irc not connected"))
+  const token = `bridge-${crypto.randomBytes(6).toString("hex")}`
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer)
+      client.removeListener("raw", onRaw)
+      conn.removeListener("close", onClose)
+    }
+    const onRaw = (message: any) => {
+      if (message?.command !== "PONG") return
+      if (!(message.args ?? []).includes(token)) return
+      cleanup()
+      if (client.conn !== conn)
+        reject(new Error("irc connection changed while waiting for PONG"))
+      else resolve()
+    }
+    const onClose = () => {
+      cleanup()
+      reject(new Error("irc connection closed while waiting for PONG"))
+    }
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new TimeoutError(`irc: no PONG within ${timeoutMs}ms`))
+    }, timeoutMs)
+    timer.unref?.()
+    client.on("raw", onRaw)
+    conn.once("close", onClose)
+    client.send("PING", token)
+  })
+}
+
+/** Make sure we are in `channelId`, joining it if needed. */
+async function ensureJoined(messenger: string, channelId: string) {
+  const client = generic[messenger].client
+  const key = channelKey(channelId)
+  if (!key.startsWith("#") && !key.startsWith("&")) return // private message
+  if (client.chans?.[key]) return
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      client.removeListener("join", onJoin)
+      reject(
+        new PermanentSendError(
+          `irc: could not join ${key} within ${IRC_JOIN_TIMEOUT_MS}ms`,
+        ),
+      )
+    }, IRC_JOIN_TIMEOUT_MS)
+    const onJoin = (channel: string, nick: string) => {
+      if (channel.toLowerCase() !== key || nick !== client.nick) return
+      clearTimeout(timer)
+      client.removeListener("join", onJoin)
+      resolve()
+    }
+    client.on("join", onJoin)
+    client.join(String(channelId))
+  })
+}
+
 export function registerPier() {
   pierObj.irc.sendTo = async ({
     messenger,
@@ -62,8 +161,47 @@ export function registerPier() {
   }: IsendToArgs) => {
     const line = ircChunkToString(chunk)
     log("irc")({ "sending for irc": line })
+    if (!ircConnected(messenger))
+      throw new NotReadyError(`${messenger}: irc not connected`)
+    await ensureJoined(messenger, channelId)
     generic[messenger].client.say(channelId, line)
+    // irc has no delivery receipts: a PING/PONG round trip on the same
+    // connection confirms the server received the PRIVMSG
+    await ircRoundTrip(messenger)
   }
+
+  /** Connection health hooks used by the outbox supervisor. */
+  pierObj.irc.health = (messenger: string) => ({
+    // irc-upd reconnects by itself (and pings on silence); give it a minute
+    nativeRecoveryMs: 60000,
+    isReady: () => {
+      if (!ircConnected(messenger)) return false
+      const client = generic[messenger].client
+      const wanted: string[] = (
+        state.config.piers[messenger]?.ircOptions?.channels ?? []
+      ).map(channelKey)
+      const allJoined = wanted.every((c) => !!client.chans?.[c])
+      const since = generic[messenger].registeredAt ?? 0
+      return allJoined || Date.now() - since > IRC_JOIN_GRACE_MS
+    },
+    probe: () => ircRoundTrip(messenger),
+    stop: async () => {
+      const client = generic[messenger]?.client
+      if (!client) return
+      generic[messenger].client = null
+      generic[messenger].registeredConn = null
+      client.removeAllListeners()
+      client.on("error", () => {}) // late socket errors must not crash
+      if (client.retryTimeout) clearTimeout(client.retryTimeout)
+      client.deactivateFloodProtection?.()
+      try {
+        client.disconnect("reconnecting")
+      } catch {
+        // already gone
+      }
+      client.end?.()
+    },
+  })
 
   pierObj.irc.common.prepareToWhom = function ({
     messenger,
@@ -313,6 +451,11 @@ export function registerPier() {
       config.piers[messenger].ircOptions,
     )
     if (!config.MessengersAvailable[messenger]) return
+    const client = generic[messenger].client
+    client.on("netError", (error: any) =>
+      reportDown(messenger, `irc network error: ${error?.message ?? error}`),
+    )
+    client.on("abort", () => reportDown(messenger, "irc gave up reconnecting"))
     generic[messenger].client.on("error", (error: unknown) => {
       pierObj.irc.receivedFrom(messenger, {
         error,
@@ -321,6 +464,8 @@ export function registerPier() {
     })
 
     generic[messenger].client.on("registered", () => {
+      generic[messenger].registeredConn = client.conn
+      generic[messenger].registeredAt = Date.now()
       pierObj.irc.receivedFrom(messenger, {
         handler: generic[messenger].client,
         type: "registered",
