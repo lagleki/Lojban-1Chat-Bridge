@@ -5,6 +5,7 @@ docker rm 1chat 2> /dev/null
 
 docker run \
   -it \
+  --init \
   --name 1chat \
   --memory 1g \
   --cpus 1 \

@@ -131,6 +131,22 @@ Run the tests with `pnpm test`.
 * see logs via `docker logs -f -t 1chat`
 * if necessary stop the process via `docker stop 1chat`
 
+### Stopping cleanly (SIGTERM)
+
+The bridge handles `SIGTERM`/`SIGINT`: it stops all network supervisors and
+timers, disconnects the networks, closes the SQLite outbox and exits (forced
+exit after 10 s). Undelivered messages stay in the outbox and are re-sent on
+the next start. For the signal to reach node, node must be PID 1 (or run under
+an init such as `--init`/tini):
+
+* the image's default command is `node ./dist/bridge.js` (exec form);
+* if you override the command, `exec` node at the end, e.g.
+  `bash -c "pnpm run tsc && exec node ./dist/bridge.js"`, and/or add `--init`
+  to `docker run`/`podman run`;
+* do **not** end the command with `pnpm start`: pnpm becomes PID 1, does not
+  forward `SIGTERM` to the `sh -c node …` child, and the container is
+  `SIGKILL`ed after the stop timeout.
+
 ## Debug
 
 * run `./docker_dev.sh` in dev mode

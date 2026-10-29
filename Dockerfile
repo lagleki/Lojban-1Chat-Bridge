@@ -22,4 +22,9 @@ COPY default-config ./default-config
 
 RUN pnpm run tsc
 
-CMD ["pnpm", "start"]
+# Run node directly (exec form) so it is PID 1 and receives SIGTERM from
+# `docker/podman stop`. `pnpm start` as PID 1 does not forward signals to the
+# `sh -c node ...` child, so the bridge was SIGKILLed after the stop timeout.
+# If you override the command, end it with `exec node ./dist/bridge.js`, e.g.
+#   bash -c "pnpm run tsc && exec node ./dist/bridge.js"
+CMD ["node", "./dist/bridge.js"]

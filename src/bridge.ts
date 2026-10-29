@@ -42,6 +42,7 @@ import {
   OutgoingPayload,
 } from "./reliability/integration"
 import type { ReliabilityManager } from "./reliability/manager"
+import { installShutdown } from "./reliability/shutdown"
 import type { LogFn } from "./reliability/supervisor"
 import type { Chunk } from "./piers/types"
 import localizationDict from "./local/dict.json"
@@ -652,18 +653,6 @@ async function StartServices() {
   }
   reliability.start()
 
-  const shutdown = async (signal: string) => {
-    reliabilityLog("info", `received ${signal}, stopping`)
-    try {
-      await reliability?.stop()
-      reliability?.close()
-    } finally {
-      process.exit(0)
-    }
-  }
-  process.once("SIGTERM", () => void shutdown("SIGTERM"))
-  process.once("SIGINT", () => void shutdown("SIGINT"))
-
   console.log("Lojban-1Chat-Bridge started!")
 }
 common.LogMessageToAdmin = async (
@@ -874,6 +863,21 @@ common.LocalizeString = ({
   }
 }
 //START
+// Installed before anything else: when node runs as PID 1 in a container a
+// SIGTERM without a handler is ignored and podman SIGKILLs us after the timeout.
+installShutdown({
+  log: reliabilityLog,
+  hardTimeoutMs: 10000,
+  stop: async () => {
+    if (server?.listening) {
+      server.closeAllConnections?.()
+      server.close()
+    }
+    await reliability?.stop()
+  },
+  close: () => reliability?.close(),
+})
+
 void (async () => {
   // get/set config
   await common.ConfigBeforeStart()
